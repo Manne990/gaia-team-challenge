@@ -233,13 +233,15 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
   if (url.pathname === '/api/auth/me' && request.method === 'GET') {
     const db = openDatabase();
     try {
-      const current = requireActor(request, response, db);
+      const current = actor(request, db);
       if (current)
         sendJson(response, 200, {
+          authenticated: true,
           organizationId: current.organization_id,
           membershipId: current.membership_id,
           role: current.role,
         });
+      else sendJson(response, 200, { authenticated: false });
     } finally {
       db.close();
     }
@@ -326,6 +328,34 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
                 role: current.role as 'owner' | 'member' | 'viewer',
               },
               data as TaskInput,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (id && url.pathname.startsWith('/api/tasks/') && request.method === 'PUT') {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          const input = data as TaskInput & { version?: unknown };
+          if (typeof input.version !== 'number' || !Number.isInteger(input.version))
+            throw new TaskError('VALIDATION', 'A task version is required.');
+          sendJson(
+            response,
+            200,
+            new TaskService(db).update(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              id,
+              input,
+              input.version,
             ),
           );
         } catch (error) {

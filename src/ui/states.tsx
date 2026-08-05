@@ -101,6 +101,9 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="dialog-title"
         aria-describedby="dialog-description"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onCancel();
+        }}
       >
         <h2 id="dialog-title">{title}</h2>
         <p id="dialog-description">{description}</p>
