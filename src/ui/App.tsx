@@ -21,7 +21,13 @@ const navigation: NavigationItem[] = [
   },
 ];
 
-export function App({ role = 'owner' }: { role?: UserRole }) {
+export function App({
+  role = 'owner',
+  organizationName = 'Northstar Demo',
+}: {
+  role?: UserRole;
+  organizationName?: string;
+}) {
   const [activePage, setActivePage] = useState('Dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -70,7 +76,7 @@ export function App({ role = 'owner' }: { role?: UserRole }) {
       <div className="workspace">
         <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`} aria-label="CRM navigation">
           <nav id="main-navigation" aria-label="CRM navigation">
-            <p className="organization-name">Northstar Demo</p>
+            <p className="organization-name">{organizationName}</p>
             <ul>
               {items.map((item) => (
                 <li key={item.label}>
