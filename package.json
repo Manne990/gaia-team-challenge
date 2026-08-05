@@ -14,7 +14,7 @@
     "format:write": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:server && npm run test:ui",
-    "test:server": "tsx --test src/**/*.test.ts tests/**/*.test.ts",
+    "test:server": "tsx --test --test-concurrency=1 src/**/*.test.ts tests/**/*.test.ts",
     "test:ui": "vitest run",
     "test:db": "node --test test/*.test.mjs",
     "test:fixtures": "node --test tests/**/*.test.mjs",

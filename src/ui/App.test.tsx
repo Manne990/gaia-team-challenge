@@ -37,6 +37,17 @@ describe('application shell', () => {
     await user.click(screen.getByRole('button', { name: 'Mark complete' }));
     expect(screen.getByText('Weekly review marked complete.')).toBeVisible();
   });
+
+  it('adds and completes follow-up work from the Tasks workspace', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    await user.type(screen.getByRole('textbox', { name: 'Task title' }), 'Send contract');
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    expect(screen.getByText('Send contract')).toBeVisible();
+    await user.click(screen.getByRole('checkbox', { name: 'Send contract' }));
+    expect(screen.getByText('Completed')).toBeVisible();
+  });
 });
 
 describe('operational states', () => {
