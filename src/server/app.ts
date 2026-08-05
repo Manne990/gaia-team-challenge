@@ -15,8 +15,8 @@ import { ActivityError, ActivityService, type ActivityInput } from './activities
 import { dashboard } from './dashboard.js';
 import { TaskError, TaskService, type TaskInput } from './tasks.js';
 import { ContactError, ContactService, type ContactInput } from './contacts.js';
-import { DealError, DealService } from './deals.js';
-import { SearchError, SearchService } from './search.js';
+import { DealError, DealService, type DealInput } from './deals.js';
+import { SearchError, SearchService, type SearchResource } from './search.js';
 import { NotificationError, NotificationService } from './notifications.js';
 import { DuplicateError, DuplicateService, type DuplicateResource } from './duplicates.js';
 import { CsvImportService, type ImportResource } from './csv.js';
@@ -230,6 +230,21 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
     sendJson(response, 200, { ok: true });
     return true;
   }
+  if (url.pathname === '/api/auth/me' && request.method === 'GET') {
+    const db = openDatabase();
+    try {
+      const current = requireActor(request, response, db);
+      if (current)
+        sendJson(response, 200, {
+          organizationId: current.organization_id,
+          membershipId: current.membership_id,
+          role: current.role,
+        });
+    } finally {
+      db.close();
+    }
+    return true;
+  }
   const db = openDatabase();
   const current = requireActor(request, response, db);
   if (!current) {
@@ -238,10 +253,12 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
   }
   const parts = url.pathname.split('/').filter(Boolean);
   const id = parts[2];
+  let deferred = false;
   try {
     if (url.pathname === '/api/imports/preview' && request.method === 'POST') {
       if (current.role === 'viewer')
         throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      deferred = true;
       void body(request).then((data) => {
         try {
           const value = data as { resource?: ImportResource; filename?: string; csv?: string };
@@ -296,6 +313,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         actorMembershipId: current.membership_id,
       });
     else if (url.pathname === '/api/tasks' && request.method === 'POST') {
+      deferred = true;
       void body(request).then((data) => {
         try {
           sendJson(
@@ -342,6 +360,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         ),
       );
     else if (url.pathname === '/api/contacts' && request.method === 'POST') {
+      deferred = true;
       void body(request).then((data) => {
         try {
           sendJson(
@@ -359,6 +378,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
     } else if (id && url.pathname.startsWith('/api/contacts/') && request.method === 'GET')
       sendJson(response, 200, new ContactService(db).get(current as never, id));
     else if (id && url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
+      deferred = true;
       void body(request).then((data) => {
         try {
           const input = data as ContactInput & { version?: unknown };
@@ -382,6 +402,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
       ['archive', 'restore'].includes(parts[3] ?? '') &&
       request.method === 'POST'
     ) {
+      deferred = true;
       void body(request).then((data) => {
         try {
           const version = (data as { version?: unknown }).version;
@@ -421,7 +442,30 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           },
         ),
       );
-    else if (url.pathname === '/api/search' && request.method === 'GET')
+    else if (url.pathname === '/api/deals' && request.method === 'POST') {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          sendJson(
+            response,
+            201,
+            new DealService(db).create(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as DealInput,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/search' && request.method === 'GET')
       sendJson(
         response,
         200,
@@ -435,7 +479,39 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           Number(url.searchParams.get('limit') ?? 10),
         ),
       );
-    else if (url.pathname === '/api/notifications' && request.method === 'GET')
+    else if (
+      (url.pathname === '/api/search/views' || url.pathname === '/api/views') &&
+      request.method === 'POST'
+    ) {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          sendJson(
+            response,
+            201,
+            new SearchService(db).save(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as {
+                id?: string;
+                name: string;
+                resource: SearchResource;
+                query: unknown;
+                version?: number;
+              },
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/notifications' && request.method === 'GET')
       sendJson(response, 200, {
         items: new NotificationService(db).list(
           {
@@ -446,7 +522,30 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           url.searchParams.get('unread') === 'true',
         ),
       });
-    else if (url.pathname === '/api/duplicates' && request.method === 'GET') {
+    else if (url.pathname === '/api/notifications/read-all' && request.method === 'POST')
+      sendJson(response, 200, {
+        updated: new NotificationService(db).markAllRead({
+          organizationId: current.organization_id,
+          membershipId: current.membership_id,
+          role: current.role as 'owner' | 'member' | 'viewer',
+        }),
+      });
+    else if (
+      id &&
+      url.pathname.startsWith('/api/notifications/') &&
+      parts[3] === 'read' &&
+      request.method === 'POST'
+    ) {
+      new NotificationService(db).markRead(
+        {
+          organizationId: current.organization_id,
+          membershipId: current.membership_id,
+          role: current.role as 'owner' | 'member' | 'viewer',
+        },
+        id,
+      );
+      sendJson(response, 200, { ok: true });
+    } else if (url.pathname === '/api/duplicates' && request.method === 'GET') {
       const resource = url.searchParams.get('resource');
       const duplicateId = url.searchParams.get('id');
       if (!resource || !duplicateId) sendJson(response, 200, { items: [] });
@@ -464,6 +563,29 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
             duplicateId,
           ),
         });
+    } else if (url.pathname === '/api/duplicates/merge' && request.method === 'POST') {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          sendJson(
+            response,
+            200,
+            new DuplicateService(db).merge(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as never,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
     } else if (url.pathname === '/api/audit' && request.method === 'GET')
       sendJson(
         response,
@@ -487,6 +609,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         }),
       });
     else if (url.pathname === '/api/admin/members' && request.method === 'POST') {
+      deferred = true;
       void body(request).then((data) => {
         try {
           sendJson(response, 201, {
@@ -529,6 +652,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         ),
       );
     else if (url.pathname === '/api/activities' && request.method === 'POST') {
+      deferred = true;
       void body(request).then((data) => {
         try {
           sendJson(response, 201, {
@@ -564,6 +688,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
     else if (url.pathname === '/api/companies' && request.method === 'POST') {
       if (current.role === 'viewer')
         throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      deferred = true;
       void body(request).then((data) => {
         try {
           sendJson(response, 201, {
@@ -586,6 +711,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
     else if (id && request.method === 'PUT') {
       if (current.role === 'viewer')
         throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      deferred = true;
       void body(request).then((data) => {
         try {
           const input = data as CompanyInput & { version: number };
@@ -615,7 +741,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
   } catch (error) {
     fail(response, error);
   } finally {
-    db.close();
+    if (!deferred) db.close();
   }
   return true;
 }

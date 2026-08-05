@@ -1,14 +1,28 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '../ui/App';
+import type { UserRole } from '../ui/App';
 import './styles.css';
 
 function ClientApp() {
   const [state, setState] = useState<'loading' | 'sign-in' | 'ready' | 'unavailable'>('loading');
+  const [role, setRole] = useState<UserRole>('viewer');
   useEffect(() => {
-    fetch('/api/health')
-      .then((response) => setState(response.ok ? 'sign-in' : 'unavailable'))
-      .catch(() => setState('unavailable'));
+    void (async () => {
+      try {
+        const health = await fetch('/api/health');
+        if (!health.ok) return setState('unavailable');
+        const session = await fetch('/api/auth/me');
+        if (!session.ok) return setState('sign-in');
+        const value = (await session.json()) as { role?: string };
+        if (value.role !== 'owner' && value.role !== 'member' && value.role !== 'viewer')
+          return setState('unavailable');
+        setRole(value.role);
+        setState('ready');
+      } catch {
+        setState('unavailable');
+      }
+    })();
   }, []);
   if (state === 'loading')
     return (
@@ -24,11 +38,19 @@ function ClientApp() {
         <button onClick={() => location.reload()}>Try again</button>
       </main>
     );
-  if (state === 'sign-in') return <SignIn onAuthenticated={() => setState('ready')} />;
-  return <App />;
+  if (state === 'sign-in')
+    return (
+      <SignIn
+        onAuthenticated={(nextRole) => {
+          setRole(nextRole);
+          setState('ready');
+        }}
+      />
+    );
+  return <App role={role} />;
 }
 
-function SignIn({ onAuthenticated }: { onAuthenticated: () => void }) {
+function SignIn({ onAuthenticated }: { onAuthenticated: (role: UserRole) => void }) {
   const [error, setError] = useState<string | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +60,11 @@ function SignIn({ onAuthenticated }: { onAuthenticated: () => void }) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
     });
-    if (response.ok) return onAuthenticated();
+    if (response.ok) {
+      const session = await fetch('/api/auth/me');
+      const value = (await session.json()) as { role?: UserRole };
+      if (session.ok && value.role) return onAuthenticated(value.role);
+    }
     setError('Invalid email or password.');
   }
   return (
