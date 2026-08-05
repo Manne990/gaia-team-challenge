@@ -2,24 +2,39 @@
   "name": "northstar-crm-challenge",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "description": "Source-identical baseline for the SOL versus Gaia CRM challenge",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "db:reset": "node scripts/baseline.mjs db-reset",
-    "db:seed": "node scripts/baseline.mjs db-seed",
-    "ci": "node scripts/baseline.mjs ci",
-    "build": "node scripts/baseline.mjs build",
-    "dev": "node scripts/baseline.mjs dev",
+    "db:reset": "tsx scripts/database.ts reset",
+    "db:seed": "tsx scripts/database.ts seed",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test:auth": "tsc && node --test .test-build/tests/auth.test.js"
+    "test": "tsx --test src/**/*.test.ts tests/**/*.test.ts",
+    "ci": "npm run format && npm run typecheck && npm test",
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "dev": "tsx src/server/dev.ts",
+    "start": "node dist/server/main.js"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3"
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "typescript": "^5.9.3"
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0"
   }
 }
