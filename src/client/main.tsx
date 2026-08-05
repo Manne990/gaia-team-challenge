@@ -14,7 +14,8 @@ function ClientApp() {
         if (!health.ok) return setState('unavailable');
         const session = await fetch('/api/auth/me');
         if (!session.ok) return setState('sign-in');
-        const value = (await session.json()) as { role?: string };
+        const value = (await session.json()) as { authenticated?: boolean; role?: string };
+        if (!value.authenticated) return setState('sign-in');
         if (value.role !== 'owner' && value.role !== 'member' && value.role !== 'viewer')
           return setState('unavailable');
         setRole(value.role);
