@@ -7,6 +7,15 @@ This repository begins from a deliberately minimal, green baseline. The
 baseline scripts prove only that the challenge repository is installable; they
 are not product implementation or product acceptance.
 
+## Database lifecycle
+
+SQLite schema changes are committed under `migrations/` and applied in filename
+order. By default the durable local database is `.data/northstar.sqlite`; set
+`NORTHSTAR_DB_PATH` to use an isolated database (as the test suite does).
+`db:reset` recreates the schema and `db:seed` is safe to rerun. The deterministic
+seed creates the frozen Northstar and Outside Demo accounts and related CRM data
+for list, filter, dashboard, and pipeline development.
+
 ## Required Final Commands
 
 ```bash
