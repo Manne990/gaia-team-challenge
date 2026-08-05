@@ -26,7 +26,7 @@ test('notifications are recipient-scoped and replay-safe', () => {
       () =>
         service.markRead(
           { ...actor, membershipId: 'membership-northstar-owner' },
-        (list[0] as unknown as { id: string }).id,
+          (list[0] as unknown as { id: string }).id,
         ),
       NotificationError,
     );
