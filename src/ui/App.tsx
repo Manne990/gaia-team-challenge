@@ -99,7 +99,7 @@ export function App({
         <main id="main-content" className="main-content" tabIndex={-1}>
           <section className="page-header" aria-labelledby="page-title">
             <div>
-              <p className="eyebrow">Northstar Demo</p>
+              <p className="eyebrow">{organizationName}</p>
               <h1 id="page-title">{active.label}</h1>
               <p>{active.detail}</p>
             </div>
