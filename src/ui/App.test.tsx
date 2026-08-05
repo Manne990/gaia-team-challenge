@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { ConfirmDialog, ErrorState, LoadingState } from './states';
 
@@ -40,13 +40,41 @@ describe('application shell', () => {
 
   it('adds and completes follow-up work from the Tasks workspace', async () => {
     const user = userEvent.setup();
+    const task = {
+      id: 'task-1',
+      title: 'Review proposal',
+      description: '',
+      assigneeMembershipId: 'member-1',
+      dueAt: null,
+      priority: 'medium',
+      status: 'open',
+      companyId: null,
+      contactId: null,
+      dealId: null,
+      version: 1,
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [task], actorMembershipId: 'member-1' })),
+      );
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    await screen.findByText('Review proposal');
     await user.type(screen.getByRole('textbox', { name: 'Task title' }), 'Send contract');
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...task, id: 'task-2', title: 'Send contract' })),
+    );
     await user.click(screen.getByRole('button', { name: 'Add task' }));
-    expect(screen.getByText('Send contract')).toBeVisible();
+    expect(await screen.findByText('Send contract')).toBeVisible();
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...task, id: 'task-2', title: 'Send contract', status: 'completed' }),
+      ),
+    );
     await user.click(screen.getByRole('checkbox', { name: 'Send contract' }));
-    expect(screen.getByText('Completed')).toBeVisible();
+    expect(await screen.findByText('Completed')).toBeVisible();
+    fetchMock.mockRestore();
   });
 });
 

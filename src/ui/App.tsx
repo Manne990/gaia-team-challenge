@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConfirmDialog, EmptyState, ErrorState, LoadingState, ToastRegion } from './states';
 
 export type UserRole = 'owner' | 'member' | 'viewer';
@@ -198,18 +198,80 @@ function WorkspacePage({ page }: { page: string }) {
 }
 
 function TaskWorkspace() {
-  const [items, setItems] = useState([
-    { id: 1, title: 'Review renewal proposal', due: 'Today · 15:00 UTC', completed: false },
-  ]);
+  type Task = {
+    id: string;
+    title: string;
+    description: string;
+    assigneeMembershipId: string;
+    dueAt: string | null;
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+    status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+    companyId: string | null;
+    contactId: string | null;
+    dealId: string | null;
+    version: number;
+  };
+  const [items, setItems] = useState<Task[]>([]);
   const [title, setTitle] = useState('');
-  function addTask(event: React.FormEvent<HTMLFormElement>) {
+  const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const apiUrl = (path: string) => new URL(path, window.location.origin).toString();
+
+  async function loadTasks() {
+    setLoading(true);
+    try {
+      const response = await fetch(apiUrl('/api/tasks'));
+      if (!response.ok) throw new Error('Could not load tasks.');
+      const data = (await response.json()) as { items: Task[]; actorMembershipId: string };
+      setItems(data.items);
+      setAssigneeMembershipId(data.actorMembershipId);
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not load tasks.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadTasks();
+  }, []);
+
+  async function addTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!title.trim()) return;
-    setItems((current) => [
-      ...current,
-      { id: Date.now(), title: title.trim(), due: 'No due date', completed: false },
-    ]);
-    setTitle('');
+    if (!title.trim() || !assigneeMembershipId) return;
+    try {
+      const response = await fetch(apiUrl('/api/tasks'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), assigneeMembershipId }),
+      });
+      if (!response.ok) throw new Error('Could not create task.');
+      const created = (await response.json()) as Task;
+      setItems((current) => [...current, created]);
+      setTitle('');
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not create task.');
+    }
+  }
+
+  async function toggleTask(task: Task) {
+    try {
+      const status = task.status === 'completed' ? 'open' : 'completed';
+      const response = await fetch(apiUrl(`/api/tasks/${task.id}`), {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...task, status }),
+      });
+      if (!response.ok) throw new Error('Could not update task.');
+      const updated = (await response.json()) as Task;
+      setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not update task.');
+    }
   }
   return (
     <section className="data-panel">
@@ -228,26 +290,22 @@ function TaskWorkspace() {
           Add task
         </button>
       </form>
+      {error ? <ErrorState title="Task workspace unavailable" description={error} /> : null}
+      {loading ? <LoadingState label="Loading tasks" /> : null}
       <ul className="task-list">
         {items.map((item) => (
           <li key={item.id}>
             <label>
               <input
                 type="checkbox"
-                checked={item.completed}
-                onChange={() =>
-                  setItems((current) =>
-                    current.map((candidate) =>
-                      candidate.id === item.id
-                        ? { ...candidate, completed: !candidate.completed }
-                        : candidate,
-                    ),
-                  )
-                }
+                checked={item.status === 'completed'}
+                onChange={() => void toggleTask(item)}
               />{' '}
               <span>{item.title}</span>
             </label>
-            <small>{item.completed ? 'Completed' : item.due}</small>
+            <small>
+              {item.status === 'completed' ? 'Completed' : (item.dueAt ?? 'No due date')}
+            </small>
           </li>
         ))}
       </ul>

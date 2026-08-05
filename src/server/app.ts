@@ -13,6 +13,12 @@ import {
 } from './companies.js';
 import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
 import { dashboard } from './dashboard.js';
+import { TaskError, TaskService, type TaskInput } from './tasks.js';
+import { ContactError, ContactService, type ContactInput } from './contacts.js';
+import { DealError, DealService } from './deals.js';
+import { SearchError, SearchService } from './search.js';
+import { NotificationError, NotificationService } from './notifications.js';
+import { DuplicateError, DuplicateService, type DuplicateResource } from './duplicates.js';
 import { CsvImportService, type ImportResource } from './csv.js';
 import { listAudit } from './audit.js';
 import { AdministrationError, AdministrationService } from './administration.js';
@@ -71,6 +77,50 @@ function fail(response: ServerResponse, error: unknown) {
         error: { code: error.code, message: error.message },
       },
     );
+  if (error instanceof TaskError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'CONFLICT'
+            ? 409
+            : 422,
+      { error: { code: error.code, message: error.message } },
+    );
+  if (error instanceof ContactError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'CONFLICT'
+            ? 409
+            : 422,
+      { error: { code: error.code, message: error.message } },
+    );
+  if (error instanceof DealError || error instanceof DuplicateError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'CONFLICT'
+            ? 409
+            : 422,
+      { error: { code: error.code, message: error.message } },
+    );
+  if (error instanceof SearchError)
+    return sendJson(response, error.code === 'NOT_FOUND' ? 404 : 422, {
+      error: { code: error.code, message: error.message },
+    });
+  if (error instanceof NotificationError)
+    return sendJson(response, error.code === 'NOT_FOUND' ? 404 : 403, {
+      error: { code: error.code, message: error.message },
+    });
   if (error instanceof AdministrationError)
     return sendJson(
       response,
@@ -232,7 +282,189 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           role: current.role as 'owner' | 'member' | 'viewer',
         }),
       );
-    else if (url.pathname === '/api/audit' && request.method === 'GET')
+    else if (url.pathname === '/api/tasks' && request.method === 'GET')
+      sendJson(response, 200, {
+        items: new TaskService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams.get('view') ?? 'all',
+        ),
+        displayTimezone: 'UTC',
+        actorMembershipId: current.membership_id,
+      });
+    else if (url.pathname === '/api/tasks' && request.method === 'POST') {
+      void body(request).then((data) => {
+        try {
+          sendJson(
+            response,
+            201,
+            new TaskService(db).create(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as TaskInput,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/contacts' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new ContactService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          {
+            text: url.searchParams.get('text') ?? undefined,
+            page: Number(url.searchParams.get('page') ?? 1),
+            pageSize: Number(url.searchParams.get('pageSize') ?? 25),
+            sort: (url.searchParams.get('sort') ?? 'name') as 'name' | 'email' | 'updatedAt',
+            direction: (url.searchParams.get('direction') ?? 'asc') as 'asc' | 'desc',
+            companyId: url.searchParams.get('companyId') ?? undefined,
+            ownerMembershipId: url.searchParams.get('ownerMembershipId') ?? undefined,
+            status: url.searchParams.get('status') ?? undefined,
+            tag: url.searchParams.get('tag') ?? undefined,
+            includeArchived: url.searchParams.get('includeArchived') === 'true',
+          },
+        ),
+      );
+    else if (url.pathname === '/api/contacts' && request.method === 'POST') {
+      void body(request).then((data) => {
+        try {
+          sendJson(
+            response,
+            201,
+            new ContactService(db).create(current as never, data as ContactInput),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (id && url.pathname.startsWith('/api/contacts/') && request.method === 'GET')
+      sendJson(response, 200, new ContactService(db).get(current as never, id));
+    else if (id && url.pathname.startsWith('/api/contacts/') && request.method === 'PUT') {
+      void body(request).then((data) => {
+        try {
+          const input = data as ContactInput & { version?: unknown };
+          if (typeof input.version !== 'number' || !Number.isInteger(input.version))
+            throw new ContactError('VALIDATION', 'A contact version is required.');
+          sendJson(
+            response,
+            200,
+            new ContactService(db).update(current as never, id, input, input.version),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (
+      id &&
+      url.pathname.startsWith('/api/contacts/') &&
+      ['archive', 'restore'].includes(parts[3] ?? '') &&
+      request.method === 'POST'
+    ) {
+      void body(request).then((data) => {
+        try {
+          const version = (data as { version?: unknown }).version;
+          if (typeof version !== 'number' || !Number.isInteger(version))
+            throw new ContactError('VALIDATION', 'A contact version is required.');
+          const service = new ContactService(db);
+          sendJson(
+            response,
+            200,
+            parts[3] === 'archive'
+              ? service.archive(current as never, id, version)
+              : service.restore(current as never, id, version),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/deals' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new DealService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          {
+            stageId: url.searchParams.get('stageId') ?? undefined,
+            status: url.searchParams.get('status') ?? undefined,
+            companyId: url.searchParams.get('companyId') ?? undefined,
+            text: url.searchParams.get('text') ?? undefined,
+            includeArchived: url.searchParams.get('includeArchived') === 'true',
+          },
+        ),
+      );
+    else if (url.pathname === '/api/search' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new SearchService(db).search(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams.get('q') ?? url.searchParams.get('text') ?? '',
+          Number(url.searchParams.get('limit') ?? 10),
+        ),
+      );
+    else if (url.pathname === '/api/notifications' && request.method === 'GET')
+      sendJson(response, 200, {
+        items: new NotificationService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams.get('unread') === 'true',
+        ),
+      });
+    else if (url.pathname === '/api/duplicates' && request.method === 'GET') {
+      const resource = url.searchParams.get('resource');
+      const duplicateId = url.searchParams.get('id');
+      if (!resource || !duplicateId) sendJson(response, 200, { items: [] });
+      else if (resource !== 'company' && resource !== 'contact')
+        throw new DuplicateError('VALIDATION', 'Choose a valid CRM resource.');
+      else
+        sendJson(response, 200, {
+          items: new DuplicateService(db).candidates(
+            {
+              organizationId: current.organization_id,
+              membershipId: current.membership_id,
+              role: current.role as 'owner' | 'member' | 'viewer',
+            },
+            resource as DuplicateResource,
+            duplicateId,
+          ),
+        });
+    } else if (url.pathname === '/api/audit' && request.method === 'GET')
       sendJson(
         response,
         200,
