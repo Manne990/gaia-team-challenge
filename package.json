@@ -2,7 +2,7 @@
   "name": "northstar-crm-challenge",
   "version": "0.0.0",
   "private": true,
-  "description": "Source-identical baseline for the SOL versus Gaia CRM challenge",
+  "description": "Northstar CRM operational workspace",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -13,12 +13,15 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts tests/**/*.test.ts",
+    "test": "npm run test:server && npm run test:ui",
+    "test:server": "tsx --test src/**/*.test.ts tests/**/*.test.ts",
+    "test:ui": "vitest run",
     "test:db": "node --test test/*.test.mjs",
     "test:fixtures": "node --test tests/**/*.test.mjs",
     "test:browser": "node scripts/run-browser-tests.mjs",
+    "test:e2e": "playwright test",
     "check": "node scripts/static-check.mjs && node scripts/verify-tests.mjs",
-    "ci": "npm run format && npm run typecheck && npm run check && npm test && npm run test:db && npm run test:fixtures && npm run test:browser",
+    "ci": "npm run format && npm run typecheck && npm run check && npm test && npm run test:db && npm run test:fixtures && npm run test:browser && npm run build",
     "build": "vite build && tsc -p tsconfig.server.json",
     "dev": "tsx src/server/dev.ts",
     "start": "node dist/server/main.js"
@@ -32,14 +35,19 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@testing-library/jest-dom": "latest",
+    "@testing-library/react": "latest",
+    "@testing-library/user-event": "latest",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "latest",
     "prettier": "^3.9.6",
     "tsx": "^4.23.8",
     "typescript": "^7.0.2",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vitest": "latest"
   }
 }
