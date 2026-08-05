@@ -14,6 +14,8 @@ import {
 import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
 import { dashboard } from './dashboard.js';
 import { CsvImportService, type ImportResource } from './csv.js';
+import { listAudit } from './audit.js';
+import { AdministrationError, AdministrationService } from './administration.js';
 export function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -68,6 +70,18 @@ function fail(response: ServerResponse, error: unknown) {
       {
         error: { code: error.code, message: error.message },
       },
+    );
+  if (error instanceof AdministrationError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'CONFLICT'
+            ? 409
+            : 422,
+      { error: { code: error.code, message: error.message } },
     );
   return sendJson(response, 500, {
     error: { code: 'UNEXPECTED', message: 'Something went wrong. Please try again.' },
@@ -218,7 +232,49 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           role: current.role as 'owner' | 'member' | 'viewer',
         }),
       );
-    else if (url.pathname === '/api/activities' && request.method === 'GET')
+    else if (url.pathname === '/api/audit' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        listAudit(
+          db,
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams,
+        ),
+      );
+    else if (url.pathname === '/api/admin/members' && request.method === 'GET')
+      sendJson(response, 200, {
+        items: new AdministrationService(db).list({
+          organizationId: current.organization_id,
+          membershipId: current.membership_id,
+          role: current.role as 'owner' | 'member' | 'viewer',
+        }),
+      });
+    else if (url.pathname === '/api/admin/members' && request.method === 'POST') {
+      void body(request).then((data) => {
+        try {
+          sendJson(response, 201, {
+            member: new AdministrationService(db).invite(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as { email: string; displayName?: string; password: string; role: string },
+            ),
+          });
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/activities' && request.method === 'GET')
       sendJson(
         response,
         200,
