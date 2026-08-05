@@ -292,7 +292,24 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         }
       });
       return true;
-    } else if (url.pathname === '/api/audit' && request.method === 'GET')
+    } else if (url.pathname === '/api/contacts' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new ContactService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          {
+            text: url.searchParams.get('text') ?? undefined,
+            page: Number(url.searchParams.get('page') ?? 1),
+            pageSize: Number(url.searchParams.get('pageSize') ?? 25),
+          },
+        ),
+      );
+    else if (url.pathname === '/api/audit' && request.method === 'GET')
       sendJson(
         response,
         200,
