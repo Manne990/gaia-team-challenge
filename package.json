@@ -11,6 +11,15 @@
     "db:seed": "node scripts/baseline.mjs db-seed",
     "ci": "node scripts/baseline.mjs ci",
     "build": "node scripts/baseline.mjs build",
-    "dev": "node scripts/baseline.mjs dev"
+    "dev": "node scripts/baseline.mjs dev",
+    "typecheck": "tsc --noEmit",
+    "test:auth": "tsc && node --test .test-build/tests/auth.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.3"
   }
 }
