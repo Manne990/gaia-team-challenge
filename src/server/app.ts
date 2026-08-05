@@ -1,5 +1,16 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { type IncomingMessage, type ServerResponse } from 'node:http';
+import { compareSync } from 'bcryptjs';
 import { openDatabase } from './database.js';
+import {
+  CompanyError,
+  archiveCompany,
+  createCompany,
+  getCompany,
+  listCompanies,
+  updateCompany,
+  type CompanyInput,
+} from './companies.js';
 export function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -7,13 +18,72 @@ export function sendJson(response: ServerResponse, status: number, body: unknown
   });
   response.end(JSON.stringify(body));
 }
+const tokenHash = (value: string) => createHash('sha256').update(value).digest('hex');
+function cookie(request: IncomingMessage) {
+  return request.headers.cookie
+    ?.split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith('northstar_session='))
+    ?.slice(18);
+}
+function actor(request: IncomingMessage, db: ReturnType<typeof openDatabase>) {
+  const token = cookie(request);
+  if (!token) return null;
+  return db
+    .prepare(
+      'SELECT m.organization_id,m.id AS membership_id,m.role,u.id AS user_id FROM sessions s JOIN memberships m ON m.organization_id=s.organization_id AND m.user_id=s.user_id JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?',
+    )
+    .get(tokenHash(token), new Date().toISOString()) as
+    { organization_id: string; membership_id: string; role: string } | undefined;
+}
+function body(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    request.on('data', (chunk) => {
+      raw += chunk;
+      if (raw.length > 100_000) reject(new Error('too large'));
+    });
+    request.on('end', () => {
+      try {
+        resolve(raw ? JSON.parse(raw) : {});
+      } catch {
+        reject(new Error('invalid'));
+      }
+    });
+    request.on('error', reject);
+  });
+}
+function fail(response: ServerResponse, error: unknown) {
+  if (error instanceof CompanyError)
+    return sendJson(response, error.status, {
+      error: { code: error.code, message: error.message },
+    });
+  return sendJson(response, 500, {
+    error: { code: 'UNEXPECTED', message: 'Something went wrong. Please try again.' },
+  });
+}
+function requireActor(
+  request: IncomingMessage,
+  response: ServerResponse,
+  db: ReturnType<typeof openDatabase>,
+) {
+  const value = actor(request, db);
+  if (!value) {
+    sendJson(response, 401, {
+      error: { code: 'UNAUTHORIZED', message: 'Please sign in to continue.' },
+    });
+    return null;
+  }
+  return value;
+}
 export function handleApi(request: IncomingMessage, response: ServerResponse): boolean {
   if (!request.url?.startsWith('/api/')) return false;
-  if (request.method === 'GET' && request.url === '/api/health') {
+  const url = new URL(request.url, 'http://northstar.local');
+  if (url.pathname === '/api/health') {
     try {
-      const database = openDatabase();
-      database.prepare('SELECT 1').get();
-      database.close();
+      const db = openDatabase();
+      db.prepare('SELECT 1').get();
+      db.close();
       sendJson(response, 200, { status: 'ok' });
     } catch {
       sendJson(response, 503, {
@@ -23,9 +93,134 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         },
       });
     }
-  } else
-    sendJson(response, 404, {
-      error: { code: 'NOT_FOUND', message: 'The requested resource was not found.' },
-    });
+    return true;
+  }
+  if (url.pathname === '/api/auth/sign-in' && request.method === 'POST') {
+    void body(request)
+      .then((data) => {
+        const value = data as { email?: string; password?: string };
+        const db = openDatabase();
+        try {
+          const user = db
+            .prepare('SELECT * FROM users WHERE email=?')
+            .get(value.email?.trim().toLowerCase()) as
+            { id: string; password_hash: string } | undefined;
+          const membership =
+            user && compareSync(value.password ?? '', user.password_hash)
+              ? (db.prepare('SELECT * FROM memberships WHERE user_id=?').get(user.id) as
+                  { organization_id: string } | undefined)
+              : undefined;
+          if (!membership)
+            return sendJson(response, 401, {
+              error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
+            });
+          const token = randomBytes(32).toString('base64url'),
+            now = new Date(),
+            expires = new Date(now.getTime() + 604800000);
+          db.prepare(
+            'INSERT INTO sessions (id,organization_id,user_id,token_hash,expires_at,created_at) VALUES (?,?,?,?,?,?)',
+          ).run(
+            randomBytes(16).toString('hex'),
+            membership.organization_id,
+            user!.id,
+            tokenHash(token),
+            expires.toISOString(),
+            now.toISOString(),
+          );
+          response.setHeader(
+            'Set-Cookie',
+            `northstar_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`,
+          );
+          sendJson(response, 200, { ok: true });
+        } finally {
+          db.close();
+        }
+      })
+      .catch((error) => fail(response, error));
+    return true;
+  }
+  if (url.pathname === '/api/auth/sign-out' && request.method === 'POST') {
+    const db = openDatabase();
+    const token = cookie(request);
+    if (token)
+      db.prepare('UPDATE sessions SET revoked_at=? WHERE token_hash=?').run(
+        new Date().toISOString(),
+        tokenHash(token),
+      );
+    db.close();
+    response.setHeader(
+      'Set-Cookie',
+      'northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+    );
+    sendJson(response, 200, { ok: true });
+    return true;
+  }
+  const db = openDatabase();
+  const current = requireActor(request, response, db);
+  if (!current) {
+    db.close();
+    return true;
+  }
+  const parts = url.pathname.split('/').filter(Boolean);
+  const id = parts[2];
+  try {
+    if (url.pathname === '/api/companies' && request.method === 'GET')
+      sendJson(response, 200, listCompanies(db, current.organization_id, url.searchParams));
+    else if (url.pathname === '/api/companies' && request.method === 'POST') {
+      if (current.role === 'viewer')
+        throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      void body(request).then((data) => {
+        try {
+          sendJson(response, 201, {
+            company: createCompany(
+              db,
+              current.organization_id,
+              current.membership_id,
+              data as CompanyInput,
+            ),
+          });
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (id && request.method === 'GET')
+      sendJson(response, 200, getCompany(db, current.organization_id, id));
+    else if (id && request.method === 'PUT') {
+      if (current.role === 'viewer')
+        throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      void body(request).then((data) => {
+        try {
+          const input = data as CompanyInput & { version: number };
+          sendJson(response, 200, {
+            company: updateCompany(db, current.organization_id, id, input, input.version),
+          });
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (
+      id &&
+      (request.method === 'DELETE' || (request.method === 'POST' && parts[3] === 'restore'))
+    ) {
+      if (current.role === 'viewer')
+        throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      sendJson(response, 200, {
+        company: archiveCompany(db, current.organization_id, id, request.method === 'POST'),
+      });
+    } else
+      sendJson(response, 404, {
+        error: { code: 'NOT_FOUND', message: 'The requested resource was not found.' },
+      });
+  } catch (error) {
+    fail(response, error);
+  } finally {
+    db.close();
+  }
   return true;
 }
