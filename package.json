@@ -2,19 +2,20 @@
   "name": "northstar-crm-challenge",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Source-identical baseline for the SOL versus Gaia CRM challenge",
+  "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "db:reset": "tsx scripts/database.ts reset",
-    "db:seed": "tsx scripts/database.ts seed",
+    "db:reset": "node scripts/db.mjs reset",
+    "db:seed": "node scripts/db.mjs seed",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts tests/**/*.test.ts",
-    "ci": "npm run format && npm run typecheck && npm test",
+    "test:db": "node --test test/*.test.mjs",
+    "ci": "npm run format && npm run typecheck && npm test && npm run test:db",
     "build": "vite build && tsc -p tsconfig.server.json",
     "dev": "tsx src/server/dev.ts",
     "start": "node dist/server/main.js"
