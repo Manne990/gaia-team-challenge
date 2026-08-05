@@ -12,6 +12,7 @@ import {
   type CompanyInput,
 } from './companies.js';
 import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
+import { CsvImportService, type ImportResource } from './csv.js';
 export function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -173,7 +174,40 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
   const parts = url.pathname.split('/').filter(Boolean);
   const id = parts[2];
   try {
-    if (url.pathname === '/api/activities' && request.method === 'GET')
+    if (url.pathname === '/api/imports/preview' && request.method === 'POST') {
+      if (current.role === 'viewer')
+        throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      void body(request).then((data) => {
+        try {
+          const value = data as { resource?: ImportResource; filename?: string; csv?: string };
+          if (typeof value.filename !== 'string' || typeof value.csv !== 'string')
+            throw new CompanyError('VALIDATION', 'Enter a CSV file.', 422);
+          if (value.resource !== 'companies' && value.resource !== 'contacts')
+            throw new CompanyError('VALIDATION', 'Choose companies or contacts.', 422);
+          sendJson(
+            response,
+            201,
+            new CsvImportService(db).createPreview(
+              current.organization_id,
+              current.membership_id,
+              value.resource,
+              value.filename,
+              value.csv,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (id && parts[1] === 'imports' && parts[3] === 'commit' && request.method === 'POST') {
+      if (current.role === 'viewer')
+        throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
+      new CsvImportService(db).commit(current.organization_id, id);
+      sendJson(response, 200, { ok: true });
+    } else if (url.pathname === '/api/activities' && request.method === 'GET')
       sendJson(
         response,
         200,
