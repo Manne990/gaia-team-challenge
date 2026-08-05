@@ -11,6 +11,7 @@ import {
   updateCompany,
   type CompanyInput,
 } from './companies.js';
+import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
 export function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -58,6 +59,14 @@ function fail(response: ServerResponse, error: unknown) {
     return sendJson(response, error.status, {
       error: { code: error.code, message: error.message },
     });
+  if (error instanceof ActivityError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN' ? 403 : error.code === 'NOT_FOUND' ? 404 : 422,
+      {
+        error: { code: error.code, message: error.message },
+      },
+    );
   return sendJson(response, 500, {
     error: { code: 'UNEXPECTED', message: 'Something went wrong. Please try again.' },
   });
@@ -164,7 +173,60 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
   const parts = url.pathname.split('/').filter(Boolean);
   const id = parts[2];
   try {
-    if (url.pathname === '/api/companies' && request.method === 'GET')
+    if (url.pathname === '/api/activities' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new ActivityService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          {
+            page: Number(url.searchParams.get('page') ?? 1),
+            pageSize: Number(url.searchParams.get('pageSize') ?? 25),
+            type: url.searchParams.get('type') ?? undefined,
+            author: url.searchParams.get('author') ?? undefined,
+            companyId: url.searchParams.get('companyId') ?? undefined,
+            contactId: url.searchParams.get('contactId') ?? undefined,
+            from: url.searchParams.get('from') ?? undefined,
+            to: url.searchParams.get('to') ?? undefined,
+          },
+        ),
+      );
+    else if (url.pathname === '/api/activities' && request.method === 'POST') {
+      void body(request).then((data) => {
+        try {
+          sendJson(response, 201, {
+            activity: new ActivityService(db).create(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as ActivityInput,
+            ),
+          });
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (id && url.pathname.startsWith('/api/activities/') && request.method === 'GET')
+      sendJson(response, 200, {
+        activity: new ActivityService(db).get(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          id,
+        ),
+      });
+    else if (url.pathname === '/api/companies' && request.method === 'GET')
       sendJson(response, 200, listCompanies(db, current.organization_id, url.searchParams));
     else if (url.pathname === '/api/companies' && request.method === 'POST') {
       if (current.role === 'viewer')
