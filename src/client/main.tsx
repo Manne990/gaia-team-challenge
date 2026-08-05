@@ -1,7 +1,9 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { App } from '../ui/App';
 import './styles.css';
-function App() {
+
+function ClientApp() {
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   useEffect(() => {
     fetch('/api/health')
@@ -22,16 +24,11 @@ function App() {
         <button onClick={() => location.reload()}>Try again</button>
       </main>
     );
-  return (
-    <main>
-      <p className="eyebrow">Northstar CRM</p>
-      <h1>Your operational workspace is ready.</h1>
-      <p>Sign-in, data management, and dashboard workflows will appear here.</p>
-    </main>
-  );
+  return <App />;
 }
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ClientApp />
   </StrictMode>,
 );

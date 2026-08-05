@@ -1,5 +1,7 @@
 node_modules/
 dist/
+test-results/
+.test-build/
 package-lock.json
 docs/product-contract.md
 *.sqlite
