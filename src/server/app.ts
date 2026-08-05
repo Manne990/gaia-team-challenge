@@ -12,6 +12,7 @@ import {
   type CompanyInput,
 } from './companies.js';
 import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
+import { dashboard } from './dashboard.js';
 import { CsvImportService, type ImportResource } from './csv.js';
 export function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
@@ -207,7 +208,17 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
       new CsvImportService(db).commit(current.organization_id, id);
       sendJson(response, 200, { ok: true });
-    } else if (url.pathname === '/api/activities' && request.method === 'GET')
+    } else if (url.pathname === '/api/dashboard' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        dashboard(db, {
+          organizationId: current.organization_id,
+          membershipId: current.membership_id,
+          role: current.role as 'owner' | 'member' | 'viewer',
+        }),
+      );
+    else if (url.pathname === '/api/activities' && request.method === 'GET')
       sendJson(
         response,
         200,
