@@ -13,6 +13,7 @@ import {
 } from './companies.js';
 import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
 import { dashboard } from './dashboard.js';
+import { TaskError, TaskService, type TaskInput } from './tasks.js';
 import { CsvImportService, type ImportResource } from './csv.js';
 import { listAudit } from './audit.js';
 import { AdministrationError, AdministrationService } from './administration.js';
@@ -70,6 +71,18 @@ function fail(response: ServerResponse, error: unknown) {
       {
         error: { code: error.code, message: error.message },
       },
+    );
+  if (error instanceof TaskError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'CONFLICT'
+            ? 409
+            : 422,
+      { error: { code: error.code, message: error.message } },
     );
   if (error instanceof AdministrationError)
     return sendJson(
@@ -232,7 +245,41 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           role: current.role as 'owner' | 'member' | 'viewer',
         }),
       );
-    else if (url.pathname === '/api/audit' && request.method === 'GET')
+    else if (url.pathname === '/api/tasks' && request.method === 'GET')
+      sendJson(response, 200, {
+        items: new TaskService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams.get('view') ?? 'all',
+        ),
+        displayTimezone: 'UTC',
+      });
+    else if (url.pathname === '/api/tasks' && request.method === 'POST') {
+      void body(request).then((data) => {
+        try {
+          sendJson(
+            response,
+            201,
+            new TaskService(db).create(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as TaskInput,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/audit' && request.method === 'GET')
       sendJson(
         response,
         200,
