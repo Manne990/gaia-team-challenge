@@ -7,6 +7,7 @@ import './styles.css';
 function ClientApp() {
   const [state, setState] = useState<'loading' | 'sign-in' | 'ready' | 'unavailable'>('loading');
   const [role, setRole] = useState<UserRole>('viewer');
+  const [organizationName, setOrganizationName] = useState('');
   useEffect(() => {
     void (async () => {
       try {
@@ -14,11 +15,16 @@ function ClientApp() {
         if (!health.ok) return setState('unavailable');
         const session = await fetch('/api/auth/me');
         if (!session.ok) return setState('sign-in');
-        const value = (await session.json()) as { authenticated?: boolean; role?: string };
+        const value = (await session.json()) as {
+          authenticated?: boolean;
+          role?: string;
+          organizationName?: string;
+        };
         if (!value.authenticated) return setState('sign-in');
         if (value.role !== 'owner' && value.role !== 'member' && value.role !== 'viewer')
           return setState('unavailable');
         setRole(value.role);
+        setOrganizationName(value.organizationName ?? '');
         setState('ready');
       } catch {
         setState('unavailable');
@@ -48,7 +54,7 @@ function ClientApp() {
         }}
       />
     );
-  return <App role={role} />;
+  return <App role={role} organizationName={organizationName || undefined} />;
 }
 
 function SignIn({ onAuthenticated }: { onAuthenticated: (role: UserRole) => void }) {

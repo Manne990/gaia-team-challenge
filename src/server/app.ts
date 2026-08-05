@@ -42,10 +42,11 @@ function actor(request: IncomingMessage, db: ReturnType<typeof openDatabase>) {
   if (!token) return null;
   return db
     .prepare(
-      'SELECT m.organization_id,m.id AS membership_id,m.role,u.id AS user_id FROM sessions s JOIN memberships m ON m.organization_id=s.organization_id AND m.user_id=s.user_id JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?',
+      'SELECT m.organization_id,m.id AS membership_id,m.role,u.id AS user_id,o.name AS organization_name FROM sessions s JOIN memberships m ON m.organization_id=s.organization_id AND m.user_id=s.user_id JOIN users u ON u.id=s.user_id JOIN organizations o ON o.id=m.organization_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?',
     )
     .get(tokenHash(token), new Date().toISOString()) as
-    { organization_id: string; membership_id: string; role: string } | undefined;
+    | { organization_id: string; membership_id: string; role: string; organization_name: string }
+    | undefined;
 }
 function body(request: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -240,6 +241,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           organizationId: current.organization_id,
           membershipId: current.membership_id,
           role: current.role,
+          organizationName: current.organization_name,
         });
       else sendJson(response, 200, { authenticated: false });
     } finally {
