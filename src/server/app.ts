@@ -495,6 +495,40 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         }
       });
       return true;
+    } else if (
+      id &&
+      url.pathname.startsWith('/api/deals/') &&
+      parts[3] === 'transition' &&
+      request.method === 'POST'
+    ) {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          const input = data as { version?: unknown; stageId?: unknown; lossReason?: unknown };
+          if (typeof input.version !== 'number' || typeof input.stageId !== 'string')
+            throw new DealError('VALIDATION', 'A deal version and stage are required.');
+          sendJson(
+            response,
+            200,
+            new DealService(db).transition(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              id,
+              input.version,
+              input.stageId,
+              typeof input.lossReason === 'string' ? input.lossReason : null,
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
     } else if (url.pathname === '/api/search' && request.method === 'GET')
       sendJson(
         response,
