@@ -14,6 +14,7 @@ import {
 import { ActivityError, ActivityService, type ActivityInput } from './activities.js';
 import { dashboard } from './dashboard.js';
 import { TaskError, TaskService, type TaskInput } from './tasks.js';
+import { ContactError, ContactService, type ContactInput } from './contacts.js';
 import { CsvImportService, type ImportResource } from './csv.js';
 import { listAudit } from './audit.js';
 import { AdministrationError, AdministrationService } from './administration.js';
@@ -73,6 +74,18 @@ function fail(response: ServerResponse, error: unknown) {
       },
     );
   if (error instanceof TaskError)
+    return sendJson(
+      response,
+      error.code === 'FORBIDDEN'
+        ? 403
+        : error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'CONFLICT'
+            ? 409
+            : 422,
+      { error: { code: error.code, message: error.message } },
+    );
+  if (error instanceof ContactError)
     return sendJson(
       response,
       error.code === 'FORBIDDEN'
