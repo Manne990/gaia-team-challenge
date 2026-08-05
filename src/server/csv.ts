@@ -132,8 +132,11 @@ export class CsvImportService {
   }
   commit(organizationId: string, importId: string): void {
     const imported = this.database
-      .prepare('SELECT resource, status FROM imports WHERE id = ? AND organization_id = ?')
-      .get(importId, organizationId) as { resource: ImportResource; status: string } | undefined;
+      .prepare(
+        'SELECT resource, status, creator_membership_id FROM imports WHERE id = ? AND organization_id = ?',
+      )
+      .get(importId, organizationId) as
+      { resource: ImportResource; status: string; creator_membership_id: string } | undefined;
     if (!imported) throw new Error('Import was not found.');
     if (imported.status === 'committed') return;
     const rows = this.database
@@ -148,20 +151,22 @@ export class CsvImportService {
         if (imported.resource === 'companies')
           this.database
             .prepare(
-              'INSERT INTO companies (id, organization_id, name, external_reference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+              'INSERT INTO companies (id, organization_id, name, external_reference, owner_membership_id, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             )
             .run(
               randomUUID(),
               organizationId,
               value.name,
               value.external_reference || null,
+              imported.creator_membership_id,
+              '[]',
               now,
               now,
             );
         else
           this.database
             .prepare(
-              'INSERT INTO contacts (id, organization_id, first_name, last_name, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              'INSERT INTO contacts (id, organization_id, first_name, last_name, email, owner_membership_id, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             )
             .run(
               randomUUID(),
@@ -169,6 +174,8 @@ export class CsvImportService {
               value.first_name,
               value.last_name,
               value.email || null,
+              imported.creator_membership_id,
+              '[]',
               now,
               now,
             );
