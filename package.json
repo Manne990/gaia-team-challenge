@@ -15,7 +15,10 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts tests/**/*.test.ts",
     "test:db": "node --test test/*.test.mjs",
-    "ci": "npm run format && npm run typecheck && npm test && npm run test:db",
+    "test:fixtures": "node --test tests/**/*.test.mjs",
+    "test:browser": "node scripts/run-browser-tests.mjs",
+    "check": "node scripts/static-check.mjs && node scripts/verify-tests.mjs",
+    "ci": "npm run format && npm run typecheck && npm run check && npm test && npm run test:db && npm run test:fixtures && npm run test:browser",
     "build": "vite build && tsc -p tsconfig.server.json",
     "dev": "tsx src/server/dev.ts",
     "start": "node dist/server/main.js"
@@ -28,6 +31,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
