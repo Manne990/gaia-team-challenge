@@ -273,6 +273,23 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           items,
         ),
       );
+    } else if (url.pathname === '/api/exports/contacts' && request.method === 'GET') {
+      const items = new ContactService(db).list(
+        {
+          organizationId: current.organization_id,
+          membershipId: current.membership_id,
+          role: current.role as 'owner' | 'member' | 'viewer',
+        },
+        { pageSize: 100, text: url.searchParams.get('q') ?? undefined },
+      ).items as Record<string, unknown>[];
+      response.writeHead(200, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="contacts.csv"',
+        'cache-control': 'no-store',
+      });
+      response.end(
+        renderCsv(['firstName', 'lastName', 'email', 'phone', 'jobTitle', 'status'], items),
+      );
     } else if (url.pathname === '/api/imports/preview' && request.method === 'POST') {
       if (current.role === 'viewer')
         throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
