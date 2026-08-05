@@ -176,6 +176,7 @@ function Dashboard({ onConfirm }: { onConfirm: () => void }) {
 }
 
 function WorkspacePage({ page }: { page: string }) {
+  if (page === 'Tasks') return <TaskWorkspace />;
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -192,6 +193,64 @@ function WorkspacePage({ page }: { page: string }) {
         description="Choose a saved view or create a record to begin working here."
         actionLabel={`Create ${page === 'Activities' ? 'activity' : page.slice(0, -1).toLowerCase()}`}
       />
+    </section>
+  );
+}
+
+function TaskWorkspace() {
+  const [items, setItems] = useState([
+    { id: 1, title: 'Review renewal proposal', due: 'Today · 15:00 UTC', completed: false },
+  ]);
+  const [title, setTitle] = useState('');
+  function addTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setItems((current) => [
+      ...current,
+      { id: Date.now(), title: title.trim(), due: 'No due date', completed: false },
+    ]);
+    setTitle('');
+  }
+  return (
+    <section className="data-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Task workspace</h2>
+          <p>Due-state views use UTC.</p>
+        </div>
+      </div>
+      <form className="task-form" onSubmit={addTask}>
+        <label>
+          Task title
+          <input value={title} onChange={(event) => setTitle(event.target.value)} required />
+        </label>
+        <button className="primary-button" type="submit">
+          Add task
+        </button>
+      </form>
+      <ul className="task-list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <label>
+              <input
+                type="checkbox"
+                checked={item.completed}
+                onChange={() =>
+                  setItems((current) =>
+                    current.map((candidate) =>
+                      candidate.id === item.id
+                        ? { ...candidate, completed: !candidate.completed }
+                        : candidate,
+                    ),
+                  )
+                }
+              />{' '}
+              <span>{item.title}</span>
+            </label>
+            <small>{item.completed ? 'Completed' : item.due}</small>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
