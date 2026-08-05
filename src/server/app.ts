@@ -293,6 +293,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           url.searchParams.get('view') ?? 'all',
         ),
         displayTimezone: 'UTC',
+        actorMembershipId: current.membership_id,
       });
     else if (url.pathname === '/api/tasks' && request.method === 'POST') {
       void body(request).then((data) => {
@@ -401,6 +402,68 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         }
       });
       return true;
+    } else if (url.pathname === '/api/deals' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new DealService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          {
+            stageId: url.searchParams.get('stageId') ?? undefined,
+            status: url.searchParams.get('status') ?? undefined,
+            companyId: url.searchParams.get('companyId') ?? undefined,
+            text: url.searchParams.get('text') ?? undefined,
+            includeArchived: url.searchParams.get('includeArchived') === 'true',
+          },
+        ),
+      );
+    else if (url.pathname === '/api/search' && request.method === 'GET')
+      sendJson(
+        response,
+        200,
+        new SearchService(db).search(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams.get('q') ?? url.searchParams.get('text') ?? '',
+          Number(url.searchParams.get('limit') ?? 10),
+        ),
+      );
+    else if (url.pathname === '/api/notifications' && request.method === 'GET')
+      sendJson(response, 200, {
+        items: new NotificationService(db).list(
+          {
+            organizationId: current.organization_id,
+            membershipId: current.membership_id,
+            role: current.role as 'owner' | 'member' | 'viewer',
+          },
+          url.searchParams.get('unread') === 'true',
+        ),
+      });
+    else if (url.pathname === '/api/duplicates' && request.method === 'GET') {
+      const resource = url.searchParams.get('resource');
+      const duplicateId = url.searchParams.get('id');
+      if (!resource || !duplicateId) sendJson(response, 200, { items: [] });
+      else if (resource !== 'company' && resource !== 'contact')
+        throw new DuplicateError('VALIDATION', 'Choose a valid CRM resource.');
+      else
+        sendJson(response, 200, {
+          items: new DuplicateService(db).candidates(
+            {
+              organizationId: current.organization_id,
+              membershipId: current.membership_id,
+              role: current.role as 'owner' | 'member' | 'viewer',
+            },
+            resource as DuplicateResource,
+            duplicateId,
+          ),
+        });
     } else if (url.pathname === '/api/audit' && request.method === 'GET')
       sendJson(
         response,
