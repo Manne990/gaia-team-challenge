@@ -16,5 +16,5 @@ function readPort(value: string | undefined): number {
 export const config = {
   host: argument('--host') ?? process.env.NORTHSTAR_HOST ?? '127.0.0.1',
   port: readPort(argument('--port') ?? process.env.NORTHSTAR_PORT),
-  databasePath: resolve(process.env.NORTHSTAR_DB_PATH ?? './data/northstar.sqlite'),
+  databasePath: resolve(process.env.NORTHSTAR_DB_PATH ?? './.data/northstar.sqlite'),
 };
