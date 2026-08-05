@@ -19,7 +19,7 @@ import { DealError, DealService, type DealInput } from './deals.js';
 import { SearchError, SearchService, type SearchResource } from './search.js';
 import { NotificationError, NotificationService } from './notifications.js';
 import { DuplicateError, DuplicateService, type DuplicateResource } from './duplicates.js';
-import { CsvImportService, type ImportResource } from './csv.js';
+import { CsvImportService, renderCsv, type ImportResource } from './csv.js';
 import { listAudit } from './audit.js';
 import { AdministrationError, AdministrationService } from './administration.js';
 export function sendJson(response: ServerResponse, status: number, body: unknown): void {
@@ -257,7 +257,23 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
   const id = parts[2];
   let deferred = false;
   try {
-    if (url.pathname === '/api/imports/preview' && request.method === 'POST') {
+    if (url.pathname === '/api/exports/companies' && request.method === 'GET') {
+      const items = listCompanies(db, current.organization_id, url.searchParams).items as Record<
+        string,
+        unknown
+      >[];
+      response.writeHead(200, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="companies.csv"',
+        'cache-control': 'no-store',
+      });
+      response.end(
+        renderCsv(
+          ['name', 'external_reference', 'website', 'phone', 'industry', 'lifecycle_status'],
+          items,
+        ),
+      );
+    } else if (url.pathname === '/api/imports/preview' && request.method === 'POST') {
       if (current.role === 'viewer')
         throw new CompanyError('FORBIDDEN', 'Viewer access is read only.', 403);
       deferred = true;
