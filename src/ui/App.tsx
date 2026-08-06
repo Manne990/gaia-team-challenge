@@ -290,6 +290,9 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   const [lifecycleStatus, setLifecycleStatus] = useState('lead');
   const [phone, setPhone] = useState('');
   const [description, setDescription] = useState('');
+  const [externalReference, setExternalReference] = useState('');
+  const [size, setSize] = useState('');
+  const [address, setAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const load = () =>
     void fetch('/api/companies')
@@ -312,7 +315,17 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
     const response = await fetch('/api/companies', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, website, industry, lifecycleStatus, phone, description }),
+      body: JSON.stringify({
+        name,
+        website,
+        industry,
+        lifecycleStatus,
+        phone,
+        description,
+        externalReference,
+        size,
+        address,
+      }),
     });
     if (!response.ok) return setError('Could not create company.');
     setName('');
@@ -320,6 +333,9 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
     setIndustry('');
     setPhone('');
     setDescription('');
+    setExternalReference('');
+    setSize('');
+    setAddress('');
     setError(null);
     load();
   }
@@ -365,6 +381,30 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          External reference
+          <input
+            value={externalReference}
+            onChange={(event) => setExternalReference(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Size
+          <input
+            value={size}
+            onChange={(event) => setSize(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Address
+          <input
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
             disabled={readOnly}
           />
         </label>
