@@ -731,6 +731,8 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   };
   const [items, setItems] = useState<Task[]>([]);
   const [title, setTitle] = useState('');
+  const [dueAt, setDueAt] = useState('');
+  const [priority, setPriority] = useState<Task['priority']>('medium');
   const [selectedView, setSelectedView] = useState<TaskView>(view);
   const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -766,12 +768,19 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
       const response = await fetch(apiUrl('/api/tasks'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), assigneeMembershipId }),
+        body: JSON.stringify({
+          title: title.trim(),
+          assigneeMembershipId,
+          dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+          priority,
+        }),
       });
       if (!response.ok) throw new Error('Could not create task.');
       const created = (await response.json()) as Task;
       setItems((current) => [...current, created]);
       setTitle('');
+      setDueAt('');
+      setPriority('medium');
       setError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create task.');
@@ -826,6 +835,26 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
         <label>
           Task title
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
+        </label>
+        <label>
+          Due date and time
+          <input
+            type="datetime-local"
+            value={dueAt}
+            onChange={(event) => setDueAt(event.target.value)}
+          />
+        </label>
+        <label>
+          Priority
+          <select
+            value={priority}
+            onChange={(event) => setPriority(event.target.value as Task['priority'])}
+          >
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
         </label>
         <button className="primary-button" type="submit">
           Add task

@@ -72,6 +72,8 @@ describe('application shell', () => {
     await user.click(screen.getByRole('button', { name: 'Tasks' }));
     await screen.findByText('Review proposal');
     await user.type(screen.getByRole('textbox', { name: 'Task title' }), 'Send contract');
+    expect(screen.getByLabelText('Due date and time')).toHaveAttribute('type', 'datetime-local');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Priority' }), 'high');
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ ...task, id: 'task-2', title: 'Send contract' })),
     );
