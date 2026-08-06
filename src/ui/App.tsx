@@ -735,6 +735,9 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [selectedView, setSelectedView] = useState<TaskView>(view);
   const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
+  const [assignableMembers, setAssignableMembers] = useState<
+    Array<{ id: string; displayName: string }>
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const apiUrl = (path: string) => new URL(path, window.location.origin).toString();
@@ -746,9 +749,14 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
         apiUrl(`/api/tasks${selectedView === 'all' ? '' : `?view=${selectedView}`}`),
       );
       if (!response.ok) throw new Error('Could not load tasks.');
-      const data = (await response.json()) as { items: Task[]; actorMembershipId: string };
+      const data = (await response.json()) as {
+        items: Task[];
+        actorMembershipId: string;
+        assignableMembers: Array<{ id: string; displayName: string }>;
+      };
       setItems(data.items);
-      setAssigneeMembershipId(data.actorMembershipId);
+      setAssigneeMembershipId((current) => current ?? data.actorMembershipId);
+      setAssignableMembers(data.assignableMembers ?? []);
       setError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not load tasks.');
@@ -835,6 +843,20 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
         <label>
           Task title
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
+        </label>
+        <label>
+          Assignee
+          <select
+            value={assigneeMembershipId ?? ''}
+            onChange={(event) => setAssigneeMembershipId(event.target.value)}
+            required
+          >
+            {assignableMembers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.displayName}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Due date and time
