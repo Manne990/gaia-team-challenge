@@ -713,7 +713,14 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
 }
 
 type TaskView =
-  'all' | 'assigned' | 'overdue' | 'due-today' | 'upcoming' | 'completed' | 'follow-up';
+  | 'all'
+  | 'assigned'
+  | 'overdue'
+  | 'due-today'
+  | 'upcoming'
+  | 'completed'
+  | 'archived'
+  | 'follow-up';
 
 function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   type Task = {
@@ -727,6 +734,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
     companyId: string | null;
     contactId: string | null;
     dealId: string | null;
+    archivedAt: string | null;
     version: number;
   };
   const [items, setItems] = useState<Task[]>([]);
@@ -820,6 +828,15 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
     if (!response.ok) return setError('Could not archive task.');
     setItems((current) => current.filter((item) => item.id !== task.id));
   }
+  async function restoreTask(task: Task) {
+    const response = await fetch(apiUrl(`/api/tasks/${task.id}/restore`), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: task.version }),
+    });
+    if (!response.ok) return setError('Could not restore task.');
+    setItems((current) => current.filter((item) => item.id !== task.id));
+  }
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -846,6 +863,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
             <option value="due-today">Due today</option>
             <option value="upcoming">Upcoming</option>
             <option value="completed">Completed</option>
+            <option value="archived">Archived</option>
             {view === 'follow-up' ? <option value="follow-up">Follow-up work</option> : null}
           </select>
         </label>
@@ -907,9 +925,15 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
             <small>
               {item.status === 'completed' ? 'Completed' : (item.dueAt ?? 'No due date')}
             </small>
-            <button type="button" className="text-button" onClick={() => void archiveTask(item)}>
-              Archive
-            </button>
+            {selectedView === 'archived' ? (
+              <button type="button" className="text-button" onClick={() => void restoreTask(item)}>
+                Restore
+              </button>
+            ) : (
+              <button type="button" className="text-button" onClick={() => void archiveTask(item)}>
+                Archive
+              </button>
+            )}
           </li>
         ))}
       </ul>
