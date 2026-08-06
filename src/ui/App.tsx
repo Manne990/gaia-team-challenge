@@ -105,7 +105,7 @@ export function App({
               <h1 id="page-title">{active.label}</h1>
               <p>{active.detail}</p>
             </div>
-            {canCreate ? (
+            {canCreate && active.label !== 'Companies' ? (
               <button
                 className="primary-button"
                 type="button"
@@ -274,7 +274,7 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
       <EmptyState
         title={`No ${page.toLowerCase()} selected`}
         description="Choose a saved view or create a record to begin working here."
-        actionLabel={`Create ${page === 'Activities' ? 'activity' : page.slice(0, -1).toLowerCase()}`}
+        actionLabel={`Create ${singular(page)}`}
       />
     </section>
   );
