@@ -115,7 +115,7 @@ export function App({
                   )
                 }
               >
-                Create {active.label === 'Dashboard' ? 'record' : active.label.slice(0, -1)}
+                Create {active.label === 'Dashboard' ? 'record' : singular(active.label)}
               </button>
             ) : (
               <span className="read-only-note">Viewer access · read only</span>
@@ -124,7 +124,7 @@ export function App({
           {active.label === 'Dashboard' ? (
             <Dashboard onConfirm={() => setDialogOpen(true)} onNavigate={choosePage} />
           ) : (
-            <WorkspacePage page={active.label} />
+            <WorkspacePage page={active.label} role={role} />
           )}
         </main>
       </div>
@@ -253,9 +253,13 @@ function Dashboard({
   );
 }
 
-function WorkspacePage({ page }: { page: string }) {
+const singular = (label: string) =>
+  ({ Companies: 'company', Activities: 'activity', Audit: 'audit', Administration: 'member' })[
+    label
+  ] ?? label.slice(0, -1).toLowerCase();
+function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   if (page === 'Tasks') return <TaskWorkspace />;
-  if (page === 'Companies') return <CompanyWorkspace />;
+  if (page === 'Companies') return <CompanyWorkspace readOnly={role === 'viewer'} />;
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -276,7 +280,7 @@ function WorkspacePage({ page }: { page: string }) {
   );
 }
 
-function CompanyWorkspace() {
+function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   const [items, setItems] = useState<Array<{ id: string; name: string; lifecycle_status: string }>>(
     [],
   );
@@ -316,12 +320,18 @@ function CompanyWorkspace() {
       <form onSubmit={create}>
         <label>
           Company name
-          <input value={name} onChange={(event) => setName(event.target.value)} required />
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            disabled={readOnly}
+          />
         </label>
-        <button className="primary-button" type="submit">
+        <button className="primary-button" type="submit" disabled={readOnly}>
           Create company
         </button>
       </form>
+      {readOnly ? <p className="read-only-note">Viewer access · read only</p> : null}
       {error ? <ErrorState title="Companies unavailable" description={error} /> : null}
       <ul>
         {items.map((item) => (
