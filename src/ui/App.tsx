@@ -712,6 +712,9 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   );
 }
 
+type TaskView =
+  'all' | 'assigned' | 'overdue' | 'due-today' | 'upcoming' | 'completed' | 'follow-up';
+
 function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   type Task = {
     id: string;
@@ -728,6 +731,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   };
   const [items, setItems] = useState<Task[]>([]);
   const [title, setTitle] = useState('');
+  const [selectedView, setSelectedView] = useState<TaskView>(view);
   const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -736,7 +740,9 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   async function loadTasks() {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl(`/api/tasks${view === 'all' ? '' : `?view=${view}`}`));
+      const response = await fetch(
+        apiUrl(`/api/tasks${selectedView === 'all' ? '' : `?view=${selectedView}`}`),
+      );
       if (!response.ok) throw new Error('Could not load tasks.');
       const data = (await response.json()) as { items: Task[]; actorMembershipId: string };
       setItems(data.items);
@@ -751,7 +757,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
 
   useEffect(() => {
     void loadTasks();
-  }, [view]);
+  }, [selectedView]);
 
   async function addTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -801,6 +807,22 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
         </div>
       </div>
       <form className="task-form" onSubmit={addTask}>
+        <label>
+          Task view
+          <select
+            value={selectedView}
+            onChange={(event) => setSelectedView(event.target.value as TaskView)}
+            disabled={view === 'follow-up'}
+          >
+            <option value="all">All active and completed</option>
+            <option value="assigned">Assigned to me</option>
+            <option value="overdue">Overdue</option>
+            <option value="due-today">Due today</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+            {view === 'follow-up' ? <option value="follow-up">Follow-up work</option> : null}
+          </select>
+        </label>
         <label>
           Task title
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
