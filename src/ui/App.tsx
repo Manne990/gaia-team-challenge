@@ -289,6 +289,7 @@ function ContactWorkspace({ readOnly }: { readOnly: boolean }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const load = () =>
     void fetch('/api/contacts').then(async (response) => {
       const value = (await response.json()) as { items: typeof items; actorMembershipId: string };
@@ -309,12 +310,12 @@ function ContactWorkspace({ readOnly }: { readOnly: boolean }) {
         ownerMembershipId: membershipId,
       }),
     });
-    if (response.ok) {
-      setFirstName('');
-      setLastName('');
-      setEmail('');
-      load();
-    }
+    if (!response.ok) return setError('Please correct the contact details and try again.');
+    setError(null);
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    load();
   }
   return (
     <section className="data-panel" aria-label="Contact records">
@@ -351,6 +352,7 @@ function ContactWorkspace({ readOnly }: { readOnly: boolean }) {
           Create contact
         </button>
       </form>
+      {error ? <ErrorState title="Could not create contact" description={error} /> : null}
       {readOnly ? <p className="read-only-note">Viewer access · read only</p> : null}
       <ul>
         {items.map((item) => (
