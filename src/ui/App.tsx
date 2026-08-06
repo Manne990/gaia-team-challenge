@@ -293,6 +293,7 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   const [externalReference, setExternalReference] = useState('');
   const [size, setSize] = useState('');
   const [address, setAddress] = useState('');
+  const [tags, setTags] = useState('');
   const [error, setError] = useState<string | null>(null);
   const load = () =>
     void fetch('/api/companies')
@@ -325,6 +326,10 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
         externalReference,
         size,
         address,
+        tags: tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
       }),
     });
     if (!response.ok) return setError('Could not create company.');
@@ -336,6 +341,7 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
     setExternalReference('');
     setSize('');
     setAddress('');
+    setTags('');
     setError(null);
     load();
   }
@@ -405,6 +411,14 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
           <input
             value={address}
             onChange={(event) => setAddress(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Tags
+          <input
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
             disabled={readOnly}
           />
         </label>
