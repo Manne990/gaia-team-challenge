@@ -355,6 +355,11 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         ),
         displayTimezone: 'UTC',
         actorMembershipId: current.membership_id,
+        assignableMembers: db
+          .prepare(
+            'SELECT m.id,u.display_name AS displayName FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=? ORDER BY u.display_name,m.id',
+          )
+          .all(current.organization_id),
       });
     else if (url.pathname === '/api/tasks' && request.method === 'POST') {
       deferred = true;
