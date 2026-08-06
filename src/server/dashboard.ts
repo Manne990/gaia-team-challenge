@@ -54,6 +54,19 @@ export function dashboard(
         'SELECT id,subject,type,occurred_at FROM activities WHERE organization_id=? ORDER BY occurred_at DESC,id DESC LIMIT 10',
       )
       .all(actor.organizationId),
+    followUpTasks: db
+      .prepare(
+        `SELECT t.id,t.title,t.due_at AS dueAt,t.priority,
+          coalesce(c.name, '—') AS companyName,u.display_name AS assigneeName
+         FROM tasks t
+         JOIN memberships m ON m.id=t.assignee_membership_id AND m.organization_id=t.organization_id
+         JOIN users u ON u.id=m.user_id
+         LEFT JOIN companies c ON c.id=t.company_id AND c.organization_id=t.organization_id
+         WHERE t.organization_id=? AND t.archived_at IS NULL
+           AND t.status NOT IN ('completed','cancelled') AND t.due_at IS NOT NULL
+         ORDER BY t.due_at,t.id LIMIT 10`,
+      )
+      .all(actor.organizationId),
     staleAccounts: db
       .prepare(
         'SELECT c.id,c.name,c.updated_at FROM companies c WHERE c.organization_id=? AND c.archived_at IS NULL AND c.updated_at < ? ORDER BY c.updated_at,c.id LIMIT 25',
