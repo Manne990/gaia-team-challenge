@@ -811,6 +811,15 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
       setError(caught instanceof Error ? caught.message : 'Could not update task.');
     }
   }
+  async function archiveTask(task: Task) {
+    const response = await fetch(apiUrl(`/api/tasks/${task.id}/archive`), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: task.version }),
+    });
+    if (!response.ok) return setError('Could not archive task.');
+    setItems((current) => current.filter((item) => item.id !== task.id));
+  }
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -898,6 +907,9 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
             <small>
               {item.status === 'completed' ? 'Completed' : (item.dueAt ?? 'No due date')}
             </small>
+            <button type="button" className="text-button" onClick={() => void archiveTask(item)}>
+              Archive
+            </button>
           </li>
         ))}
       </ul>
