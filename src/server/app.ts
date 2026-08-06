@@ -384,6 +384,38 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
         }
       });
       return true;
+    } else if (
+      url.pathname.match(/^\/api\/tasks\/[^/]+\/(archive|restore)$/) &&
+      request.method === 'POST'
+    ) {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          const match = url.pathname.match(/^\/api\/tasks\/([^/]+)\/(archive|restore)$/)!;
+          const version = (data as { version?: unknown }).version;
+          if (typeof version !== 'number' || !Number.isInteger(version))
+            throw new TaskError('VALIDATION', 'A task version is required.');
+          sendJson(
+            response,
+            200,
+            new TaskService(db).archive(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              match[1],
+              version,
+              match[2] === 'restore',
+            ),
+          );
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
     } else if (id && url.pathname.startsWith('/api/tasks/') && request.method === 'PUT') {
       deferred = true;
       void body(request).then((data) => {
