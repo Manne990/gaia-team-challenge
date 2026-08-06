@@ -122,7 +122,7 @@ export function App({
             )}
           </section>
           {active.label === 'Dashboard' ? (
-            <Dashboard onConfirm={() => setDialogOpen(true)} />
+            <Dashboard onConfirm={() => setDialogOpen(true)} onNavigate={choosePage} />
           ) : (
             <WorkspacePage page={active.label} />
           )}
@@ -153,7 +153,13 @@ type DashboardData = {
   stageDistribution: Array<{ id: string; name: string; count: number; amountMinor: number }>;
 };
 
-function Dashboard({ onConfirm }: { onConfirm: () => void }) {
+function Dashboard({
+  onConfirm,
+  onNavigate,
+}: {
+  onConfirm: () => void;
+  onNavigate: (page: string) => void;
+}) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,22 +199,26 @@ function Dashboard({ onConfirm }: { onConfirm: () => void }) {
           label="Open pipeline"
           value={money(dashboard.openPipeline.amountMinor)}
           trend={`${dashboard.openPipeline.count} open deals`}
+          onClick={() => onNavigate('Deals')}
         />
         <Metric
           label="Deals closing soon"
           value={`${dashboard.closingSoon.length}`}
           trend="Next 7 days"
+          onClick={() => onNavigate('Deals')}
         />
         <Metric
           label="Follow-up work"
           value={`${dashboard.upcomingTasks}`}
           trend={`${dashboard.overdueTasks} overdue`}
           warn={dashboard.overdueTasks > 0}
+          onClick={() => onNavigate('Tasks')}
         />
         <Metric
           label="Recent activity"
           value={`${dashboard.recentActivity.length}`}
           trend="Latest 10 entries"
+          onClick={() => onNavigate('Activities')}
         />
       </section>
       {error ? <ErrorState title="Dashboard unavailable" description={error} /> : null}
@@ -386,18 +396,20 @@ function Metric({
   value,
   trend,
   warn = false,
+  onClick,
 }: {
   label: string;
   value: string;
   trend: string;
   warn?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <article className="metric">
+    <button className="metric" type="button" onClick={onClick} aria-label={`View ${label}`}>
       <p>{label}</p>
       <strong>{value}</strong>
       <span className={warn ? 'warning-text' : 'muted'}>{trend}</span>
-    </article>
+    </button>
   );
 }
 
