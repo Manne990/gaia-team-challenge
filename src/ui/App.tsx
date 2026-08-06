@@ -255,6 +255,7 @@ function Dashboard({
 
 function WorkspacePage({ page }: { page: string }) {
   if (page === 'Tasks') return <TaskWorkspace />;
+  if (page === 'Companies') return <CompanyWorkspace />;
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -271,6 +272,64 @@ function WorkspacePage({ page }: { page: string }) {
         description="Choose a saved view or create a record to begin working here."
         actionLabel={`Create ${page === 'Activities' ? 'activity' : page.slice(0, -1).toLowerCase()}`}
       />
+    </section>
+  );
+}
+
+function CompanyWorkspace() {
+  const [items, setItems] = useState<Array<{ id: string; name: string; lifecycle_status: string }>>(
+    [],
+  );
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const load = () =>
+    void fetch('/api/companies')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load companies.');
+        setItems(
+          (
+            (await response.json()) as {
+              items: Array<{ id: string; name: string; lifecycle_status: string }>;
+            }
+          ).items,
+        );
+      })
+      .catch((caught) =>
+        setError(caught instanceof Error ? caught.message : 'Could not load companies.'),
+      );
+  useEffect(load, []);
+  async function create(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const response = await fetch('/api/companies', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) return setError('Could not create company.');
+    setName('');
+    setError(null);
+    load();
+  }
+  return (
+    <section className="data-panel">
+      <h2>Companies</h2>
+      <form onSubmit={create}>
+        <label>
+          Company name
+          <input value={name} onChange={(event) => setName(event.target.value)} required />
+        </label>
+        <button className="primary-button" type="submit">
+          Create company
+        </button>
+      </form>
+      {error ? <ErrorState title="Companies unavailable" description={error} /> : null}
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>
+            {item.name} · {item.lifecycle_status}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
