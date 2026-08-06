@@ -144,15 +144,75 @@ export function App({
   );
 }
 
+type DashboardData = {
+  openPipeline: { count: number; amountMinor: number };
+  overdueTasks: number;
+  upcomingTasks: number;
+  recentActivity: Array<{ id: string }>;
+  closingSoon: Array<{ id: string }>;
+  stageDistribution: Array<{ id: string; name: string; count: number; amountMinor: number }>;
+};
+
 function Dashboard({ onConfirm }: { onConfirm: () => void }) {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch('/api/dashboard')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load dashboard data.');
+        const value = (await response.json()) as DashboardData;
+        if (!value.openPipeline || !Array.isArray(value.closingSoon))
+          throw new Error('Could not load dashboard data.');
+        setData(value);
+        setError(null);
+      })
+      .catch((caught) =>
+        setError(caught instanceof Error ? caught.message : 'Could not load dashboard data.'),
+      );
+  }, []);
+
+  const dashboard =
+    data ??
+    ({
+      openPipeline: { count: 0, amountMinor: 0 },
+      overdueTasks: 0,
+      upcomingTasks: 0,
+      recentActivity: [],
+      closingSoon: [],
+      stageDistribution: [],
+    } satisfies DashboardData);
+  const money = (amountMinor: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+      amountMinor / 100,
+    );
   return (
     <>
       <section className="metric-grid" aria-label="Dashboard metrics">
-        <Metric label="Open pipeline" value="$184,500" trend="12% from last month" />
-        <Metric label="Deals closing soon" value="8" trend="3 need attention" />
-        <Metric label="Tasks due today" value="6" trend="2 overdue" warn />
-        <Metric label="Recent activity" value="24" trend="Across 14 accounts" />
+        <Metric
+          label="Open pipeline"
+          value={money(dashboard.openPipeline.amountMinor)}
+          trend={`${dashboard.openPipeline.count} open deals`}
+        />
+        <Metric
+          label="Deals closing soon"
+          value={`${dashboard.closingSoon.length}`}
+          trend="Next 7 days"
+        />
+        <Metric
+          label="Follow-up work"
+          value={`${dashboard.upcomingTasks}`}
+          trend={`${dashboard.overdueTasks} overdue`}
+          warn={dashboard.overdueTasks > 0}
+        />
+        <Metric
+          label="Recent activity"
+          value={`${dashboard.recentActivity.length}`}
+          trend="Latest 10 entries"
+        />
       </section>
+      {error ? <ErrorState title="Dashboard unavailable" description={error} /> : null}
+      {!data && !error ? <LoadingState label="Loading dashboard" /> : null}
       <section className="dashboard-grid">
         <article className="data-panel">
           <div className="panel-heading">
@@ -176,7 +236,7 @@ function Dashboard({ onConfirm }: { onConfirm: () => void }) {
               View deals
             </button>
           </div>
-          <StageList />
+          <StageList stages={dashboard.stageDistribution} money={money} />
         </article>
       </section>
     </>
@@ -385,30 +445,28 @@ function TaskTable() {
   );
 }
 
-function StageList() {
+function StageList({
+  stages,
+  money,
+}: {
+  stages: DashboardData['stageDistribution'];
+  money: (amountMinor: number) => string;
+}) {
+  const total = stages.reduce((sum, stage) => sum + stage.amountMinor, 0);
   return (
     <ul className="stage-list">
-      <li>
-        <span>Discovery</span>
-        <strong>$48,000</strong>
-        <progress value="26" max="100">
-          26%
-        </progress>
-      </li>
-      <li>
-        <span>Proposal</span>
-        <strong>$72,500</strong>
-        <progress value="39" max="100">
-          39%
-        </progress>
-      </li>
-      <li>
-        <span>Negotiation</span>
-        <strong>$64,000</strong>
-        <progress value="35" max="100">
-          35%
-        </progress>
-      </li>
+      {stages.map((stage) => {
+        const percent = total ? Math.round((stage.amountMinor / total) * 100) : 0;
+        return (
+          <li key={stage.id}>
+            <span>{stage.name}</span>
+            <strong>{money(stage.amountMinor)}</strong>
+            <progress value={percent} max="100">
+              {percent}%
+            </progress>
+          </li>
+        );
+      })}
     </ul>
   );
 }

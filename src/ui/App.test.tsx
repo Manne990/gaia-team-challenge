@@ -53,8 +53,17 @@ describe('application shell', () => {
       dealId: null,
       version: 1,
     };
+    const dashboard = {
+      openPipeline: { count: 1, amountMinor: 12500 },
+      overdueTasks: 0,
+      upcomingTasks: 1,
+      recentActivity: [],
+      closingSoon: [],
+      stageDistribution: [],
+    };
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard)))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ items: [task], actorMembershipId: 'member-1' })),
       );
