@@ -83,7 +83,35 @@ describe('application shell', () => {
       ),
     );
     await user.click(screen.getByRole('checkbox', { name: 'Send contract' }));
-    expect(await screen.findByText('Completed')).toBeVisible();
+    expect(await screen.findAllByText('Completed')).toHaveLength(2);
+    fetchMock.mockRestore();
+  });
+
+  it('loads each selected due-state task view from the server', async () => {
+    const user = userEvent.setup();
+    const dashboard = {
+      openPipeline: { count: 0, amountMinor: 0 },
+      overdueTasks: 0,
+      upcomingTasks: 0,
+      recentActivity: [],
+      closingSoon: [],
+      followUpTasks: [],
+      stageDistribution: [],
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard)))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], actorMembershipId: 'member-1' })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], actorMembershipId: 'member-1' })),
+      );
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Tasks' }));
+    await screen.findByRole('combobox', { name: 'Task view' });
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Task view' }), 'overdue');
+    expect(fetchMock).toHaveBeenLastCalledWith('http://localhost:3000/api/tasks?view=overdue');
     fetchMock.mockRestore();
   });
 
