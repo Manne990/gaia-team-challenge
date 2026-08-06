@@ -39,7 +39,8 @@ export function App({
     items.find(
       (item) =>
         item.label === activePage ||
-        (activePage === 'Deals closing soon' && item.label === 'Deals'),
+        (activePage === 'Deals closing soon' && item.label === 'Deals') ||
+        (activePage === 'Recent activity' && item.label === 'Activities'),
     ) ?? items[0];
   const canCreate = role !== 'viewer';
 
@@ -232,7 +233,7 @@ function Dashboard({
           label="Recent activity"
           value={`${dashboard.recentActivity.length}`}
           trend="Latest 10 entries"
-          onClick={() => onNavigate('Activities')}
+          onClick={() => onNavigate('Recent activity')}
         />
       </section>
       {error ? <ErrorState title="Dashboard unavailable" description={error} /> : null}
@@ -275,6 +276,8 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   if (page === 'Tasks') return <TaskWorkspace />;
   if (page === 'Companies') return <CompanyWorkspace readOnly={role === 'viewer'} />;
   if (page === 'Contacts') return <ContactWorkspace readOnly={role === 'viewer'} />;
+  if (page === 'Activities' || page === 'Recent activity')
+    return <ActivityWorkspace recent={page === 'Recent activity'} />;
   if (page === 'Deals' || page === 'Deals closing soon')
     return <DealWorkspace closingSoon={page === 'Deals closing soon'} />;
   return (
@@ -293,6 +296,58 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
         description="Choose a saved view or create a record to begin working here."
         actionLabel={`Create ${singular(page)}`}
       />
+    </section>
+  );
+}
+
+function ActivityWorkspace({ recent = false }: { recent?: boolean }) {
+  const [items, setItems] = useState<
+    Array<{ id: string; type: string; subject: string; occurred_at: string }>
+  >([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    void fetch(`/api/activities?pageSize=${recent ? 10 : 25}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load activity records.');
+        const value = (await response.json()) as { items: typeof items };
+        setItems(value.items);
+        setError(null);
+        setLoaded(true);
+      })
+      .catch((caught) => {
+        setError(caught instanceof Error ? caught.message : 'Could not load activity records.');
+        setLoaded(true);
+      });
+  }, [recent]);
+  return (
+    <section
+      className="data-panel"
+      aria-label={recent ? 'Recent activity records' : 'Activity records'}
+    >
+      <div className="panel-heading">
+        <div>
+          <h2>{recent ? 'Recent activity' : 'Activity records'}</h2>
+          <p>
+            {recent ? 'Latest 10 entries in your organization' : 'Organization activity history'}
+          </p>
+        </div>
+      </div>
+      {error ? <ErrorState title="Activities unavailable" description={error} /> : null}
+      {!error && !loaded ? <LoadingState label="Loading activity records" /> : null}
+      {!error && loaded && !items.length ? (
+        <EmptyState title="No activity records" description="No activity has been recorded yet." />
+      ) : null}
+      {items.length ? (
+        <ul className="record-list">
+          {items.map((activity) => (
+            <li key={activity.id}>
+              <strong>{activity.subject}</strong> · {activity.type} ·{' '}
+              {new Date(activity.occurred_at).toLocaleString()}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }
