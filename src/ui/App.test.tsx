@@ -125,6 +125,42 @@ describe('application shell', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/deals?status=open');
     fetchMock.mockRestore();
   });
+
+  it('opens the matching recent-activity records from the dashboard metric', async () => {
+    const user = userEvent.setup();
+    const dashboard = {
+      openPipeline: { count: 0, amountMinor: 0 },
+      overdueTasks: 0,
+      upcomingTasks: 0,
+      recentActivity: [{ id: 'activity-1' }],
+      closingSoon: [],
+      followUpTasks: [],
+      stageDistribution: [],
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard)))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'activity-1',
+                type: 'call',
+                subject: 'Discovery call',
+                occurred_at: '2026-01-15T12:00:00.000Z',
+              },
+            ],
+          }),
+        ),
+      );
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'View Recent activity' }));
+    expect(await screen.findByRole('heading', { name: 'Recent activity' })).toBeVisible();
+    expect(await screen.findByText('Discovery call')).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/activities?pageSize=10');
+    fetchMock.mockRestore();
+  });
 });
 
 describe('operational states', () => {
