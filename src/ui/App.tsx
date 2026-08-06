@@ -285,6 +285,9 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
     [],
   );
   const [name, setName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [lifecycleStatus, setLifecycleStatus] = useState('lead');
   const [error, setError] = useState<string | null>(null);
   const load = () =>
     void fetch('/api/companies')
@@ -307,10 +310,12 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
     const response = await fetch('/api/companies', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, website, industry, lifecycleStatus }),
     });
     if (!response.ok) return setError('Could not create company.');
     setName('');
+    setWebsite('');
+    setIndustry('');
     setError(null);
     load();
   }
@@ -326,6 +331,35 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
             required
             disabled={readOnly}
           />
+        </label>
+        <label>
+          Website
+          <input
+            value={website}
+            onChange={(event) => setWebsite(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Industry
+          <input
+            value={industry}
+            onChange={(event) => setIndustry(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Lifecycle status
+          <select
+            value={lifecycleStatus}
+            onChange={(event) => setLifecycleStatus(event.target.value)}
+            disabled={readOnly}
+          >
+            <option value="lead">Lead</option>
+            <option value="prospect">Prospect</option>
+            <option value="customer">Customer</option>
+            <option value="inactive">Inactive</option>
+          </select>
         </label>
         <button className="primary-button" type="submit" disabled={readOnly}>
           Create company
