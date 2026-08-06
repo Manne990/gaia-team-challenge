@@ -294,9 +294,10 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   const [size, setSize] = useState('');
   const [address, setAddress] = useState('');
   const [tags, setTags] = useState('');
+  const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const load = () =>
-    void fetch('/api/companies')
+    void fetch(`/api/companies?q=${encodeURIComponent(query)}`)
       .then(async (response) => {
         if (!response.ok) throw new Error('Could not load companies.');
         setItems(
@@ -310,7 +311,7 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
       .catch((caught) =>
         setError(caught instanceof Error ? caught.message : 'Could not load companies.'),
       );
-  useEffect(load, []);
+  useEffect(load, [query]);
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const response = await fetch('/api/companies', {
@@ -348,6 +349,10 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   return (
     <section className="data-panel" aria-label="Company records">
       <h2>Company records</h2>
+      <label>
+        Search companies
+        <input value={query} onChange={(event) => setQuery(event.target.value)} />
+      </label>
       <form onSubmit={create}>
         <label>
           Company name
