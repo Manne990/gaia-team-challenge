@@ -40,7 +40,8 @@ export function App({
       (item) =>
         item.label === activePage ||
         (activePage === 'Deals closing soon' && item.label === 'Deals') ||
-        (activePage === 'Recent activity' && item.label === 'Activities'),
+        (activePage === 'Recent activity' && item.label === 'Activities') ||
+        (activePage === 'Tasks follow-up' && item.label === 'Tasks'),
     ) ?? items[0];
   const canCreate = role !== 'viewer';
 
@@ -227,7 +228,7 @@ function Dashboard({
           value={`${dashboard.upcomingTasks}`}
           trend={`${dashboard.overdueTasks} overdue`}
           warn={dashboard.overdueTasks > 0}
-          onClick={() => onNavigate('Tasks')}
+          onClick={() => onNavigate('Tasks follow-up')}
         />
         <Metric
           label="Recent activity"
@@ -274,6 +275,7 @@ const singular = (label: string) =>
   ] ?? label.slice(0, -1).toLowerCase();
 function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   if (page === 'Tasks') return <TaskWorkspace />;
+  if (page === 'Tasks follow-up') return <TaskWorkspace view="follow-up" />;
   if (page === 'Companies') return <CompanyWorkspace readOnly={role === 'viewer'} />;
   if (page === 'Contacts') return <ContactWorkspace readOnly={role === 'viewer'} />;
   if (page === 'Activities' || page === 'Recent activity')
@@ -710,7 +712,7 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   );
 }
 
-function TaskWorkspace() {
+function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   type Task = {
     id: string;
     title: string;
@@ -734,7 +736,7 @@ function TaskWorkspace() {
   async function loadTasks() {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl('/api/tasks'));
+      const response = await fetch(apiUrl(`/api/tasks${view === 'all' ? '' : `?view=${view}`}`));
       if (!response.ok) throw new Error('Could not load tasks.');
       const data = (await response.json()) as { items: Task[]; actorMembershipId: string };
       setItems(data.items);
@@ -749,7 +751,7 @@ function TaskWorkspace() {
 
   useEffect(() => {
     void loadTasks();
-  }, []);
+  }, [view]);
 
   async function addTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -790,8 +792,12 @@ function TaskWorkspace() {
     <section className="data-panel">
       <div className="panel-heading">
         <div>
-          <h2>Task workspace</h2>
-          <p>Due-state views use UTC.</p>
+          <h2>{view === 'follow-up' ? 'Follow-up work' : 'Task workspace'}</h2>
+          <p>
+            {view === 'follow-up'
+              ? 'Overdue tasks and tasks due in the next seven days, in UTC.'
+              : 'Due-state views use UTC.'}
+          </p>
         </div>
       </div>
       <form className="task-form" onSubmit={addTask}>

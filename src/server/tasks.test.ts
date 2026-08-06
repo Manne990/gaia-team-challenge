@@ -21,6 +21,14 @@ test('tasks enforce organization assignment, versions, lifecycle, and UTC views'
       priority: 'high',
     });
     assert.equal(service.list(actor, 'due-today').length, 1);
+    assert.equal(service.list(actor, 'follow-up').length, 1);
+    const later = service.create(actor, {
+      title: 'Later',
+      assigneeMembershipId: actor.membershipId,
+      dueAt: '2026-01-23T12:00:00.000Z',
+    });
+    assert.equal(service.list(actor, 'follow-up').length, 1);
+    service.archive(actor, later.id as string, later.version as number);
     assert.throws(
       () =>
         service.create(actor, { title: 'Bad', assigneeMembershipId: 'membership-outside-owner' }),
