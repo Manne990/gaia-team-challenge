@@ -251,7 +251,7 @@ function Dashboard({
               <h2>Pipeline by stage</h2>
               <p>Current open value</p>
             </div>
-            <button className="text-button" type="button">
+            <button className="text-button" type="button" onClick={() => onNavigate('Deals')}>
               View deals
             </button>
           </div>
@@ -270,6 +270,7 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   if (page === 'Tasks') return <TaskWorkspace />;
   if (page === 'Companies') return <CompanyWorkspace readOnly={role === 'viewer'} />;
   if (page === 'Contacts') return <ContactWorkspace readOnly={role === 'viewer'} />;
+  if (page === 'Deals') return <DealWorkspace />;
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -286,6 +287,88 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
         description="Choose a saved view or create a record to begin working here."
         actionLabel={`Create ${singular(page)}`}
       />
+    </section>
+  );
+}
+
+function DealWorkspace() {
+  const [items, setItems] = useState<
+    Array<{
+      id: string;
+      name: string;
+      company_name: string;
+      stage_name: string;
+      amount_minor: number;
+      currency: string;
+      expected_close_date: string;
+    }>
+  >([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    void fetch('/api/deals?status=open')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load open pipeline records.');
+        const value = (await response.json()) as { items: typeof items };
+        setItems(value.items);
+        setError(null);
+        setLoaded(true);
+      })
+      .catch((caught) => {
+        setError(
+          caught instanceof Error ? caught.message : 'Could not load open pipeline records.',
+        );
+        setLoaded(true);
+      });
+  }, []);
+  return (
+    <section className="data-panel" aria-label="Open pipeline records">
+      <div className="panel-heading">
+        <div>
+          <h2>Open pipeline</h2>
+          <p>Active deals in your organization</p>
+        </div>
+      </div>
+      {error ? <ErrorState title="Deals unavailable" description={error} /> : null}
+      {!error && !loaded ? <LoadingState label="Loading open pipeline" /> : null}
+      {!error && loaded && !items.length ? (
+        <EmptyState
+          title="No open deals"
+          description="There are no active deals in your organization."
+        />
+      ) : null}
+      {items.length ? (
+        <div className="table-scroll">
+          <table>
+            <caption className="sr-only">Open pipeline deals</caption>
+            <thead>
+              <tr>
+                <th scope="col">Deal</th>
+                <th scope="col">Company</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Close date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((deal) => (
+                <tr key={deal.id}>
+                  <td>{deal.name}</td>
+                  <td>{deal.company_name}</td>
+                  <td>{deal.stage_name}</td>
+                  <td>
+                    {new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: deal.currency,
+                    }).format(deal.amount_minor / 100)}
+                  </td>
+                  <td>{deal.expected_close_date}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </section>
   );
 }
