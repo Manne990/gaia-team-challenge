@@ -314,6 +314,7 @@ export class DealService {
       companyId?: string;
       text?: string;
       includeArchived?: boolean;
+      closingSoon?: boolean;
     } = {},
   ) {
     const conditions = ['d.organization_id=@organizationId'];
@@ -331,6 +332,16 @@ export class DealService {
     if (query.text) {
       conditions.push('(d.name LIKE @text OR c.name LIKE @text)');
       params.text = `%${query.text.trim()}%`;
+    }
+    if (query.closingSoon) {
+      const now = this.now();
+      const week = new Date(now);
+      week.setUTCDate(week.getUTCDate() + 7);
+      conditions.push(
+        'd.expected_close_date >= @closingStart AND d.expected_close_date < @closingEnd',
+      );
+      params.closingStart = now.slice(0, 10);
+      params.closingEnd = week.toISOString().slice(0, 10);
     }
     const where = conditions.join(' AND ');
     const items = this.db
