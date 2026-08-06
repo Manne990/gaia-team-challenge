@@ -35,7 +35,12 @@ export function App({
   const [notice, setNotice] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const items = navigation.filter((item) => !item.ownerOnly || role === 'owner');
-  const active = items.find((item) => item.label === activePage) ?? items[0];
+  const active =
+    items.find(
+      (item) =>
+        item.label === activePage ||
+        (activePage === 'Deals closing soon' && item.label === 'Deals'),
+    ) ?? items[0];
   const canCreate = role !== 'viewer';
 
   function choosePage(label: string) {
@@ -214,7 +219,7 @@ function Dashboard({
           label="Deals closing soon"
           value={`${dashboard.closingSoon.length}`}
           trend="Next 7 days"
-          onClick={() => onNavigate('Deals')}
+          onClick={() => onNavigate('Deals closing soon')}
         />
         <Metric
           label="Follow-up work"
@@ -270,7 +275,8 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   if (page === 'Tasks') return <TaskWorkspace />;
   if (page === 'Companies') return <CompanyWorkspace readOnly={role === 'viewer'} />;
   if (page === 'Contacts') return <ContactWorkspace readOnly={role === 'viewer'} />;
-  if (page === 'Deals') return <DealWorkspace />;
+  if (page === 'Deals' || page === 'Deals closing soon')
+    return <DealWorkspace closingSoon={page === 'Deals closing soon'} />;
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -291,7 +297,7 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   );
 }
 
-function DealWorkspace() {
+function DealWorkspace({ closingSoon = false }: { closingSoon?: boolean }) {
   const [items, setItems] = useState<
     Array<{
       id: string;
@@ -306,35 +312,44 @@ function DealWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    void fetch('/api/deals?status=open')
+    void fetch(`/api/deals?status=open${closingSoon ? '&closingSoon=true' : ''}`)
       .then(async (response) => {
-        if (!response.ok) throw new Error('Could not load open pipeline records.');
+        if (!response.ok) throw new Error('Could not load pipeline records.');
         const value = (await response.json()) as { items: typeof items };
         setItems(value.items);
         setError(null);
         setLoaded(true);
       })
       .catch((caught) => {
-        setError(
-          caught instanceof Error ? caught.message : 'Could not load open pipeline records.',
-        );
+        setError(caught instanceof Error ? caught.message : 'Could not load pipeline records.');
         setLoaded(true);
       });
-  }, []);
+  }, [closingSoon]);
   return (
-    <section className="data-panel" aria-label="Open pipeline records">
+    <section
+      className="data-panel"
+      aria-label={closingSoon ? 'Deals closing soon' : 'Open pipeline records'}
+    >
       <div className="panel-heading">
         <div>
-          <h2>Open pipeline</h2>
-          <p>Active deals in your organization</p>
+          <h2>{closingSoon ? 'Deals closing soon' : 'Open pipeline'}</h2>
+          <p>
+            {closingSoon
+              ? 'Expected to close in the next 7 days'
+              : 'Active deals in your organization'}
+          </p>
         </div>
       </div>
       {error ? <ErrorState title="Deals unavailable" description={error} /> : null}
-      {!error && !loaded ? <LoadingState label="Loading open pipeline" /> : null}
+      {!error && !loaded ? <LoadingState label="Loading pipeline records" /> : null}
       {!error && loaded && !items.length ? (
         <EmptyState
-          title="No open deals"
-          description="There are no active deals in your organization."
+          title={closingSoon ? 'No deals closing soon' : 'No open deals'}
+          description={
+            closingSoon
+              ? 'There are no active deals expected to close in the next 7 days.'
+              : 'There are no active deals in your organization.'
+          }
         />
       ) : null}
       {items.length ? (

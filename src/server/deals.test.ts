@@ -82,6 +82,16 @@ test('pipeline totals and owner-only stage configuration are scoped and retain h
     assert.ok(
       (pipeline.totals as { amountMinor: number }[]).some((item) => item.amountMinor >= 125000),
     );
+    const closingSoon = service.list(actor, { closingSoon: true }) as unknown as {
+      items: Array<{ expected_close_date: string }>;
+    };
+    assert.equal(
+      closingSoon.items.every(
+        (deal) =>
+          deal.expected_close_date >= '2026-08-05' && deal.expected_close_date < '2026-08-12',
+      ),
+      true,
+    );
     assert.throws(
       () =>
         service.configureStage(

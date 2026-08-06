@@ -517,6 +517,7 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
             companyId: url.searchParams.get('companyId') ?? undefined,
             text: url.searchParams.get('text') ?? undefined,
             includeArchived: url.searchParams.get('includeArchived') === 'true',
+            closingSoon: url.searchParams.get('closingSoon') === 'true',
           },
         ),
       );
