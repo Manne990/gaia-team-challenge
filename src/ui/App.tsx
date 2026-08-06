@@ -311,8 +311,8 @@ function CompanyWorkspace() {
     load();
   }
   return (
-    <section className="data-panel">
-      <h2>Companies</h2>
+    <section className="data-panel" aria-label="Company records">
+      <h2>Company records</h2>
       <form onSubmit={create}>
         <label>
           Company name
