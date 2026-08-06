@@ -8,6 +8,7 @@ function ClientApp() {
   const [state, setState] = useState<'loading' | 'sign-in' | 'ready' | 'unavailable'>('loading');
   const [role, setRole] = useState<UserRole>('viewer');
   const [organizationName, setOrganizationName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   useEffect(() => {
     void (async () => {
       try {
@@ -19,12 +20,14 @@ function ClientApp() {
           authenticated?: boolean;
           role?: string;
           organizationName?: string;
+          displayName?: string;
         };
         if (!value.authenticated) return setState('sign-in');
         if (value.role !== 'owner' && value.role !== 'member' && value.role !== 'viewer')
           return setState('unavailable');
         setRole(value.role);
         setOrganizationName(value.organizationName ?? '');
+        setDisplayName(value.displayName ?? '');
         setState('ready');
       } catch {
         setState('unavailable');
@@ -48,20 +51,27 @@ function ClientApp() {
   if (state === 'sign-in')
     return (
       <SignIn
-        onAuthenticated={(nextRole, nextOrganizationName) => {
+        onAuthenticated={(nextRole, nextOrganizationName, nextDisplayName) => {
           setRole(nextRole);
           setOrganizationName(nextOrganizationName);
+          setDisplayName(nextDisplayName);
           setState('ready');
         }}
       />
     );
-  return <App role={role} organizationName={organizationName || undefined} />;
+  return (
+    <App
+      role={role}
+      organizationName={organizationName || undefined}
+      displayName={displayName || undefined}
+    />
+  );
 }
 
 function SignIn({
   onAuthenticated,
 }: {
-  onAuthenticated: (role: UserRole, organizationName: string) => void;
+  onAuthenticated: (role: UserRole, organizationName: string, displayName: string) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -74,9 +84,13 @@ function SignIn({
     });
     if (response.ok) {
       const session = await fetch('/api/auth/me');
-      const value = (await session.json()) as { role?: UserRole; organizationName?: string };
+      const value = (await session.json()) as {
+        role?: UserRole;
+        organizationName?: string;
+        displayName?: string;
+      };
       if (session.ok && value.role)
-        return onAuthenticated(value.role, value.organizationName ?? '');
+        return onAuthenticated(value.role, value.organizationName ?? '', value.displayName ?? '');
     }
     setError('Invalid email or password.');
   }

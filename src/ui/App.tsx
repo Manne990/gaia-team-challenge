@@ -24,9 +24,11 @@ const navigation: NavigationItem[] = [
 export function App({
   role = 'owner',
   organizationName = 'Northstar Demo',
+  displayName = 'Alex Morgan',
 }: {
   role?: UserRole;
   organizationName?: string;
+  displayName?: string;
 }) {
   const [activePage, setActivePage] = useState('Dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -69,7 +71,7 @@ export function App({
             Notifications
           </button>
           <button className="user-menu" type="button" aria-label="Open account menu">
-            Alex Morgan <span aria-hidden="true">⌄</span>
+            {displayName} <span aria-hidden="true">⌄</span>
           </button>
         </div>
       </header>
