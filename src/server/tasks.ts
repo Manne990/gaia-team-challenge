@@ -172,7 +172,10 @@ export class TaskService {
     now = this.now(),
     relation?: { companyId?: string; contactId?: string; dealId?: string },
   ) {
-    const where = ['organization_id=?', 'archived_at IS NULL'];
+    const where = [
+      'organization_id=?',
+      view === 'archived' ? 'archived_at IS NOT NULL' : 'archived_at IS NULL',
+    ];
     const values: unknown[] = [actor.organizationId];
     for (const [column, id] of [
       ['company_id', relation?.companyId],
