@@ -742,10 +742,12 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   const [dueAt, setDueAt] = useState('');
   const [companyId, setCompanyId] = useState('');
   const [contactId, setContactId] = useState('');
+  const [dealId, setDealId] = useState('');
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [contacts, setContacts] = useState<
     Array<{ id: string; firstName: string; lastName: string }>
   >([]);
+  const [deals, setDeals] = useState<Array<{ id: string; name: string }>>([]);
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [selectedView, setSelectedView] = useState<TaskView>(view);
   const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
@@ -794,6 +796,16 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   }, []);
 
   useEffect(() => {
+    void fetch('/api/deals?status=open')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load deals.');
+        return (await response.json()) as { items: Array<{ id: string; name: string }> };
+      })
+      .then((data) => setDeals(data.items))
+      .catch(() => setDeals([]));
+  }, []);
+
+  useEffect(() => {
     void fetch('/api/contacts')
       .then(async (response) => {
         if (!response.ok) throw new Error('Could not load contacts.');
@@ -819,6 +831,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
           priority,
           companyId: companyId || null,
           contactId: contactId || null,
+          dealId: dealId || null,
         }),
       });
       if (!response.ok) throw new Error('Could not create task.');
@@ -828,6 +841,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
       setDueAt('');
       setCompanyId('');
       setContactId('');
+      setDealId('');
       setPriority('medium');
       setError(null);
     } catch (caught) {
@@ -935,6 +949,17 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
             {contacts.map((contact) => (
               <option key={contact.id} value={contact.id}>
                 {contact.firstName} {contact.lastName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Related deal
+          <select value={dealId} onChange={(event) => setDealId(event.target.value)}>
+            <option value="">No related deal</option>
+            {deals.map((deal) => (
+              <option key={deal.id} value={deal.id}>
+                {deal.name}
               </option>
             ))}
           </select>
