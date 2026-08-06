@@ -39,6 +39,26 @@ test('activity timeline retains snapshots and atomically creates linked follow-u
     assert.equal(activity.company_label_snapshot, 'Timeline Co');
     assert.equal(activity.creator_label_snapshot, 'member@northstar.test');
     assert.equal(service.list(actor, { type: 'call' }).items.length, 1);
+    const updated = service.update(actor, activity.id, {
+      type: 'meeting',
+      subject: 'Renewal meeting',
+      body: 'Updated notes.',
+      occurredAt: '2026-03-01T09:30:00.000Z',
+      companyId: 'timeline-company',
+      contactId: 'timeline-contact',
+      participants: ['Pat Customer'],
+    }) as { subject: string; type: string };
+    assert.equal(updated.subject, 'Renewal meeting');
+    assert.equal(updated.type, 'meeting');
+    assert.throws(
+      () =>
+        service.update({ ...actor, organizationId: 'org-outside' }, activity.id, {
+          type: 'note',
+          subject: 'No',
+          occurredAt: '2026-03-01T09:00:00.000Z',
+        }),
+      ActivityError,
+    );
     assert.throws(
       () =>
         service.create(
