@@ -48,8 +48,9 @@ function ClientApp() {
   if (state === 'sign-in')
     return (
       <SignIn
-        onAuthenticated={(nextRole) => {
+        onAuthenticated={(nextRole, nextOrganizationName) => {
           setRole(nextRole);
+          setOrganizationName(nextOrganizationName);
           setState('ready');
         }}
       />
@@ -57,7 +58,11 @@ function ClientApp() {
   return <App role={role} organizationName={organizationName || undefined} />;
 }
 
-function SignIn({ onAuthenticated }: { onAuthenticated: (role: UserRole) => void }) {
+function SignIn({
+  onAuthenticated,
+}: {
+  onAuthenticated: (role: UserRole, organizationName: string) => void;
+}) {
   const [error, setError] = useState<string | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,8 +74,9 @@ function SignIn({ onAuthenticated }: { onAuthenticated: (role: UserRole) => void
     });
     if (response.ok) {
       const session = await fetch('/api/auth/me');
-      const value = (await session.json()) as { role?: UserRole };
-      if (session.ok && value.role) return onAuthenticated(value.role);
+      const value = (await session.json()) as { role?: UserRole; organizationName?: string };
+      if (session.ok && value.role)
+        return onAuthenticated(value.role, value.organizationName ?? '');
     }
     setError('Invalid email or password.');
   }
