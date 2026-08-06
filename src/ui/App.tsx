@@ -741,7 +741,11 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   const [title, setTitle] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [companyId, setCompanyId] = useState('');
+  const [contactId, setContactId] = useState('');
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
+  const [contacts, setContacts] = useState<
+    Array<{ id: string; firstName: string; lastName: string }>
+  >([]);
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [selectedView, setSelectedView] = useState<TaskView>(view);
   const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
@@ -789,6 +793,18 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
       .catch(() => setCompanies([]));
   }, []);
 
+  useEffect(() => {
+    void fetch('/api/contacts')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load contacts.');
+        return (await response.json()) as {
+          items: Array<{ id: string; firstName: string; lastName: string }>;
+        };
+      })
+      .then((data) => setContacts(data.items))
+      .catch(() => setContacts([]));
+  }, []);
+
   async function addTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim() || !assigneeMembershipId) return;
@@ -802,6 +818,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
           priority,
           companyId: companyId || null,
+          contactId: contactId || null,
         }),
       });
       if (!response.ok) throw new Error('Could not create task.');
@@ -810,6 +827,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
       setTitle('');
       setDueAt('');
       setCompanyId('');
+      setContactId('');
       setPriority('medium');
       setError(null);
     } catch (caught) {
@@ -906,6 +924,17 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
             {companies.map((company) => (
               <option key={company.id} value={company.id}>
                 {company.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Related contact
+          <select value={contactId} onChange={(event) => setContactId(event.target.value)}>
+            <option value="">No related contact</option>
+            {contacts.map((contact) => (
+              <option key={contact.id} value={contact.id}>
+                {contact.firstName} {contact.lastName}
               </option>
             ))}
           </select>
