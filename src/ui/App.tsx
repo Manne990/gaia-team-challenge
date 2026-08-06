@@ -260,6 +260,7 @@ const singular = (label: string) =>
 function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
   if (page === 'Tasks') return <TaskWorkspace />;
   if (page === 'Companies') return <CompanyWorkspace readOnly={role === 'viewer'} />;
+  if (page === 'Contacts') return <ContactWorkspace readOnly={role === 'viewer'} />;
   return (
     <section className="data-panel">
       <div className="panel-heading">
@@ -276,6 +277,89 @@ function WorkspacePage({ page, role }: { page: string; role: UserRole }) {
         description="Choose a saved view or create a record to begin working here."
         actionLabel={`Create ${singular(page)}`}
       />
+    </section>
+  );
+}
+
+function ContactWorkspace({ readOnly }: { readOnly: boolean }) {
+  const [items, setItems] = useState<
+    Array<{ id: string; firstName: string; lastName: string; email: string | null }>
+  >([]);
+  const [membershipId, setMembershipId] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const load = () =>
+    void fetch('/api/contacts').then(async (response) => {
+      const value = (await response.json()) as { items: typeof items; actorMembershipId: string };
+      setItems(value.items);
+      setMembershipId(value.actorMembershipId);
+    });
+  useEffect(load, []);
+  async function create(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (readOnly) return;
+    const response = await fetch('/api/contacts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        email: email || null,
+        ownerMembershipId: membershipId,
+      }),
+    });
+    if (response.ok) {
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      load();
+    }
+  }
+  return (
+    <section className="data-panel" aria-label="Contact records">
+      <h2>Contact records</h2>
+      <form onSubmit={create}>
+        <label>
+          First name
+          <input
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+            required
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Last name
+          <input
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+            required
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <button className="primary-button" type="submit" disabled={readOnly || !membershipId}>
+          Create contact
+        </button>
+      </form>
+      {readOnly ? <p className="read-only-note">Viewer access · read only</p> : null}
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>
+            {item.firstName} {item.lastName}
+            {item.email ? ` · ${item.email}` : ''}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
