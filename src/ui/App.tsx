@@ -150,6 +150,14 @@ type DashboardData = {
   upcomingTasks: number;
   recentActivity: Array<{ id: string }>;
   closingSoon: Array<{ id: string }>;
+  followUpTasks: Array<{
+    id: string;
+    title: string;
+    dueAt: string;
+    priority: string;
+    companyName: string;
+    assigneeName: string;
+  }>;
   stageDistribution: Array<{ id: string; name: string; count: number; amountMinor: number }>;
 };
 
@@ -186,6 +194,7 @@ function Dashboard({
       upcomingTasks: 0,
       recentActivity: [],
       closingSoon: [],
+      followUpTasks: [],
       stageDistribution: [],
     } satisfies DashboardData);
   const money = (amountMinor: number) =>
@@ -234,7 +243,7 @@ function Dashboard({
               Complete review
             </button>
           </div>
-          <TaskTable />
+          <TaskTable tasks={dashboard.followUpTasks} />
         </article>
         <article className="data-panel">
           <div className="panel-heading">
@@ -686,7 +695,7 @@ function Metric({
   );
 }
 
-function TaskTable() {
+function TaskTable({ tasks }: { tasks: DashboardData['followUpTasks'] }) {
   return (
     <div className="table-scroll">
       <table>
@@ -700,30 +709,28 @@ function TaskTable() {
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>
-              <a href="#task-1">Send proposal follow-up</a>
-            </td>
-            <td>Northwind Trading</td>
-            <td className="warning-text">Today, 15:00</td>
-            <td>Alex Morgan</td>
-          </tr>
-          <tr>
-            <td>
-              <a href="#task-2">Prepare renewal notes</a>
-            </td>
-            <td>Acme Industries</td>
-            <td>Tomorrow</td>
-            <td>Sam Lee</td>
-          </tr>
-          <tr>
-            <td>
-              <a href="#task-3">Schedule discovery call</a>
-            </td>
-            <td>Brightworks</td>
-            <td>Thu, 10:00</td>
-            <td>Alex Morgan</td>
-          </tr>
+          {tasks.map((task) => (
+            <tr key={task.id}>
+              <td>
+                <a href={`#${task.id}`}>{task.title}</a>
+              </td>
+              <td>{task.companyName}</td>
+              <td className={task.priority === 'urgent' ? 'warning-text' : undefined}>
+                {new Date(task.dueAt).toLocaleString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </td>
+              <td>{task.assigneeName}</td>
+            </tr>
+          ))}
+          {!tasks.length ? (
+            <tr>
+              <td colSpan={4}>No upcoming follow-up work.</td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>

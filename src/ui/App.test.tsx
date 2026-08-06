@@ -59,6 +59,7 @@ describe('application shell', () => {
       upcomingTasks: 1,
       recentActivity: [],
       closingSoon: [],
+      followUpTasks: [],
       stageDistribution: [],
     };
     const fetchMock = vi

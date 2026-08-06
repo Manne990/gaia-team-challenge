@@ -21,6 +21,13 @@ test('dashboard aggregates are organization-scoped and date-boundary explicit', 
     assert.ok(result.openPipeline.amountMinor > 0);
     assert.ok(result.stageDistribution.length);
     assert.ok(result.recentActivity.length);
+    assert.ok(result.followUpTasks.length);
+    assert.equal(
+      (result.followUpTasks as Array<{ assigneeName: string; companyName: string }>).every(
+        (task) => task.assigneeName && task.companyName,
+      ),
+      true,
+    );
     const outside = dashboard(
       db,
       { organizationId: 'org-outside', membershipId: 'membership-outside-owner', role: 'owner' },
@@ -28,6 +35,7 @@ test('dashboard aggregates are organization-scoped and date-boundary explicit', 
     );
     assert.equal(outside.openPipeline.count, 0);
     assert.equal(outside.recentActivity.length, 0);
+    assert.equal(outside.followUpTasks.length, 0);
   } finally {
     db.close();
   }
