@@ -437,7 +437,14 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           sendJson(
             response,
             201,
-            new ContactService(db).create(current as never, data as ContactInput),
+            new ContactService(db).create(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              data as ContactInput,
+            ),
           );
         } catch (error) {
           fail(response, error);
