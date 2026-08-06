@@ -288,6 +288,8 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
   const [website, setWebsite] = useState('');
   const [industry, setIndustry] = useState('');
   const [lifecycleStatus, setLifecycleStatus] = useState('lead');
+  const [phone, setPhone] = useState('');
+  const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
   const load = () =>
     void fetch('/api/companies')
@@ -310,12 +312,14 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
     const response = await fetch('/api/companies', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, website, industry, lifecycleStatus }),
+      body: JSON.stringify({ name, website, industry, lifecycleStatus, phone, description }),
     });
     if (!response.ok) return setError('Could not create company.');
     setName('');
     setWebsite('');
     setIndustry('');
+    setPhone('');
+    setDescription('');
     setError(null);
     load();
   }
@@ -345,6 +349,22 @@ function CompanyWorkspace({ readOnly }: { readOnly: boolean }) {
           <input
             value={industry}
             onChange={(event) => setIndustry(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Phone
+          <input
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            disabled={readOnly}
+          />
+        </label>
+        <label>
+          Description
+          <textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
             disabled={readOnly}
           />
         </label>
