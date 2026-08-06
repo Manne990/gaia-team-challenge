@@ -222,7 +222,7 @@ describe('application shell', () => {
     render(<App />);
     await user.click(await screen.findByRole('button', { name: 'View Follow-up work' }));
     expect(await screen.findByRole('heading', { name: 'Follow-up work' })).toBeVisible();
-    expect(fetchMock).toHaveBeenLastCalledWith('http://localhost:3000/api/tasks?view=follow-up');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3000/api/tasks?view=follow-up');
     fetchMock.mockRestore();
   });
 });

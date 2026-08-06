@@ -740,6 +740,8 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
   const [items, setItems] = useState<Task[]>([]);
   const [title, setTitle] = useState('');
   const [dueAt, setDueAt] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [selectedView, setSelectedView] = useState<TaskView>(view);
   const [assigneeMembershipId, setAssigneeMembershipId] = useState<string | null>(null);
@@ -777,6 +779,16 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
     void loadTasks();
   }, [selectedView]);
 
+  useEffect(() => {
+    void fetch('/api/companies?q=')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load companies.');
+        return (await response.json()) as { items: Array<{ id: string; name: string }> };
+      })
+      .then((data) => setCompanies(data.items))
+      .catch(() => setCompanies([]));
+  }, []);
+
   async function addTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim() || !assigneeMembershipId) return;
@@ -789,6 +801,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
           assigneeMembershipId,
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
           priority,
+          companyId: companyId || null,
         }),
       });
       if (!response.ok) throw new Error('Could not create task.');
@@ -796,6 +809,7 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
       setItems((current) => [...current, created]);
       setTitle('');
       setDueAt('');
+      setCompanyId('');
       setPriority('medium');
       setError(null);
     } catch (caught) {
@@ -881,6 +895,17 @@ function TaskWorkspace({ view = 'all' }: { view?: 'all' | 'follow-up' }) {
             {assignableMembers.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Related company
+          <select value={companyId} onChange={(event) => setCompanyId(event.target.value)}>
+            <option value="">No related company</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
               </option>
             ))}
           </select>
