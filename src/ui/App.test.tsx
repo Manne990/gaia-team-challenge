@@ -161,6 +161,30 @@ describe('application shell', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/activities?pageSize=10');
     fetchMock.mockRestore();
   });
+
+  it('opens the matching overdue and upcoming task records from the dashboard metric', async () => {
+    const user = userEvent.setup();
+    const dashboard = {
+      openPipeline: { count: 0, amountMinor: 0 },
+      overdueTasks: 1,
+      upcomingTasks: 1,
+      recentActivity: [],
+      closingSoon: [],
+      followUpTasks: [],
+      stageDistribution: [],
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard)))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], actorMembershipId: 'member-1' })),
+      );
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'View Follow-up work' }));
+    expect(await screen.findByRole('heading', { name: 'Follow-up work' })).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith('http://localhost:3000/api/tasks?view=follow-up');
+    fetchMock.mockRestore();
+  });
 });
 
 describe('operational states', () => {

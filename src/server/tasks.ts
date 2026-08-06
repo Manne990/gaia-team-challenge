@@ -201,6 +201,11 @@ export class TaskService {
     } else if (view === 'upcoming') {
       where.push("status NOT IN ('completed','cancelled') AND due_at >= ?");
       values.push(now);
+    } else if (view === 'follow-up') {
+      const week = new Date(now);
+      week.setUTCDate(week.getUTCDate() + 7);
+      where.push("status NOT IN ('completed','cancelled') AND due_at IS NOT NULL AND due_at < ?");
+      values.push(week.toISOString());
     }
     return this.db
       .prepare(
