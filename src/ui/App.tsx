@@ -127,10 +127,10 @@ export function App({
               <span className="read-only-note">Viewer access · read only</span>
             )}
           </section>
-          {active.label === 'Dashboard' ? (
+          {activePage === 'Dashboard' ? (
             <Dashboard onConfirm={() => setDialogOpen(true)} onNavigate={choosePage} />
           ) : (
-            <WorkspacePage page={active.label} role={role} />
+            <WorkspacePage page={activePage} role={role} />
           )}
         </main>
       </div>
