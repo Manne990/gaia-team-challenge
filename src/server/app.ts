@@ -408,10 +408,8 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
       });
       return true;
     } else if (url.pathname === '/api/contacts' && request.method === 'GET')
-      sendJson(
-        response,
-        200,
-        new ContactService(db).list(
+      sendJson(response, 200, {
+        ...new ContactService(db).list(
           {
             organizationId: current.organization_id,
             membershipId: current.membership_id,
@@ -430,7 +428,8 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
             includeArchived: url.searchParams.get('includeArchived') === 'true',
           },
         ),
-      );
+        actorMembershipId: current.membership_id,
+      });
     else if (url.pathname === '/api/contacts' && request.method === 'POST') {
       deferred = true;
       void body(request).then((data) => {
