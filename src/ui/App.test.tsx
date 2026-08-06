@@ -86,6 +86,45 @@ describe('application shell', () => {
     expect(await screen.findByText('Completed')).toBeVisible();
     fetchMock.mockRestore();
   });
+
+  it('opens live tenant-scoped records from the pipeline metric', async () => {
+    const user = userEvent.setup();
+    const dashboard = {
+      openPipeline: { count: 1, amountMinor: 12500 },
+      overdueTasks: 0,
+      upcomingTasks: 0,
+      recentActivity: [],
+      closingSoon: [],
+      followUpTasks: [],
+      stageDistribution: [],
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard)))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'deal-1',
+                name: 'Renewal',
+                company_name: 'Northwind',
+                stage_name: 'Qualified',
+                amount_minor: 12500,
+                currency: 'USD',
+                expected_close_date: '2026-02-01',
+              },
+            ],
+          }),
+        ),
+      );
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'View Open pipeline' }));
+    expect(await screen.findByRole('heading', { name: 'Open pipeline' })).toBeVisible();
+    expect(await screen.findByText('Renewal')).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/deals?status=open');
+    fetchMock.mockRestore();
+  });
 });
 
 describe('operational states', () => {
