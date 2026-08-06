@@ -789,7 +789,29 @@ export function handleApi(request: IncomingMessage, response: ServerResponse): b
           id,
         ),
       });
-    else if (url.pathname === '/api/companies' && request.method === 'GET')
+    else if (id && url.pathname.startsWith('/api/activities/') && request.method === 'PUT') {
+      deferred = true;
+      void body(request).then((data) => {
+        try {
+          sendJson(response, 200, {
+            activity: new ActivityService(db).update(
+              {
+                organizationId: current.organization_id,
+                membershipId: current.membership_id,
+                role: current.role as 'owner' | 'member' | 'viewer',
+              },
+              id,
+              data as ActivityInput,
+            ),
+          });
+        } catch (error) {
+          fail(response, error);
+        } finally {
+          db.close();
+        }
+      });
+      return true;
+    } else if (url.pathname === '/api/companies' && request.method === 'GET')
       sendJson(response, 200, listCompanies(db, current.organization_id, url.searchParams));
     else if (url.pathname === '/api/companies' && request.method === 'POST') {
       if (current.role === 'viewer')

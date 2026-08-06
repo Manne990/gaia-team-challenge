@@ -137,6 +137,56 @@ export class ActivityService {
     if (!row) throw new ActivityError('NOT_FOUND', 'Activity not found.');
     return row;
   }
+  update(actor: ActivityActor, id: string, raw: ActivityInput) {
+    writer(actor);
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success)
+      throw new ActivityError('VALIDATION', 'Please correct the activity details.');
+    const input = parsed.data;
+    if (
+      !this.db
+        .prepare('SELECT 1 FROM activities WHERE id=? AND organization_id=?')
+        .get(id, actor.organizationId)
+    )
+      throw new ActivityError('NOT_FOUND', 'Activity not found.');
+    const related = labels(this.db, actor, input);
+    const now = this.now();
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          'UPDATE activities SET type=?,subject=?,body=?,occurred_at=?,company_id=?,contact_id=?,deal_id=?,participant_snapshot_json=?,company_label_snapshot=?,contact_label_snapshot=? WHERE id=? AND organization_id=?',
+        )
+        .run(
+          input.type,
+          input.subject,
+          input.body,
+          input.occurredAt,
+          input.companyId ?? null,
+          input.contactId ?? null,
+          input.dealId ?? null,
+          JSON.stringify(input.participants),
+          related.company,
+          related.contact,
+          id,
+          actor.organizationId,
+        );
+      this.db
+        .prepare(
+          'INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,change_summary_json,created_at) VALUES (?,?,?,?,?,?,?,?)',
+        )
+        .run(
+          randomUUID(),
+          actor.organizationId,
+          actor.membershipId,
+          'activity.updated',
+          'activity',
+          id,
+          JSON.stringify({ type: input.type, subject: input.subject }),
+          now,
+        );
+    })();
+    return this.get(actor, id);
+  }
   list(
     actor: ActivityActor,
     query: {
