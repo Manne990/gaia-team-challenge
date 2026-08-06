@@ -310,7 +310,12 @@ function ContactWorkspace({ readOnly }: { readOnly: boolean }) {
         ownerMembershipId: membershipId,
       }),
     });
-    if (!response.ok) return setError('Please correct the contact details and try again.');
+    if (!response.ok) {
+      const value = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      return setError(value?.error?.message ?? 'Please correct the contact details and try again.');
+    }
     setError(null);
     setFirstName('');
     setLastName('');
