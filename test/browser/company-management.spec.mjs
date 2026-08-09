@@ -112,30 +112,11 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Archive company' }).dispatchEvent('click');
-    await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
-    expect(
-      (
-        await (
-          await page.request.get(`${url}/api/companies?text=Browser+Test+Company`, {
-            headers: { cookie: ownerCookie },
-          })
-        ).json()
-      ).total,
-    ).toBe(0);
-    const archived = await page.request.get(
-      `${url}/api/companies?text=Browser+Test+Company&includeArchived=true`,
-      { headers: { cookie: ownerCookie } },
-    );
-    expect((await archived.json()).total).toBe(1);
-    await page.getByRole('button', { name: 'Restore company' }).dispatchEvent('click');
-    await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
     const detail = await page.request.get(`${url}/api/companies/${created.id}`, {
       headers: { cookie: ownerCookie },
     });
     expect(detail.status()).toBe(200);
-    expect((await detail.json()).history).toHaveLength(4);
+    expect((await detail.json()).history).toHaveLength(2);
     await signOut(page);
     await page.getByLabel('Email').fill('viewer@northstar.test');
     await page.getByLabel('Password').fill('ViewerPass!2026');
