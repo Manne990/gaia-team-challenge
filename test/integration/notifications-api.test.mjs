@@ -77,5 +77,22 @@ describe('notifications API', () => {
         ).json()
       ).items,
     ).toHaveLength(0);
+    const listenPort = server.address().port;
+    await new Promise((resolve) => server.close(resolve));
+    server = createApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: environment.databasePath,
+      environment: 'test',
+    }).listen(listenPort);
+    await new Promise((resolve) => server.once('listening', resolve));
+    const restarted = await fetch(`${url}/api/notifications?unread=true`, {
+      headers: { cookie: owner, connection: 'close' },
+    }).catch(() =>
+      fetch(`${url}/api/notifications?unread=true`, {
+        headers: { cookie: owner, connection: 'close' },
+      }),
+    );
+    expect((await restarted.json()).items).toHaveLength(0);
   });
 });
