@@ -1237,6 +1237,7 @@ function Imports({ canWrite }: { canWrite: boolean }) {
 function Tasks({ canWrite }: { canWrite: boolean }) {
   const initialQuery = new URLSearchParams(window.location.search);
   const selectedRecord = initialQuery.get('record');
+  const selectedRecordPending = useRef(selectedRecord);
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('');
@@ -1277,10 +1278,12 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     if (response.ok) {
       const body = await response.json();
       let nextItems = body.items;
-      if (selectedRecord && !nextItems.some((item: any) => item.id === selectedRecord)) {
-        const detail = await fetch(`/api/tasks/${encodeURIComponent(selectedRecord)}`);
+      const record = selectedRecordPending.current;
+      if (record && !nextItems.some((item: any) => item.id === record)) {
+        const detail = await fetch(`/api/tasks/${encodeURIComponent(record)}`);
         if (detail.ok) nextItems = [await detail.json(), ...nextItems];
       }
+      selectedRecordPending.current = null;
       setItems(nextItems);
       setTotal(body.total);
     }
@@ -1400,7 +1403,7 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       </form>
       <SavedViews
         resource="tasks"
-        filters={{ due, mine, relation }}
+        filters={{ due, mine, relation, page, sort, direction }}
         onChoose={(view) => {
           const nextDue = typeof view.due === 'string' ? view.due : '';
           const nextMine = view.mine === true;
@@ -1408,7 +1411,17 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           setDue(nextDue);
           setMine(nextMine);
           setRelation(nextRelation);
-          void load(nextDue, nextMine, nextRelation);
+          const nextPage = Math.max(1, Number(view.page) || 1);
+          const nextSort = ['dueAt', 'createdAt', 'updatedAt', 'priority'].includes(
+            String(view.sort),
+          )
+            ? String(view.sort)
+            : 'dueAt';
+          const nextDirection = view.direction === 'desc' ? 'desc' : 'asc';
+          setPage(nextPage);
+          setSort(nextSort);
+          setDirection(nextDirection);
+          void load(nextDue, nextMine, nextRelation, nextPage, nextSort, nextDirection);
         }}
       />
       {canWrite && (
@@ -1534,6 +1547,7 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
 function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
   const initialQuery = new URLSearchParams(window.location.search);
   const selectedRecord = initialQuery.get('record');
+  const selectedRecordPending = useRef(selectedRecord);
   const [deals, setDeals] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [stages, setStages] = useState<any[]>([]);
@@ -1569,10 +1583,12 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
       fetch('/api/pipeline/stages').then((r) => r.json()),
     ]).then(async ([list, pipeline]) => {
       let nextDeals = list.items || [];
-      if (selectedRecord && !nextDeals.some((deal: any) => deal.id === selectedRecord)) {
-        const detail = await fetch(`/api/deals/${encodeURIComponent(selectedRecord)}`);
+      const record = selectedRecordPending.current;
+      if (record && !nextDeals.some((deal: any) => deal.id === record)) {
+        const detail = await fetch(`/api/deals/${encodeURIComponent(record)}`);
         if (detail.ok) nextDeals = [await detail.json(), ...nextDeals];
       }
+      selectedRecordPending.current = null;
       setDeals(nextDeals);
       setTotal(list.total || 0);
       setStages(pipeline || []);
@@ -1755,7 +1771,14 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
       </form>
       <SavedViews
         resource="deals"
-        filters={{ stageId: stageFilter, status: statusFilter, includeArchived }}
+        filters={{
+          stageId: stageFilter,
+          status: statusFilter,
+          includeArchived,
+          page,
+          sort,
+          direction,
+        }}
         onChoose={(view) => {
           const stage = typeof view.stageId === 'string' ? view.stageId : '';
           const status = typeof view.status === 'string' ? view.status : '';
@@ -1763,7 +1786,21 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
           setStageFilter(stage);
           setStatusFilter(status);
           setIncludeArchived(archived);
-          void load(stage, status, archived);
+          const nextPage = Math.max(1, Number(view.page) || 1);
+          const nextSort = [
+            'updatedAt',
+            'createdAt',
+            'name',
+            'amount',
+            'expectedCloseDate',
+          ].includes(String(view.sort))
+            ? String(view.sort)
+            : 'updatedAt';
+          const nextDirection = view.direction === 'asc' ? 'asc' : 'desc';
+          setPage(nextPage);
+          setSort(nextSort);
+          setDirection(nextDirection);
+          void load(stage, status, archived, nextPage, nextSort, nextDirection);
         }}
       />
       <p>{total} active deals</p>
