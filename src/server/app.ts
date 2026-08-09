@@ -686,7 +686,7 @@ export function createApp(config: AppConfig) {
           .run(id, session.organizationId, user.id, input.role, now, now);
         database
           .prepare(
-            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
           .run(
             `aud_${randomUUID()}`,
@@ -697,6 +697,7 @@ export function createApp(config: AppConfig) {
             id,
             JSON.stringify({ role: input.role, email: input.email }),
             now,
+            `cor_${randomUUID()}`,
           );
         return database
           .prepare(
