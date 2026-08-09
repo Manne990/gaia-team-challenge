@@ -72,6 +72,24 @@ describe('deals API', () => {
       body: JSON.stringify({ stageId: 'stage_won', version: deal.version }),
     });
     expect(moved.status).toBe(200);
+    const movedDeal = await moved.json();
+    expect(
+      (
+        await fetch(`${url}/api/deals/${deal.id}`, {
+          method: 'PATCH',
+          headers: { cookie, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Renamed pipeline deal',
+            companyId: 'co_acme',
+            stageId: 'stage_won',
+            amountCents: 43000,
+            currency: 'USD',
+            probability: 100,
+            version: movedDeal.version,
+          }),
+        })
+      ).status,
+    ).toBe(200);
     expect(
       (await (await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie } })).json()).history,
     ).toHaveLength(2);
