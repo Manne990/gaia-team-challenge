@@ -381,24 +381,30 @@ function ListPage({
               </tr>
             </thead>
             <tbody>
-              {companies.map((company, index) => (
-                <tr key={`${company[0]}-${index}`}>
-                  <td>
-                    <a href="#company">{company[0]}</a>
-                  </td>
-                  <td>{company[1]}</td>
-                  <td>
-                    <Status tone={company[2] === 'Customer' ? 'good' : 'neutral'}>
-                      {company[2]}
-                    </Status>
-                  </td>
-                  <td>{company[3]}</td>
-                  <td>{company[4]}</td>
-                  <td>
-                    <IconButton label={`Actions for ${company[0]}`}>⋯</IconButton>
-                  </td>
+              {companies.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>No {page.toLowerCase()} match the current filters.</td>
                 </tr>
-              ))}
+              ) : (
+                companies.map((company, index) => (
+                  <tr key={`${company[0]}-${index}`}>
+                    <td>
+                      <a href="#company">{company[0]}</a>
+                    </td>
+                    <td>{company[1]}</td>
+                    <td>
+                      <Status tone={company[2] === 'Customer' ? 'good' : 'neutral'}>
+                        {company[2]}
+                      </Status>
+                    </td>
+                    <td>{company[3]}</td>
+                    <td>{company[4]}</td>
+                    <td>
+                      <IconButton label={`Actions for ${company[0]}`}>⋯</IconButton>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
