@@ -304,6 +304,7 @@ function ListPage({
   const [contactTotal, setContactTotal] = useState(0);
   const [showContactForm, setShowContactForm] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [contactNotice, setContactNotice] = useState('');
   const [contactRefresh, setContactRefresh] = useState(0);
   const contactRequest = useRef(0);
   const refreshContacts = () => setContactRefresh((value) => value + 1);
@@ -412,6 +413,11 @@ function ListPage({
               setContactTotal((total) => total + 1);
               setShowContactForm(false);
               setContactPage(1);
+              setContactNotice(
+                created.duplicateWarning
+                  ? `Possible duplicate: ${created.duplicateWarning.firstName} ${created.duplicateWarning.lastName} already uses this email. No records were merged.`
+                  : '',
+              );
               refreshContacts();
             }
           }}
@@ -470,6 +476,11 @@ function ListPage({
             Cancel
           </button>
         </form>
+      )}
+      {page === 'Contacts' && contactNotice && (
+        <p className="panel" role="status">
+          {contactNotice}
+        </p>
       )}
       <section className="panel table-panel">
         <div className="toolbar">

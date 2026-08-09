@@ -76,6 +76,32 @@ describe('contacts API', () => {
         })
       ).status,
     ).toBe(204);
+    expect(
+      (
+        await fetch(`${url}/api/contacts/${contact.id}/restore`, {
+          method: 'POST',
+          headers: { cookie: owner },
+        })
+      ).status,
+    ).toBe(204);
+    const updated = await fetch(`${url}/api/contacts/${contact.id}`, {
+      headers: { cookie: owner },
+    });
+    const current = await updated.json();
+    expect(
+      (
+        await fetch(`${url}/api/contacts/${contact.id}`, {
+          method: 'PATCH',
+          headers: { cookie: owner, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            firstName: 'New',
+            lastName: 'Person',
+            email: 'new@example.test',
+            version: current.version,
+          }),
+        })
+      ).status,
+    ).toBe(200);
     const viewer = await signIn('viewer@northstar.test', 'ViewerPass!2026');
     expect(
       (

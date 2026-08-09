@@ -128,6 +128,11 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByText('Change history')).toBeVisible();
     await page.getByRole('button', { name: 'Archive contact' }).click();
     await expect(browserContact).toHaveCount(0);
+    await page.getByRole('button', { name: 'Filter' }).click();
+    await page.getByRole('button', { name: 'Show archived' }).click();
+    await expect(browserContact).toBeVisible();
+    await page.getByRole('button', { name: 'Restore Browser Flow' }).click();
+    await expect(browserContact).toHaveCount(0);
     await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -232,6 +237,14 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(409);
+    await expect(
+      page.request
+        .post(`${url}/api/contacts`, {
+          headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
+          data: { firstName: 'Member', lastName: 'Contact' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(201);
     await signOut(page);
     await page.getByLabel('Email').fill('other-owner@outside.test');
     await page.getByLabel('Password').fill('OutsidePass!2026');
