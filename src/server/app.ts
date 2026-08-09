@@ -1695,6 +1695,52 @@ export function createApp(config: AppConfig) {
       return dealError(error, response);
     }
   });
+  app.post('/api/deals/:id/:action', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      if (!['archive', 'restore'].includes(request.params.action))
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'That action does not exist.' } });
+      const archive = request.params.action === 'archive';
+      const now = new Date().toISOString();
+      const changed = transaction(() => {
+        const result = database
+          .prepare(
+            `UPDATE deals SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND archived_at IS ${archive ? 'NULL' : 'NOT NULL'}`,
+          )
+          .run(archive ? now : null, now, request.params.id, s.organizationId);
+        if (result.changes)
+          database
+            .prepare(
+              'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              `aud_${randomUUID()}`,
+              s.organizationId,
+              s.userId,
+              archive ? 'deal.archived' : 'deal.restored',
+              'deal',
+              request.params.id,
+              '{}',
+              now,
+            );
+        return result.changes;
+      });
+      return changed
+        ? response.status(204).end()
+        : response
+            .status(409)
+            .json({
+              error: {
+                code: 'CONFLICT',
+                message: 'The deal is already in that state or unavailable.',
+              },
+            });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
   app.use('/api', (_request, response) => {
     response.status(404).json({
       error: { code: 'NOT_FOUND', message: 'That API endpoint does not exist.' },
