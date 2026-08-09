@@ -112,7 +112,7 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
+    page.on('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Archive company' }).dispatchEvent('click');
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
     expect(
