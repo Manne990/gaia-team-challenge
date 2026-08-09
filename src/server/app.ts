@@ -452,7 +452,7 @@ export function createApp(config: AppConfig) {
     resource === 'contacts'
       ? database
           .prepare(
-            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion, a.first_name AS sourceFirstName, a.last_name AS sourceLastName,
+            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion, a.first_name AS sourceFirstName, a.last_name AS sourceLastName, a.phone AS sourcePhone, b.phone AS targetPhone, a.status AS sourceStatus, b.status AS targetStatus,
               b.first_name AS targetFirstName, b.last_name AS targetLastName, a.email AS email
              FROM contacts a JOIN contacts b ON a.organization_id = b.organization_id
               AND a.id < b.id AND lower(a.email) = lower(b.email)

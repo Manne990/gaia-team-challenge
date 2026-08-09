@@ -333,6 +333,7 @@ function ListPage({
     Array<{ id: string; name: string; filters: Record<string, unknown> }>
   >([]);
   const [duplicateCandidates, setDuplicateCandidates] = useState<any[]>([]);
+  const [mergeFields, setMergeFields] = useState<Record<string, string>>({});
   const contactRequest = useRef(0);
   const refreshContacts = () => setContactRefresh((value) => value + 1);
   const loadContactViews = () =>
@@ -652,13 +653,60 @@ function ListPage({
                 {candidate.targetFirstName} {candidate.targetLastName} share{' '}
                 {candidate.facts[0].field}: {candidate.facts[0].normalized}.
               </p>
+              <label>
+                Keep phone
+                <select
+                  value={mergeFields[`${candidate.sourceId}:phone`] || candidate.targetPhone || ''}
+                  onChange={(event) =>
+                    setMergeFields({
+                      ...mergeFields,
+                      [`${candidate.sourceId}:phone`]: event.target.value,
+                    })
+                  }
+                >
+                  <option value={candidate.targetPhone || ''}>
+                    {candidate.targetFirstName}: {candidate.targetPhone || 'empty'}
+                  </option>
+                  <option value={candidate.sourcePhone || ''}>
+                    {candidate.sourceFirstName}: {candidate.sourcePhone || 'empty'}
+                  </option>
+                </select>
+              </label>
+              <label>
+                Keep status
+                <select
+                  value={mergeFields[`${candidate.sourceId}:status`] || candidate.targetStatus}
+                  onChange={(event) =>
+                    setMergeFields({
+                      ...mergeFields,
+                      [`${candidate.sourceId}:status`]: event.target.value,
+                    })
+                  }
+                >
+                  <option value={candidate.targetStatus}>
+                    {candidate.targetFirstName}: {candidate.targetStatus}
+                  </option>
+                  <option value={candidate.sourceStatus}>
+                    {candidate.sourceFirstName}: {candidate.sourceStatus}
+                  </option>
+                </select>
+              </label>
               <button
                 className="secondary"
                 onClick={async () => {
                   const response = await fetch('/api/merges', {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ resource: 'contacts', ...candidate, fields: {} }),
+                    body: JSON.stringify({
+                      resource: 'contacts',
+                      ...candidate,
+                      fields: {
+                        phone:
+                          mergeFields[`${candidate.sourceId}:phone`] || candidate.targetPhone || '',
+                        status:
+                          mergeFields[`${candidate.sourceId}:status`] || candidate.targetStatus,
+                      },
+                    }),
                   });
                   if (response.ok) {
                     setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
