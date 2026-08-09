@@ -167,6 +167,7 @@ const dealListQuery = z.object({
   status: z.enum(['open', 'won', 'lost']).optional(),
   expectedCloseFrom: z.string().date().optional(),
   expectedCloseTo: z.string().date().optional(),
+  transitionedSince: z.string().datetime({ offset: true }).optional(),
   includeArchived: z.coerce.boolean().default(false),
   sort: z
     .enum(['name', 'amount', 'createdAt', 'updatedAt', 'expectedCloseDate'])
@@ -1116,12 +1117,12 @@ export function createApp(config: AppConfig) {
         .get(s.organizationId, stale.toISOString()).count;
       const recentActivity = database
         .prepare(
-          `SELECT id, subject, type, occurred_at AS occurredAt, company_id AS companyId, deal_id AS dealId FROM activities WHERE organization_id = ? ORDER BY occurred_at DESC, id DESC LIMIT 5`,
+          `SELECT id, subject, type, occurred_at AS occurredAt, company_id AS companyId, contact_id AS contactId, deal_id AS dealId, task_id AS taskId FROM activities WHERE organization_id = ? ORDER BY occurred_at DESC, id DESC LIMIT 5`,
         )
         .all(s.organizationId);
       const trend = database
         .prepare(
-          `SELECT pipeline_stages.kind, count(*) AS count FROM deal_stage_history JOIN pipeline_stages ON pipeline_stages.id = deal_stage_history.to_stage_id AND pipeline_stages.organization_id = deal_stage_history.organization_id WHERE deal_stage_history.organization_id = ? AND deal_stage_history.changed_at >= ? AND pipeline_stages.kind IN ('won', 'lost') GROUP BY pipeline_stages.kind`,
+          `SELECT pipeline_stages.kind, count(DISTINCT deal_stage_history.deal_id) AS count FROM deal_stage_history JOIN pipeline_stages ON pipeline_stages.id = deal_stage_history.to_stage_id AND pipeline_stages.organization_id = deal_stage_history.organization_id WHERE deal_stage_history.organization_id = ? AND deal_stage_history.changed_at >= ? AND pipeline_stages.kind IN ('won', 'lost') GROUP BY pipeline_stages.kind`,
         )
         .all(s.organizationId, stale.toISOString());
       return response.json({
@@ -2461,6 +2462,12 @@ export function createApp(config: AppConfig) {
       if (query.expectedCloseTo) {
         where.push('deals.expected_close_date <= ?');
         args.push(query.expectedCloseTo);
+      }
+      if (query.transitionedSince) {
+        where.push(
+          `EXISTS (SELECT 1 FROM deal_stage_history JOIN pipeline_stages AS transition_stage ON transition_stage.id = deal_stage_history.to_stage_id AND transition_stage.organization_id = deal_stage_history.organization_id WHERE deal_stage_history.deal_id = deals.id AND deal_stage_history.organization_id = deals.organization_id AND deal_stage_history.changed_at >= ? AND transition_stage.kind = deals.status)`,
+        );
+        args.push(query.transitionedSince);
       }
       const clause = where.join(' AND ');
       const total = database

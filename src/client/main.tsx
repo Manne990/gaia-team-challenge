@@ -1756,6 +1756,7 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
   const expectedCloseFrom = initialQuery.get('expectedCloseFrom') || '';
   const expectedCloseTo = initialQuery.get('expectedCloseTo') || '';
+  const transitionedSince = initialQuery.get('transitionedSince') || '';
   const [includeArchived, setIncludeArchived] = useState(
     () => initialQuery.get('includeArchived') === 'true',
   );
@@ -1777,6 +1778,7 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     if (status) query.set('status', status);
     if (expectedCloseFrom) query.set('expectedCloseFrom', expectedCloseFrom);
     if (expectedCloseTo) query.set('expectedCloseTo', expectedCloseTo);
+    if (transitionedSince) query.set('transitionedSince', transitionedSince);
     if (archived) query.set('includeArchived', 'true');
     query.set('page', String(nextPage));
     query.set('sort', nextSort);
@@ -2310,7 +2312,15 @@ function LiveDashboard({
           <ul>
             {['won', 'lost'].map((kind) => (
               <li key={kind}>
-                <button className="link-button" onClick={() => open('Deals', `?status=${kind}`)}>
+                <button
+                  className="link-button"
+                  onClick={() =>
+                    open(
+                      'Deals',
+                      `?status=${kind}&transitionedSince=${encodeURIComponent(new Date(new Date(data.generatedAt).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString())}`,
+                    )
+                  }
+                >
                   {kind}: {data.trend.find((entry: any) => entry.kind === kind)?.count || 0}
                 </button>
               </li>
@@ -2328,7 +2338,7 @@ function LiveDashboard({
                 onClick={() =>
                   open(
                     'Activities',
-                    `?relatedRecordId=${encodeURIComponent(activity.companyId || activity.dealId || '')}`,
+                    `?relatedRecordId=${encodeURIComponent(activity.companyId || activity.contactId || activity.dealId || activity.taskId || '')}`,
                   )
                 }
               >
