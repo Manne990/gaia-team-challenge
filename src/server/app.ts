@@ -1479,11 +1479,9 @@ export function createApp(config: AppConfig) {
       return response
         .status(400)
         .json({ error: { code: 'VALIDATION', message: 'Check the deal fields and try again.' } });
-    return response
-      .status(500)
-      .json({
-        error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
-      });
+    return response.status(500).json({
+      error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
+    });
   };
   app.get('/api/deals', (request, response) => {
     try {
@@ -1579,6 +1577,122 @@ export function createApp(config: AppConfig) {
       return response
         .status(201)
         .json(database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(id));
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.get('/api/deals/:id', (request, response) => {
+    try {
+      const s = dealSession(request);
+      const deal = database
+        .prepare(
+          `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE deals.id = ? AND deals.organization_id = ?`,
+        )
+        .get(request.params.id, s.organizationId);
+      if (!deal)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This deal was not found.' } });
+      return response.json({
+        ...deal,
+        contacts: database
+          .prepare(
+            'SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName FROM deal_contacts JOIN contacts ON contacts.id = deal_contacts.contact_id WHERE deal_contacts.deal_id = ? AND deal_contacts.organization_id = ?',
+          )
+          .all(deal.id, s.organizationId),
+        history: database
+          .prepare(
+            'SELECT deal_stage_history.id, from_stage_id AS fromStageId, to_stage_id AS toStageId, actor_id AS actorId, changed_at AS changedAt, reason FROM deal_stage_history WHERE deal_id = ? AND organization_id = ? ORDER BY changed_at DESC',
+          )
+          .all(deal.id, s.organizationId),
+      });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.post('/api/deals/:id/transition', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      const input = z
+        .object({
+          stageId: z.string().min(1),
+          version: z.number().int().positive(),
+          lossReason: z.string().trim().min(1).max(500).optional(),
+        })
+        .parse(request.body);
+      const now = new Date().toISOString();
+      const changed = transaction(() => {
+        const current = database
+          .prepare(
+            'SELECT stage_id AS stageId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
+          )
+          .get(request.params.id, s.organizationId);
+        const target = database
+          .prepare('SELECT kind FROM pipeline_stages WHERE id = ? AND organization_id = ?')
+          .get(input.stageId, s.organizationId);
+        if (
+          !current ||
+          !target ||
+          current.version !== input.version ||
+          (target.kind === 'lost' && !input.lossReason)
+        )
+          return null;
+        const update = database
+          .prepare(
+            'UPDATE deals SET stage_id = ?, status = ?, loss_reason = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
+          )
+          .run(
+            input.stageId,
+            target.kind,
+            target.kind === 'lost' ? input.lossReason : null,
+            now,
+            request.params.id,
+            s.organizationId,
+            input.version,
+          );
+        if (!update.changes) return null;
+        database
+          .prepare(
+            'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, actor_id, changed_at, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `dsh_${randomUUID()}`,
+            s.organizationId,
+            request.params.id,
+            current.stageId,
+            input.stageId,
+            s.userId,
+            now,
+            input.lossReason || null,
+          );
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            s.organizationId,
+            s.userId,
+            'deal.transitioned',
+            'deal',
+            request.params.id,
+            JSON.stringify({ fromStageId: current.stageId, toStageId: input.stageId }),
+            now,
+          );
+        return true;
+      });
+      return changed
+        ? response.json(
+            database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
+          )
+        : response
+            .status(409)
+            .json({
+              error: {
+                code: 'CONFLICT',
+                message: 'The deal changed, stage is invalid, or a loss reason is required.',
+              },
+            });
     } catch (error) {
       return dealError(error, response);
     }
