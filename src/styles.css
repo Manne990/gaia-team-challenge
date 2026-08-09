@@ -225,6 +225,23 @@ select {
   justify-content: space-between;
   padding: 0 32px;
 }
+.notifications {
+  position: relative;
+}
+.notification-inbox {
+  background: #fff;
+  border: 1px solid #dfe5ed;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px #17203326;
+  max-height: min(480px, calc(100vh - 88px));
+  overflow: auto;
+  padding: 12px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(360px, calc(100vw - 32px));
+  z-index: 4;
+}
 .global-search,
 .search {
   align-items: center;

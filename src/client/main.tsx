@@ -1491,7 +1491,7 @@ function Notifications({
     if (open) void load();
   }, [unread]);
   return (
-    <div>
+    <div className="notifications">
       <button
         aria-label="Notifications"
         onClick={() => {
@@ -1502,7 +1502,7 @@ function Notifications({
         ♧
       </button>
       {open && (
-        <section aria-label="Notifications">
+        <section className="notification-inbox" aria-label="Notifications">
           <label>
             Show unread only
             <input
