@@ -17,7 +17,7 @@
     "check:test-suites": "node scripts/check-test-suites.mjs",
     "test:fixtures": "vitest run --config vitest.unit.config.mjs && vitest run --config vitest.integration.config.mjs",
     "test:browser": "playwright install chromium && playwright test",
-    "ci": "npm run format:check && npm run check:test-suites && npm run typecheck && npm run test && npm run test:fixtures && npm run test:browser && npm run build",
+    "ci": "npm run format:check && npm run check:test-suites && npm run typecheck && node scripts/db-check.mjs && npm run test && npm run test:fixtures && npm run test:browser && npm run build",
     "build": "vite build && tsc --noEmit -p tsconfig.server.json",
     "dev": "tsx src/server/index.ts",
     "start": "NODE_ENV=production tsx src/server/index.ts"
