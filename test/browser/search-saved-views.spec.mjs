@@ -27,6 +27,12 @@ const ready = async (url) => {
   throw new Error('Northstar server did not become ready');
 };
 
+const navigateTo = async (page, destination) => {
+  if ((page.viewportSize()?.width ?? 0) <= 720)
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('button', { name: destination, exact: true }).click();
+};
+
 test('global search is keyboard reachable and saved company views are actionable', async ({
   page,
 }) => {
@@ -148,8 +154,8 @@ test('task and deal saved views restore pagination, and a selected task respects
         }).then((response) => response.status),
       ),
     ).toBe(201);
-    await page.getByRole('button', { name: 'Dashboard' }).click();
-    await page.getByRole('button', { name: 'Tasks' }).click();
+    await navigateTo(page, 'Dashboard');
+    await navigateTo(page, 'Tasks');
     const taskSaved = page.locator('[aria-label="Manage saved views for tasks"]');
     await expect(
       taskSaved.getByRole('button', { name: 'Task ordered page', exact: true }),
@@ -157,7 +163,7 @@ test('task and deal saved views restore pagination, and a selected task respects
     await taskSaved.getByRole('button', { name: 'Task ordered page', exact: true }).click();
     await expect(page).toHaveURL(/sort=createdAt&direction=desc&page=2/);
 
-    await page.getByRole('button', { name: 'Deals', exact: true }).click();
+    await navigateTo(page, 'Deals');
     expect(
       await page.evaluate(async () =>
         fetch('/api/saved-views', {
@@ -178,8 +184,8 @@ test('task and deal saved views restore pagination, and a selected task respects
         }).then((response) => response.status),
       ),
     ).toBe(201);
-    await page.getByRole('button', { name: 'Dashboard' }).click();
-    await page.getByRole('button', { name: 'Deals', exact: true }).click();
+    await navigateTo(page, 'Dashboard');
+    await navigateTo(page, 'Deals');
     const dealSaved = page.locator('[aria-label="Manage saved views for deals"]');
     await expect(
       dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true }),
