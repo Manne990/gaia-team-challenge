@@ -74,6 +74,32 @@ describe('explicit contact merge', () => {
       }),
     });
     expect(merge.status).toBe(201);
+    const replay = await fetch(`${url}/api/merges`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        resource: 'contacts',
+        sourceId: 'ct_duplicate',
+        targetId: 'ct_ada',
+        sourceVersion,
+        targetVersion,
+        fields: {},
+      }),
+    });
+    expect(replay.status).toBe(400);
+    const stale = await fetch(`${url}/api/merges`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        resource: 'contacts',
+        sourceId: 'ct_ada',
+        targetId: 'ct_duplicate',
+        sourceVersion: targetVersion,
+        targetVersion: sourceVersion,
+        fields: {},
+      }),
+    });
+    expect(stale.status).toBe(400);
     const retired = await fetch(`${url}/api/contacts/ct_duplicate`, { headers: { cookie } });
     expect(retired.status).toBe(200);
     expect((await retired.json()).id).toBe('ct_ada');
