@@ -987,6 +987,31 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       await load();
     }
   };
+  const rename = async (task: any) => {
+    const title = window.prompt('Task title', task.title);
+    if (!title) return;
+    const response = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: task.description || '',
+        assigneeId: task.assignee_id,
+        dueAt: task.due_at,
+        priority: task.priority,
+        status: task.status,
+        companyId: task.company_id,
+        contactId: task.contact_id,
+        dealId: task.deal_id,
+        version: task.version,
+      }),
+    });
+    if (response.status === 409) setMessage('This task changed. Refresh it before saving.');
+    else if (response.ok) {
+      setMessage('Task updated.');
+      await load();
+    }
+  };
   return (
     <section aria-labelledby="tasks-heading">
       <div className="page-heading">
@@ -1097,6 +1122,7 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
                 {task.archived_at ? 'Restore task' : 'Archive task'}
               </button>
             )}
+            {canWrite && <button onClick={() => void rename(task)}>Edit task</button>}
           </li>
         ))}
       </ul>

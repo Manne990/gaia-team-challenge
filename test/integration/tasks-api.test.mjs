@@ -19,13 +19,15 @@ describe('tasks API', () => {
     const database = openDatabase(environment.databasePath);
     seedDatabase(database);
     database.close();
-    server = createApp({
+    const app = createApp({
       host: '127.0.0.1',
       port: 0,
       databasePath: environment.databasePath,
       environment: 'test',
-    }).listen(0);
-    await new Promise((resolve) => server.once('listening', resolve));
+    });
+    await new Promise((resolve) => {
+      server = app.listen(0, resolve);
+    });
     const url = `http://127.0.0.1:${server.address().port}`;
     const signIn = async (email, password) =>
       (
