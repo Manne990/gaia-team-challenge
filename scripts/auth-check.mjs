@@ -43,9 +43,25 @@ try {
   );
   authError(() => auth.listMembers(auth.authenticate(member.token)), 'FORBIDDEN');
   authError(() => auth.removeMember(auth.authenticate(owner.token), 'mem_owner'), 'LAST_OWNER');
+  db.prepare(
+    "INSERT INTO notifications (id, organization_id, user_id, type, dedupe_key, payload_json, created_at) VALUES ('notice_member', 'org_northstar', 'usr_member', 'task_assigned', 'member-removal', '{}', '2026-01-15T12:00:00.000Z')",
+  ).run();
+  db.prepare(
+    "INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES ('view_member', 'org_northstar', 'usr_member', 'tasks', 'Member tasks', '{}', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z')",
+  ).run();
   auth.removeMember(auth.authenticate(owner.token), 'mem_member');
   assert.equal(
     db.prepare("SELECT count(*) AS total FROM memberships WHERE id = 'mem_member'").get().total,
+    0,
+  );
+  assert.equal(
+    db.prepare("SELECT count(*) AS total FROM notifications WHERE user_id = 'usr_member'").get()
+      .total,
+    0,
+  );
+  assert.equal(
+    db.prepare("SELECT count(*) AS total FROM saved_views WHERE user_id = 'usr_member'").get()
+      .total,
     0,
   );
   assert.equal(

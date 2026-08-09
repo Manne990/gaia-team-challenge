@@ -199,6 +199,11 @@ export function createAuthService(
       db.prepare(
         'UPDATE activities SET creator_id = NULL WHERE organization_id = ? AND creator_id = (SELECT user_id FROM memberships WHERE id = ?)',
       ).run(context.organizationId, membership.id);
+      for (const table of ['notifications', 'saved_views']) {
+        db.prepare(
+          `DELETE FROM ${table} WHERE organization_id = ? AND user_id = (SELECT user_id FROM memberships WHERE id = ?)`,
+        ).run(context.organizationId, membership.id);
+      }
       db.prepare(
         'UPDATE sessions SET revoked_at = ? WHERE user_id = (SELECT user_id FROM memberships WHERE id = ?) AND organization_id = ? AND revoked_at IS NULL',
       ).run(nowIso(clock), membership.id, context.organizationId);
