@@ -831,22 +831,12 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<any>(null);
   const [message, setMessage] = useState('');
-  const createPreview = async () => {
-    setMessage('Preparing preview…');
-    const response = await fetch('/api/imports/preview', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ resource, csv, mapping }),
-    });
-    const body = await response.json();
-    if (!response.ok) return setMessage(body.error?.message || 'Preview could not be created.');
-    setPreview(body);
-    setMessage(`${body.validRows} rows are ready; invalid or duplicate rows will not be imported.`);
-  };
   const headers = csv
     .split(/\r?\n/, 1)[0]
     .split(',')
     .map((header) => header.trim());
+  const headerForTarget = (target: string) =>
+    headers.find((header) => header.toLowerCase().replace(/[^a-z0-9]/g, '') === target) || '';
   const targets =
     resource === 'companies'
       ? [
@@ -871,6 +861,21 @@ function Imports({ canWrite }: { canWrite: boolean }) {
           'tags',
           'communicationpreference',
         ];
+  const resolvedMapping = Object.fromEntries(
+    targets.map((target) => [target, mapping[target] ?? headerForTarget(target)]),
+  );
+  const createPreview = async () => {
+    setMessage('Preparing preview…');
+    const response = await fetch('/api/imports/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, csv, mapping: resolvedMapping }),
+    });
+    const body = await response.json();
+    if (!response.ok) return setMessage(body.error?.message || 'Preview could not be created.');
+    setPreview(body);
+    setMessage(`${body.validRows} rows are ready; invalid or duplicate rows will not be imported.`);
+  };
   return (
     <section aria-labelledby="imports-heading">
       <h2 id="imports-heading">Imports and exports</h2>
@@ -892,7 +897,7 @@ function Imports({ canWrite }: { canWrite: boolean }) {
           <label key={target}>
             {target}
             <select
-              value={mapping[target] || target}
+              value={mapping[target] ?? headerForTarget(target)}
               onChange={(event) => setMapping({ ...mapping, [target]: event.target.value })}
             >
               <option value="">Do not import</option>
