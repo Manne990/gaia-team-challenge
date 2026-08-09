@@ -227,6 +227,58 @@ describe('explicit contact merge', () => {
       now,
       now,
     );
+    db.prepare(
+      'INSERT INTO contacts (id, organization_id, company_id, first_name, last_name, email, status, tags_json, communication_preference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      'ct_company_merge',
+      'org_northstar',
+      'co_acme_duplicate',
+      'Company',
+      'Relation',
+      'company-merge@example.test',
+      'active',
+      '[]',
+      'email',
+      now,
+      now,
+    );
+    const dealId = db
+      .prepare('SELECT id FROM deals WHERE organization_id = ? LIMIT 1')
+      .get('org_northstar').id;
+    db.prepare('UPDATE deals SET company_id = ? WHERE id = ? AND organization_id = ?').run(
+      'co_acme_duplicate',
+      dealId,
+      'org_northstar',
+    );
+    db.prepare(
+      'INSERT INTO tasks (id, organization_id, title, description, priority, status, company_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      'task_company_merge',
+      'org_northstar',
+      'Company merge task',
+      '',
+      'medium',
+      'open',
+      'co_acme_duplicate',
+      now,
+      now,
+    );
+    db.prepare(
+      'INSERT INTO activities (id, organization_id, type, subject, body, occurred_at, creator_id, company_id, participant_names_json, creator_name_snapshot, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      'act_company_merge',
+      'org_northstar',
+      'note',
+      'Company merge history',
+      '',
+      now,
+      'usr_owner',
+      'co_acme_duplicate',
+      '[]',
+      'Owner',
+      now,
+      now,
+    );
     const sourceVersion = db
       .prepare('SELECT version FROM companies WHERE id = ?')
       .get('co_acme_duplicate').version;
@@ -313,6 +365,15 @@ describe('explicit contact merge', () => {
       headers: { cookie: restartedCookie },
     });
     expect(retired.status).toBe(200);
-    expect(await retired.json()).toMatchObject({ id: 'co_acme', owner_id: null });
+    expect(await retired.json()).toMatchObject({
+      id: 'co_acme',
+      owner_id: null,
+      contacts: expect.arrayContaining([expect.objectContaining({ id: 'ct_company_merge' })]),
+      deals: expect.arrayContaining([expect.objectContaining({ id: dealId })]),
+      tasks: expect.arrayContaining([expect.objectContaining({ id: 'task_company_merge' })]),
+      activities: expect.arrayContaining([
+        expect.objectContaining({ id: 'act_company_merge', occurredAt: now }),
+      ]),
+    });
   });
 });
