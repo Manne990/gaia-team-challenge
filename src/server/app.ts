@@ -65,7 +65,9 @@ const dealInput = z.object({
   lossReason: z.string().trim().max(500).nullable().optional(),
   contactIds: z.array(z.string().min(1)).max(50).default([]),
 });
-const dealUpdate = dealInput.extend({ version: z.number().int().positive() });
+const dealUpdate = dealInput
+  .omit({ stageId: true, contactIds: true })
+  .extend({ version: z.number().int().positive() });
 const contactInput = z.object({
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),

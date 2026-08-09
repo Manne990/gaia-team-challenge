@@ -87,7 +87,6 @@ describe('deals API', () => {
           body: JSON.stringify({
             name: 'Renamed pipeline deal',
             companyId: 'co_acme',
-            stageId: 'stage_won',
             amountCents: 43000,
             currency: 'USD',
             probability: 100,
