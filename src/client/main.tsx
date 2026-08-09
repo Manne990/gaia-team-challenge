@@ -986,7 +986,13 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     if (response.ok) setItems((await response.json()).items);
   };
   useEffect(() => {
-    void load();
+    const id = window.location.hash.match(/^#tasks\/([^/]+)$/)?.[1];
+    if (id)
+      void fetch(`/api/tasks/${id}`).then(async (response) => {
+        if (response.ok) setItems([await response.json()]);
+        else setMessage('The related task is unavailable.');
+      });
+    else void load();
   }, []);
   const action = async (id: string, name: string) => {
     const response = await fetch(`/api/tasks/${id}/${name}`, { method: 'POST' });
@@ -1180,7 +1186,13 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     });
   };
   useEffect(() => {
-    load().catch(() => setError('Deals could not be loaded.'));
+    const id = window.location.hash.match(/^#deals\/([^/]+)$/)?.[1];
+    if (id)
+      void fetch(`/api/deals/${id}`).then(async (response) => {
+        if (response.ok) setDeals([await response.json()]);
+        else setError('The related deal is unavailable.');
+      });
+    else load().catch(() => setError('Deals could not be loaded.'));
   }, []);
   return (
     <section aria-labelledby="deals-heading">
