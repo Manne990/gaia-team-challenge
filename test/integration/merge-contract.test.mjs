@@ -47,7 +47,11 @@ describe('explicit contact merge', () => {
       now,
       now,
     );
-    db.prepare('UPDATE contacts SET archived_at = ? WHERE id = ?').run(now, 'ct_grace');
+    db.prepare('UPDATE contacts SET archived_at = ?, email = ? WHERE id = ?').run(
+      now,
+      'ada@example.test',
+      'ct_grace',
+    );
     db.prepare('UPDATE contacts SET email = ? WHERE id = ?').run('ada@example.test', 'ct_ada');
     const sourceVersion = db
       .prepare('SELECT version FROM contacts WHERE id = ?')
@@ -71,9 +75,18 @@ describe('explicit contact merge', () => {
     });
     const cookie = login.headers.get('set-cookie');
     const suggestions = await fetch(`${url}/api/duplicates/contacts`, { headers: { cookie } });
-    expect((await suggestions.json()).items).toEqual(
+    const suggestionItems = (await suggestions.json()).items;
+    expect(suggestionItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ sourceId: 'ct_ada', targetId: 'ct_duplicate' }),
+      ]),
+    );
+    expect(suggestionItems).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'ct_ada', targetId: 'ct_grace' }),
+        expect.objectContaining({ sourceId: 'ct_grace', targetId: 'ct_duplicate' }),
+        expect.objectContaining({ sourceId: 'ct_katherine' }),
+        expect.objectContaining({ targetId: 'ct_katherine' }),
       ]),
     );
     const staleVersion = await fetch(`${url}/api/merges`, {
