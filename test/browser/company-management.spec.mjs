@@ -101,6 +101,24 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
+    await page.evaluate(() => (window.confirm = () => true));
+    const [archiveResponse] = await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().endsWith(`/api/companies/${created.id}/archive`),
+      ),
+      page.getByRole('button', { name: 'Archive company' }).click({ force: true }),
+    ]);
+    expect(archiveResponse.status()).toBe(200);
+    expect((await archiveResponse.json()).archived_at).toBeTruthy();
+    await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
+    const [restoreResponse] = await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().endsWith(`/api/companies/${created.id}/restore`),
+      ),
+      page.getByRole('button', { name: 'Restore company' }).click({ force: true }),
+    ]);
+    expect(restoreResponse.status()).toBe(200);
+    await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

@@ -405,6 +405,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                         activities: detail.activities,
                         deals: detail.deals,
                         tasks: detail.tasks,
+                        history: detail.history,
                       });
                       await load('');
                     }}
@@ -484,6 +485,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                         activities: detail.activities,
                         deals: detail.deals,
                         tasks: detail.tasks,
+                        history: detail.history,
                       });
                       await load('');
                     }}

@@ -192,14 +192,27 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const memberCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
-    await expect(
-      page.request
-        .put(`${url}/api/companies/co_acme`, {
-          headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
-          data: { name: 'Allowed member write' },
-        })
-        .then((response) => response.status()),
-    ).resolves.toBe(400);
+    const allowedMemberWrite = await page.request.put(`${url}/api/companies/co_acme`, {
+      headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
+      data: {
+        name: 'Allowed member write',
+        externalReference: 'REF-co_acme',
+        website: '',
+        phone: '',
+        industry: '',
+        size: '',
+        address: '',
+        lifecycleStatus: 'customer',
+        tags: ['seed'],
+        description: '',
+        version: 1,
+      },
+    });
+    expect(allowedMemberWrite.status()).toBe(200);
+    await expect(allowedMemberWrite.json()).resolves.toMatchObject({
+      name: 'Allowed member write',
+      version: 2,
+    });
     await signOut(page);
     await page.getByLabel('Email').fill('other-owner@outside.test');
     await page.getByLabel('Password').fill('OutsidePass!2026');
