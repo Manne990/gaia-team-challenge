@@ -594,7 +594,11 @@ export function createApp(config: AppConfig) {
             message: 'A record changed. Refresh the review before merging.',
           },
         });
-      assertContactOwner(session.organizationId, input.fields.ownerId ?? target.owner_id);
+      const selectedField = (field: string, currentValue: any): string | null | undefined =>
+        Object.prototype.hasOwnProperty.call(input.fields, field)
+          ? input.fields[field]
+          : currentValue;
+      assertContactOwner(session.organizationId, selectedField('ownerId', target.owner_id));
       const now = new Date().toISOString();
       transaction(() => {
         if (input.resource === 'contacts') {
@@ -621,16 +625,16 @@ export function createApp(config: AppConfig) {
               'UPDATE contacts SET first_name = ?, last_name = ?, email = ?, phone = ?, job_title = ?, company_id = ?, owner_id = ?, status = ?, tags_json = ?, communication_preference = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
             )
             .run(
-              input.fields.firstName ?? target.first_name,
-              input.fields.lastName ?? target.last_name,
-              input.fields.email ?? target.email,
-              input.fields.phone ?? target.phone,
-              input.fields.jobTitle ?? target.job_title,
-              input.fields.companyId ?? target.company_id,
-              input.fields.ownerId ?? target.owner_id,
-              input.fields.status ?? target.status,
-              input.fields.tagsJson ?? target.tags_json,
-              input.fields.communicationPreference ?? target.communication_preference,
+              selectedField('firstName', target.first_name),
+              selectedField('lastName', target.last_name),
+              selectedField('email', target.email),
+              selectedField('phone', target.phone),
+              selectedField('jobTitle', target.job_title),
+              selectedField('companyId', target.company_id),
+              selectedField('ownerId', target.owner_id),
+              selectedField('status', target.status),
+              selectedField('tagsJson', target.tags_json),
+              selectedField('communicationPreference', target.communication_preference),
               now,
               input.targetId,
               session.organizationId,
@@ -663,17 +667,17 @@ export function createApp(config: AppConfig) {
               'UPDATE companies SET name = ?, external_reference = ?, website = ?, phone = ?, industry = ?, size = ?, address = ?, lifecycle_status = ?, owner_id = ?, tags_json = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
             )
             .run(
-              input.fields.name ?? target.name,
-              input.fields.externalReference ?? target.external_reference,
-              input.fields.website ?? target.website,
-              input.fields.phone ?? target.phone,
-              input.fields.industry ?? target.industry,
-              input.fields.size ?? target.size,
-              input.fields.address ?? target.address,
-              input.fields.lifecycleStatus ?? target.lifecycle_status,
-              input.fields.ownerId ?? target.owner_id,
-              input.fields.tagsJson ?? target.tags_json,
-              input.fields.description ?? target.description,
+              selectedField('name', target.name),
+              selectedField('externalReference', target.external_reference),
+              selectedField('website', target.website),
+              selectedField('phone', target.phone),
+              selectedField('industry', target.industry),
+              selectedField('size', target.size),
+              selectedField('address', target.address),
+              selectedField('lifecycleStatus', target.lifecycle_status),
+              selectedField('ownerId', target.owner_id),
+              selectedField('tagsJson', target.tags_json),
+              selectedField('description', target.description),
               now,
               input.targetId,
               session.organizationId,

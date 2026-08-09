@@ -236,7 +236,7 @@ describe('explicit contact merge', () => {
         targetId: 'co_acme',
         sourceVersion,
         targetVersion,
-        fields: { name: 'Acme Industries' },
+        fields: { name: 'Acme Industries', ownerId: null },
       }),
     });
     expect(merge.status).toBe(201);
@@ -254,6 +254,6 @@ describe('explicit contact merge', () => {
       headers: { cookie: restartedCookie },
     });
     expect(retired.status).toBe(200);
-    expect((await retired.json()).id).toBe('co_acme');
+    expect(await retired.json()).toMatchObject({ id: 'co_acme', owner_id: null });
   });
 });
