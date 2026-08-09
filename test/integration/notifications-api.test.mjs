@@ -94,6 +94,22 @@ describe('notifications API', () => {
         })
       ).status,
     ).toBe(400);
+    expect(
+      (
+        await fetch(`${url}/api/deals`, {
+          method: 'POST',
+          headers: { cookie: owner, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Foreign owner attempt',
+            companyId: 'co_acme',
+            stageId: 'stage_proposal',
+            ownerId: 'usr_outside',
+            amountCents: 100,
+            currency: 'USD',
+          }),
+        })
+      ).status,
+    ).toBe(400);
     const notificationCheck = openDatabase(environment.databasePath);
     expect(
       notificationCheck
