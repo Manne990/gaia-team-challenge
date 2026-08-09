@@ -48,7 +48,17 @@ try {
       '002_enforce_crm_integrity.sql',
       '003_company_archiving.sql',
       '003_contact_archival.sql',
+      '004_activity_history.sql',
     ],
+  );
+  assert.equal(
+    upgrade
+      .prepare(
+        "SELECT count(*) AS total FROM pragma_table_info('activities') WHERE name = 'version'",
+      )
+      .get().total,
+    1,
+    'an existing 001 database must receive activity edit versioning',
   );
   upgrade.close();
   let db = resetAndSeed(filename);

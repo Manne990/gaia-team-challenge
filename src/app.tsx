@@ -915,12 +915,14 @@ export function App({
   user,
   workspace,
   companiesContent,
+  activitiesContent,
   onSignOut,
 }: {
   role: Role;
   user: ShellUser;
   workspace: Workspace;
   companiesContent?: ReactNode;
+  activitiesContent?: ReactNode;
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -948,6 +950,8 @@ export function App({
       <Dashboard user={user} workspace={workspace} />
     ) : page === 'Companies' && companiesContent ? (
       companiesContent
+    ) : page === 'Activities' && activitiesContent ? (
+      activitiesContent
     ) : page === 'Companies' || page === 'Contacts' ? (
       <ListPage page={page} workspace={workspace} user={user} role={role} />
     ) : (
