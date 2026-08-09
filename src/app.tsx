@@ -937,6 +937,7 @@ export function App({
   dealsContent,
   importsContent,
   tasksContent,
+  notificationsContent,
   onSignOut,
 }: {
   role: Role;
@@ -947,6 +948,7 @@ export function App({
   dealsContent?: ReactNode;
   importsContent?: ReactNode;
   tasksContent?: ReactNode;
+  notificationsContent?: ReactNode;
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -1055,7 +1057,7 @@ export function App({
           </label>
           <div className="top-actions">
             <IconButton label="Help">?</IconButton>
-            <IconButton label="Notifications">♧</IconButton>
+            {notificationsContent || <IconButton label="Notifications">♧</IconButton>}
             <button
               className="mobile-avatar"
               aria-label="Open account menu"

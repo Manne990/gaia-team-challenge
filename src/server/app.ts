@@ -153,6 +153,10 @@ const taskListQuery = z.object({
   sort: z.enum(['dueAt', 'createdAt', 'updatedAt', 'priority']).default('dueAt'),
   direction: z.enum(['asc', 'desc']).default('asc'),
 });
+const notificationListQuery = z.object({
+  unread: z.coerce.boolean().default(false),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
@@ -175,6 +179,49 @@ export function createApp(config: AppConfig) {
     } catch (error) {
       database.exec('ROLLBACK');
       throw error;
+    }
+  };
+  const createNotification = (
+    organizationId: string,
+    userId: string | null,
+    type: 'task_assigned' | 'task_due' | 'task_overdue' | 'deal_changed',
+    dedupeKey: string,
+    payload: unknown,
+    createdAt = new Date().toISOString(),
+  ) => {
+    if (!userId) return;
+    database
+      .prepare(
+        'INSERT OR IGNORE INTO notifications (id, organization_id, user_id, type, dedupe_key, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        `ntf_${randomUUID()}`,
+        organizationId,
+        userId,
+        type,
+        dedupeKey,
+        JSON.stringify(payload),
+        createdAt,
+      );
+  };
+  const generateDueNotifications = (organizationId: string, now = new Date()) => {
+    const instant = now.toISOString();
+    const day = instant.slice(0, 10);
+    const approaching = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    for (const task of database
+      .prepare(
+        "SELECT id, title, assignee_id AS assigneeId, due_at AS dueAt FROM tasks WHERE organization_id = ? AND archived_at IS NULL AND status NOT IN ('completed', 'cancelled') AND assignee_id IS NOT NULL AND due_at IS NOT NULL AND due_at <= ?",
+      )
+      .all(organizationId, approaching)) {
+      const overdue = task.dueAt < instant;
+      createNotification(
+        organizationId,
+        task.assigneeId,
+        overdue ? 'task_overdue' : 'task_due',
+        `${task.id}:${overdue ? 'overdue' : 'due'}:${overdue ? day : task.dueAt.slice(0, 10)}`,
+        { recordType: 'task', recordId: task.id, title: task.title, dueAt: task.dueAt },
+        instant,
+      );
     }
   };
   const activityFields = `
@@ -765,6 +812,54 @@ export function createApp(config: AppConfig) {
         JSON.stringify(summary),
         new Date().toISOString(),
       );
+  app.get('/api/notifications', (request, response) => {
+    try {
+      const session = taskSession(request);
+      const query = notificationListQuery.parse(request.query);
+      generateDueNotifications(session.organizationId);
+      const where = ['organization_id = ?', 'user_id = ?'];
+      if (query.unread) where.push('read_at IS NULL');
+      return response.json({
+        items: database
+          .prepare(
+            `SELECT id, type, payload_json AS payloadJson, created_at AS createdAt, read_at AS readAt FROM notifications WHERE ${where.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`,
+          )
+          .all(session.organizationId, session.userId, query.limit),
+      });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.post('/api/notifications/:id/read', (request, response) => {
+    try {
+      const session = taskSession(request);
+      const result = database
+        .prepare(
+          'UPDATE notifications SET read_at = coalesce(read_at, ?) WHERE id = ? AND organization_id = ? AND user_id = ?',
+        )
+        .run(new Date().toISOString(), request.params.id, session.organizationId, session.userId);
+      if (!result.changes)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This notification was not found.' } });
+      return response.json({ ok: true });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.post('/api/notifications/read-all', (request, response) => {
+    try {
+      const session = taskSession(request);
+      const result = database
+        .prepare(
+          'UPDATE notifications SET read_at = ? WHERE organization_id = ? AND user_id = ? AND read_at IS NULL',
+        )
+        .run(new Date().toISOString(), session.organizationId, session.userId);
+      return response.json({ updated: result.changes });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
   app.get('/api/tasks', (request, response) => {
     try {
       const s = taskSession(request);
@@ -858,6 +953,18 @@ export function createApp(config: AppConfig) {
             now,
             now,
           );
+        createNotification(
+          s.organizationId,
+          input.assigneeId || null,
+          'task_assigned',
+          `${id}:assignment:${input.assigneeId}`,
+          {
+            recordType: 'task',
+            recordId: id,
+            title: input.title,
+          },
+          now,
+        );
         auditTask(s.organizationId, s.userId, 'task.created', id, { title: input.title });
       });
       return response
@@ -927,6 +1034,19 @@ export function createApp(config: AppConfig) {
             existing.id,
             s.organizationId,
             input.version,
+          );
+        if (input.assigneeId && input.assigneeId !== existing.assignee_id)
+          createNotification(
+            s.organizationId,
+            input.assigneeId,
+            'task_assigned',
+            `${existing.id}:assignment:${input.assigneeId}:${now}`,
+            {
+              recordType: 'task',
+              recordId: existing.id,
+              title: input.title,
+            },
+            now,
           );
         auditTask(s.organizationId, s.userId, 'task.updated', existing.id, {
           status: input.status,
@@ -2014,6 +2134,19 @@ export function createApp(config: AppConfig) {
           JSON.stringify({ version: d.version }),
           now,
         );
+      if (d.ownerId && d.ownerId !== s.userId)
+        createNotification(
+          s.organizationId,
+          d.ownerId,
+          'deal_changed',
+          `${request.params.id}:updated:${d.version + 1}`,
+          {
+            recordType: 'deal',
+            recordId: request.params.id,
+            title: d.name,
+          },
+          now,
+        );
       return response.json(
         database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
       );
@@ -2035,7 +2168,7 @@ export function createApp(config: AppConfig) {
       const changed = transaction(() => {
         const current = database
           .prepare(
-            'SELECT stage_id AS stageId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
+            'SELECT stage_id AS stageId, owner_id AS ownerId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
           )
           .get(request.params.id, s.organizationId);
         const target = database
@@ -2062,6 +2195,19 @@ export function createApp(config: AppConfig) {
             input.version,
           );
         if (!update.changes) return null;
+        if (current.ownerId && current.ownerId !== s.userId)
+          createNotification(
+            s.organizationId,
+            current.ownerId,
+            'deal_changed',
+            `${request.params.id}:transition:${input.version + 1}`,
+            {
+              recordType: 'deal',
+              recordId: request.params.id,
+              stageId: input.stageId,
+            },
+            now,
+          );
         database
           .prepare(
             'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, actor_id, changed_at, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

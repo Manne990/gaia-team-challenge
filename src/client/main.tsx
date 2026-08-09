@@ -1463,6 +1463,55 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
+function Notifications() {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<any[]>([]);
+  const load = async () => {
+    const response = await fetch('/api/notifications?unread=true');
+    if (response.ok) setItems((await response.json()).items);
+  };
+  return (
+    <div>
+      <button
+        aria-label="Notifications"
+        onClick={() => {
+          setOpen(!open);
+          if (!open) void load();
+        }}
+      >
+        ♧
+      </button>
+      {open && (
+        <section aria-label="Notifications">
+          <button
+            onClick={async () => {
+              await fetch('/api/notifications/read-all', { method: 'POST' });
+              await load();
+            }}
+          >
+            Mark all read
+          </button>
+          <ul>
+            {items.map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={async () => {
+                    await fetch(`/api/notifications/${item.id}/read`, { method: 'POST' });
+                    await load();
+                  }}
+                >
+                  {JSON.parse(item.payloadJson).title}
+                </button>
+              </li>
+            ))}
+            {!items.length && <li>No unread notifications.</li>}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -1558,6 +1607,7 @@ function App() {
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
+      notificationsContent={<Notifications />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
