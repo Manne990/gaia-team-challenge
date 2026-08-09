@@ -5,6 +5,13 @@ import { createApp } from '../../src/server/app.ts';
 
 const require = createRequire(import.meta.url);
 const { openDatabase, seedDatabase } = require('../../src/db/database.mjs');
+const start = async (databasePath) => {
+  const app = createApp({ host: '127.0.0.1', port: 0, databasePath, environment: 'test' });
+  const server = await new Promise((resolve) => {
+    const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+  });
+  return { server, url: `http://127.0.0.1:${server.address().port}` };
+};
 
 describe('tasks API', () => {
   let environment;
@@ -19,16 +26,8 @@ describe('tasks API', () => {
     const database = openDatabase(environment.databasePath);
     seedDatabase(database);
     database.close();
-    const app = createApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: environment.databasePath,
-      environment: 'test',
-    });
-    await new Promise((resolve) => {
-      server = app.listen(0, resolve);
-    });
-    const url = `http://127.0.0.1:${server.address().port}`;
+    let url;
+    ({ server, url } = await start(environment.databasePath));
     const signIn = async (email, password) =>
       (
         await fetch(`${url}/api/auth/sign-in`, {
@@ -90,6 +89,12 @@ describe('tasks API', () => {
     expect(await archived.json()).toMatchObject({ archived_at: expect.any(String) });
     const detail = await fetch(`${url}/api/tasks/${task.id}`, { headers: { cookie: owner } });
     expect((await detail.json()).history.map((event) => event.action)).toContain('task.archived');
+    await new Promise((resolve) => server.close(resolve));
+    ({ server, url } = await start(environment.databasePath));
+    const restartedOwner = await signIn('owner@northstar.test', 'OwnerPass!2026');
+    expect(
+      (await fetch(`${url}/api/tasks/${task.id}`, { headers: { cookie: restartedOwner } })).status,
+    ).toBe(200);
     const viewer = await signIn('viewer@northstar.test', 'ViewerPass!2026');
     expect(
       (
