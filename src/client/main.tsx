@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App as ShellApp, type Role, type Workspace } from '../app';
 import './styles.css';
@@ -43,6 +43,99 @@ type CompanyDetail = Company & {
   history: { id: string; action: string; created_at: string; summary_json: string }[];
 };
 
+type SearchItem = { id: string; label: string; context: string | null };
+type SearchGroups = Record<'companies' | 'contacts' | 'deals' | 'tasks', SearchItem[]>;
+
+function GlobalSearch() {
+  const input = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const [groups, setGroups] = useState<SearchGroups | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+  useEffect(() => {
+    const focus = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        input.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', focus);
+    return () => document.removeEventListener('keydown', focus);
+  }, []);
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setGroups(null);
+      setState('idle');
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setState('loading');
+      fetch(`/api/search?${new URLSearchParams({ q: term })}`, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Search failed');
+          return response.json();
+        })
+        .then((body) => {
+          setGroups(body.groups);
+          setState('idle');
+        })
+        .catch((error: unknown) => {
+          if ((error as { name?: string }).name !== 'AbortError') setState('error');
+        });
+    }, 200);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+  const labels: Record<keyof SearchGroups, string> = {
+    companies: 'Companies',
+    contacts: 'Contacts',
+    deals: 'Deals',
+    tasks: 'Tasks',
+  };
+  const noMatches = groups && Object.values(groups).every((items) => items.length === 0);
+  return (
+    <div className="global-search">
+      <label>
+        <span className="sr-only">Search CRM</span>
+        <span aria-hidden="true">⌕</span>
+        <input
+          ref={input}
+          aria-label="Search CRM"
+          placeholder="Search companies, contacts, deals…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      <kbd>⌘ K</kbd>
+      {state === 'loading' && <span aria-live="polite">Searching…</span>}
+      {state === 'error' && <span role="alert">Search is unavailable.</span>}
+      {noMatches && <p role="status">No records match “{query}”.</p>}
+      {groups && !noMatches && (
+        <div aria-label="Search results">
+          {(Object.keys(labels) as Array<keyof SearchGroups>).map((resource) =>
+            groups[resource].length ? (
+              <section key={resource} aria-label={labels[resource]}>
+                <strong>{labels[resource]}</strong>
+                <ul>
+                  {groups[resource].map((item) => (
+                    <li key={item.id}>
+                      <span>{item.label}</span>
+                      {item.context && <small> — {item.context}</small>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null,
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Companies({ canWrite }: { canWrite: boolean }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [total, setTotal] = useState(0);
@@ -79,6 +172,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
       }))
         if (value) query.set(key, value);
       if (nextFilters.includeArchived) query.set('includeArchived', 'true');
+      window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
       const response = await fetch(`/api/companies?${query}`);
       if (!response.ok) throw new Error('Unable to load companies.');
       const body = await response.json();
@@ -202,6 +296,27 @@ function Companies({ canWrite }: { canWrite: boolean }) {
           Include archived companies
         </label>
         <button>Apply filters</button>
+        <button
+          type="button"
+          onClick={() => {
+            const next = {
+              lifecycle: '',
+              ownerId: '',
+              industry: '',
+              size: '',
+              tag: '',
+              sort: 'name',
+              direction: 'asc',
+              includeArchived: false,
+              page: 1,
+            };
+            setText('');
+            setFilters(next);
+            void load('', next);
+          }}
+        >
+          Clear company filters
+        </button>
       </form>
       <a href={companyExportHref} download>
         Export filtered companies
@@ -986,13 +1101,7 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     if (response.ok) setItems((await response.json()).items);
   };
   useEffect(() => {
-    const id = window.location.hash.match(/^#tasks\/([^/]+)$/)?.[1];
-    if (id)
-      void fetch(`/api/tasks/${id}`).then(async (response) => {
-        if (response.ok) setItems([await response.json()]);
-        else setMessage('The related task is unavailable.');
-      });
-    else void load();
+    void load();
   }, []);
   const action = async (id: string, name: string) => {
     const response = await fetch(`/api/tasks/${id}/${name}`, { method: 'POST' });
@@ -1186,13 +1295,7 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     });
   };
   useEffect(() => {
-    const id = window.location.hash.match(/^#deals\/([^/]+)$/)?.[1];
-    if (id)
-      void fetch(`/api/deals/${id}`).then(async (response) => {
-        if (response.ok) setDeals([await response.json()]);
-        else setError('The related deal is unavailable.');
-      });
-    else load().catch(() => setError('Deals could not be loaded.'));
+    load().catch(() => setError('Deals could not be loaded.'));
   }, []);
   return (
     <section aria-labelledby="deals-heading">
@@ -1475,72 +1578,6 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
-function Notifications({
-  navigate,
-}: {
-  navigate: (page: 'Tasks' | 'Deals', recordId?: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(true);
-  const [items, setItems] = useState<any[]>([]);
-  const load = async () => {
-    const response = await fetch(`/api/notifications?unread=${unread}`);
-    if (response.ok) setItems((await response.json()).items);
-  };
-  useEffect(() => {
-    if (open) void load();
-  }, [unread]);
-  return (
-    <div className="notifications">
-      <button
-        aria-label="Notifications"
-        onClick={() => {
-          setOpen(!open);
-          if (!open) void load();
-        }}
-      >
-        ♧
-      </button>
-      {open && (
-        <section className="notification-inbox" aria-label="Notifications">
-          <label>
-            Show unread only
-            <input
-              type="checkbox"
-              checked={unread}
-              onChange={(event) => setUnread(event.target.checked)}
-            />
-          </label>
-          <button
-            onClick={async () => {
-              await fetch('/api/notifications/read-all', { method: 'POST' });
-              await load();
-            }}
-          >
-            Mark all read
-          </button>
-          <ul>
-            {items.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={async () => {
-                    const payload = JSON.parse(item.payloadJson);
-                    await fetch(`/api/notifications/${item.id}/read`, { method: 'POST' });
-                    navigate(payload.recordType === 'deal' ? 'Deals' : 'Tasks', payload.recordId);
-                  }}
-                >
-                  {JSON.parse(item.payloadJson).title}
-                </button>
-              </li>
-            ))}
-            {!items.length && <li>No unread notifications.</li>}
-          </ul>
-        </section>
-      )}
-    </div>
-  );
-}
-
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -1636,7 +1673,7 @@ function App() {
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
-      notificationsContent={(navigate) => <Notifications navigate={navigate} />}
+      globalSearchContent={<GlobalSearch />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

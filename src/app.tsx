@@ -937,7 +937,7 @@ export function App({
   dealsContent,
   importsContent,
   tasksContent,
-  notificationsContent,
+  globalSearchContent,
   onSignOut,
 }: {
   role: Role;
@@ -948,7 +948,7 @@ export function App({
   dealsContent?: ReactNode;
   importsContent?: ReactNode;
   tasksContent?: ReactNode;
-  notificationsContent?: (navigate: (page: Page, recordId?: string) => void) => ReactNode;
+  globalSearchContent?: ReactNode;
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -957,9 +957,8 @@ export function App({
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [notice, setNotice] = useState('Updates are saved automatically.');
   const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const navigate = (next: Page, recordId?: string) => {
+  const navigate = (next: Page) => {
     setPage(next);
-    if (recordId) window.location.hash = `${next.toLowerCase()}/${recordId}`;
     setMobileOpen(false);
   };
   const openDialog = (trigger: HTMLButtonElement) => {
@@ -1051,14 +1050,16 @@ export function App({
           >
             ☰
           </button>
-          <label className="global-search">
-            <span aria-hidden="true">⌕</span>
-            <input aria-label="Search CRM" placeholder="Search companies, contacts, deals…" />
-            <kbd>⌘ K</kbd>
-          </label>
+          {globalSearchContent || (
+            <label className="global-search">
+              <span aria-hidden="true">⌕</span>
+              <input aria-label="Search CRM" placeholder="Search companies, contacts, deals…" />
+              <kbd>⌘ K</kbd>
+            </label>
+          )}
           <div className="top-actions">
             <IconButton label="Help">?</IconButton>
-            {notificationsContent?.(navigate) || <IconButton label="Notifications">♧</IconButton>}
+            <IconButton label="Notifications">♧</IconButton>
             <button
               className="mobile-avatar"
               aria-label="Open account menu"
