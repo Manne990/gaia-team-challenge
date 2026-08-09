@@ -17,6 +17,21 @@ describe('search and saved views API', () => {
     environment = await createTemporaryEnvironment();
     const db = openDatabase(environment.databasePath);
     seedDatabase(db);
+    const insertCompany = db.prepare(
+      'INSERT INTO companies (id, organization_id, name, external_reference, lifecycle_status, owner_id, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    );
+    for (let index = 0; index < 30; index += 1)
+      insertCompany.run(
+        `co_volume_${index}`,
+        'org_northstar',
+        `Volume account ${String(index).padStart(2, '0')}`,
+        `VOLUME-${index}`,
+        'lead',
+        'usr_owner',
+        '[]',
+        '2026-01-15T12:00:00.000Z',
+        '2026-01-15T12:00:00.000Z',
+      );
     db.close();
     server = createApp({
       host: '127.0.0.1',
@@ -40,6 +55,14 @@ describe('search and saved views API', () => {
     const search = await searchResponse.json();
     expect(search.groups.companies.map((item) => item.id)).toContain('co_acme');
     expect(search.groups.companies.map((item) => item.id)).not.toContain('co_outside');
+    const firstVolumePage = await fetch(`${url}/api/companies?text=Volume&page=1&pageSize=10`, {
+      headers: { cookie: owner },
+    });
+    const secondVolumePage = await fetch(`${url}/api/companies?text=Volume&page=2&pageSize=10`, {
+      headers: { cookie: owner },
+    });
+    expect((await firstVolumePage.json()).items).toHaveLength(10);
+    expect((await secondVolumePage.json()).items).toHaveLength(10);
     const created = await fetch(`${url}/api/saved-views`, {
       method: 'POST',
       headers: { cookie: owner, 'content-type': 'application/json' },
