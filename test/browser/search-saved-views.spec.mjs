@@ -124,7 +124,9 @@ test('task and deal saved views restore pagination, and a selected task respects
     await expect(page.getByRole('list', { name: 'Task results' })).toContainText('Deep link task');
     await taskViews.getByLabel('Due state').selectOption('completed');
     await taskViews.getByRole('button', { name: 'Apply view' }).click();
-    await expect(page.getByRole('list', { name: 'Task results' })).not.toContainText('Deep link task');
+    await expect(page.getByRole('list', { name: 'Task results' })).not.toContainText(
+      'Deep link task',
+    );
 
     expect(
       await page.evaluate(async () =>
@@ -132,9 +134,16 @@ test('task and deal saved views restore pagination, and a selected task respects
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-          resource: 'tasks',
-          name: 'Task ordered page',
-          filters: { due: '', mine: false, relation: '', page: 2, sort: 'createdAt', direction: 'desc' },
+            resource: 'tasks',
+            name: 'Task ordered page',
+            filters: {
+              due: '',
+              mine: false,
+              relation: '',
+              page: 2,
+              sort: 'createdAt',
+              direction: 'desc',
+            },
           }),
         }).then((response) => response.status),
       ),
@@ -142,7 +151,9 @@ test('task and deal saved views restore pagination, and a selected task respects
     await page.getByRole('button', { name: 'Dashboard' }).click();
     await page.getByRole('button', { name: 'Tasks' }).click();
     const taskSaved = page.locator('[aria-label="Manage saved views for tasks"]');
-    await expect(taskSaved.getByRole('button', { name: 'Task ordered page', exact: true })).toBeVisible();
+    await expect(
+      taskSaved.getByRole('button', { name: 'Task ordered page', exact: true }),
+    ).toBeVisible();
     await taskSaved.getByRole('button', { name: 'Task ordered page', exact: true }).click();
     await expect(page).toHaveURL(/sort=createdAt&direction=desc&page=2/);
 
@@ -153,16 +164,16 @@ test('task and deal saved views restore pagination, and a selected task respects
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-          resource: 'deals',
-          name: 'Deal ordered page',
-          filters: {
-            stageId: '',
-            status: '',
-            includeArchived: false,
-            page: 2,
-            sort: 'name',
-            direction: 'asc',
-          },
+            resource: 'deals',
+            name: 'Deal ordered page',
+            filters: {
+              stageId: '',
+              status: '',
+              includeArchived: false,
+              page: 2,
+              sort: 'name',
+              direction: 'asc',
+            },
           }),
         }).then((response) => response.status),
       ),
@@ -170,7 +181,9 @@ test('task and deal saved views restore pagination, and a selected task respects
     await page.getByRole('button', { name: 'Dashboard' }).click();
     await page.getByRole('button', { name: 'Deals', exact: true }).click();
     const dealSaved = page.locator('[aria-label="Manage saved views for deals"]');
-    await expect(dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true })).toBeVisible();
+    await expect(
+      dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true }),
+    ).toBeVisible();
     await dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true }).click();
     await expect(page).toHaveURL(/page=2&sort=name&direction=asc/);
   } finally {
