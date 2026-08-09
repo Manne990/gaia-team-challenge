@@ -970,6 +970,7 @@ function Imports({ canWrite }: { canWrite: boolean }) {
 
 function Deals() {
   const [deals, setDeals] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [stages, setStages] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [stageFilter, setStageFilter] = useState('');
@@ -983,6 +984,7 @@ function Deals() {
       fetch('/api/pipeline/stages').then((r) => r.json()),
     ]).then(([list, pipeline]) => {
       setDeals(list.items || []);
+      setTotal(list.total || 0);
       setStages(pipeline || []);
     });
   };
@@ -1022,7 +1024,7 @@ function Deals() {
         </label>
         <button>Apply filters</button>
       </form>
-      <p>{deals.length} active deals</p>
+      <p>{total} active deals</p>
       <div className="pipeline" aria-label="Pipeline view">
         {stages.map((stage) => (
           <section key={stage.id}>
