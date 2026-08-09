@@ -5,6 +5,11 @@ import { z } from 'zod';
 import type { AppConfig } from '../shared/config.js';
 
 const require = createRequire(import.meta.url);
+const { parseCsv, escapeCsv, normalizeTags } = require('../imports/csv.mjs') as {
+  parseCsv(source: string): { headers: string[]; rows: string[][] };
+  escapeCsv(value: unknown): string;
+  normalizeTags(value: unknown): string[];
+};
 const { openDatabase, migrate } = require('../db/database.mjs') as {
   openDatabase(path: string): any;
   migrate(database: any): void;
@@ -101,6 +106,11 @@ const activityListQuery = z
   .refine((query) => Boolean(query.cursorOccurredAt) === Boolean(query.cursorId), {
     message: 'A timeline cursor needs both its occurrence time and identifier.',
   });
+const importPreviewInput = z.object({
+  resource: z.enum(['companies', 'contacts']),
+  csv: z.string().max(1_000_000),
+  mapping: z.record(z.string(), z.string()).optional(),
+});
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
@@ -226,6 +236,92 @@ export function createApp(config: AppConfig) {
       .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
       .get(organizationId, ownerId);
     if (!membership) throw new Error('INVALID_CONTACT_OWNER');
+  };
+  const importColumns = {
+    companies: [
+      'name',
+      'externalreference',
+      'website',
+      'phone',
+      'industry',
+      'size',
+      'address',
+      'lifecyclestatus',
+      'tags',
+      'description',
+    ],
+    contacts: [
+      'firstname',
+      'lastname',
+      'email',
+      'phone',
+      'jobtitle',
+      'status',
+      'tags',
+      'communicationpreference',
+    ],
+  } as const;
+  const previewImport = (
+    organizationId: string,
+    resource: 'companies' | 'contacts',
+    csv: string,
+    mapping?: Record<string, string>,
+  ) => {
+    const parsed = parseCsv(csv);
+    const accepted = new Set(importColumns[resource]);
+    const resolved = Object.fromEntries(
+      Object.entries(
+        mapping || Object.fromEntries(parsed.headers.map((header) => [header, header])),
+      )
+        .map(([target, header]) => [
+          target,
+          String(header)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ''),
+        ])
+        .filter(
+          ([target, header]) => accepted.has(target as never) && parsed.headers.includes(header),
+        ),
+    );
+    const valueAt = (values: string[], target: string) => {
+      const header = resolved[target];
+      return header ? values[parsed.headers.indexOf(header)] || '' : '';
+    };
+    const seenKeys = new Set<string>();
+    const rows = parsed.rows.map((values, index) => {
+      const row = Object.fromEntries(
+        importColumns[resource].map((key) => [key, valueAt(values, key)]),
+      );
+      const errors: string[] = [];
+      if (resource === 'companies' && !row.name) errors.push('Name is required.');
+      if (resource === 'contacts' && (!row.firstname || !row.lastname))
+        errors.push('First and last name are required.');
+      if (
+        resource === 'contacts' &&
+        row.email &&
+        !z.string().email().safeParse(row.email.trim()).success
+      )
+        errors.push('Email is invalid.');
+      const key = resource === 'companies' ? row.externalreference : row.email.toLowerCase();
+      if (key && seenKeys.has(key)) errors.push('Duplicate key appears in this CSV.');
+      if (key) seenKeys.add(key);
+      const duplicate =
+        key &&
+        database
+          .prepare(
+            resource === 'companies'
+              ? 'SELECT id, name FROM companies WHERE organization_id = ? AND external_reference = ? AND archived_at IS NULL'
+              : "SELECT id, first_name || ' ' || last_name AS name FROM contacts WHERE organization_id = ? AND lower(email) = ? AND archived_at IS NULL",
+          )
+          .get(organizationId, key);
+      return { line: index + 2, values: row, errors, duplicate: duplicate || null };
+    });
+    return {
+      resource,
+      mapping: resolved,
+      rows,
+      validRows: rows.filter((row) => !row.errors.length && !row.duplicate).length,
+    };
   };
   const sessionCookie = (token: string, expiresAt: string) =>
     `northstar_session=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}${config.environment === 'production' ? '; Secure' : ''}`;
@@ -1117,6 +1213,221 @@ export function createApp(config: AppConfig) {
       );
     } catch (error) {
       return sendActivityError(error, response);
+    }
+  });
+
+  app.post('/api/imports/preview', (request, response) => {
+    try {
+      const session = auth.requireRole(contactSession(request), ['owner', 'member']);
+      const input = importPreviewInput.parse(request.body);
+      const result = previewImport(
+        session.organizationId,
+        input.resource,
+        input.csv,
+        input.mapping,
+      );
+      const id = `imp_${randomUUID()}`;
+      database
+        .prepare(
+          'INSERT INTO imports (id, organization_id, created_by_id, resource, status, mapping_json, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          id,
+          session.organizationId,
+          session.userId,
+          input.resource,
+          'preview',
+          JSON.stringify(result.mapping),
+          JSON.stringify(result),
+          new Date().toISOString(),
+        );
+      return response.status(201).json({ id, ...result });
+    } catch (error) {
+      if (error instanceof AuthError)
+        return response.status(error.code === 'FORBIDDEN' ? 403 : 401).json({
+          error: {
+            code: error.code,
+            message:
+              error.code === 'FORBIDDEN'
+                ? 'You do not have permission to import records.'
+                : 'Please sign in to continue.',
+          },
+        });
+      return response.status(400).json({
+        error: {
+          code: 'VALIDATION',
+          message: error instanceof Error ? error.message : 'CSV preview could not be created.',
+        },
+      });
+    }
+  });
+  app.post('/api/imports/:id/commit', (request, response) => {
+    try {
+      const session = auth.requireRole(contactSession(request), ['owner', 'member']);
+      const preview = database
+        .prepare('SELECT * FROM imports WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, session.organizationId);
+      if (!preview)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This import preview was not found.' } });
+      const result = JSON.parse(preview.result_json);
+      if (preview.status === 'committed') return response.json(result);
+      const now = new Date().toISOString();
+      const committed = transaction(() => {
+        const current = database
+          .prepare('SELECT status, result_json FROM imports WHERE id = ? AND organization_id = ?')
+          .get(preview.id, session.organizationId);
+        if (current.status === 'committed') return JSON.parse(current.result_json);
+        for (const row of result.rows.filter(
+          (item: any) => !item.errors.length && !item.duplicate,
+        )) {
+          if (preview.resource === 'companies')
+            database
+              .prepare(
+                'INSERT INTO companies (id, organization_id, name, external_reference, website, phone, industry, size, address, lifecycle_status, owner_id, tags_json, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              )
+              .run(
+                `co_${randomUUID()}`,
+                session.organizationId,
+                row.values.name,
+                row.values.externalreference || null,
+                row.values.website || null,
+                row.values.phone || null,
+                row.values.industry || null,
+                row.values.size || null,
+                row.values.address || null,
+                ['lead', 'prospect', 'customer', 'inactive'].includes(row.values.lifecyclestatus)
+                  ? row.values.lifecyclestatus
+                  : 'lead',
+                session.userId,
+                JSON.stringify(normalizeTags(row.values.tags)),
+                row.values.description || '',
+                now,
+                now,
+              );
+          else
+            database
+              .prepare(
+                'INSERT INTO contacts (id, organization_id, first_name, last_name, email, phone, job_title, owner_id, status, tags_json, communication_preference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              )
+              .run(
+                `ct_${randomUUID()}`,
+                session.organizationId,
+                row.values.firstname,
+                row.values.lastname,
+                row.values.email ? row.values.email.toLowerCase() : null,
+                row.values.phone || null,
+                row.values.jobtitle || null,
+                session.userId,
+                ['active', 'inactive', 'lead'].includes(row.values.status)
+                  ? row.values.status
+                  : 'active',
+                JSON.stringify(normalizeTags(row.values.tags)),
+                ['email', 'phone', 'none'].includes(row.values.communicationpreference)
+                  ? row.values.communicationpreference
+                  : 'email',
+                now,
+                now,
+              );
+        }
+        result.status = 'committed';
+        database
+          .prepare(
+            'UPDATE imports SET status = ?, result_json = ?, committed_at = ? WHERE id = ? AND organization_id = ?',
+          )
+          .run('committed', JSON.stringify(result), now, preview.id, session.organizationId);
+        return result;
+      });
+      return response.json(committed);
+    } catch (error) {
+      if (error instanceof AuthError)
+        return response.status(error.code === 'FORBIDDEN' ? 403 : 401).json({
+          error: { code: error.code, message: 'You do not have permission to import records.' },
+        });
+      return response
+        .status(400)
+        .json({ error: { code: 'IMPORT_FAILED', message: 'The import could not be committed.' } });
+    }
+  });
+  app.get('/api/exports/:resource.csv', (request, response) => {
+    try {
+      const session = contactSession(request);
+      const resource = request.params.resource;
+      if (!['companies', 'contacts'].includes(resource))
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This export does not exist.' } });
+      const query =
+        resource === 'companies'
+          ? companyListQuery.parse(request.query)
+          : { text: String(request.query.text || '').trim() };
+      const rows =
+        resource === 'companies'
+          ? database
+              .prepare(
+                `SELECT name, external_reference AS externalReference, website, phone, industry, size, address, lifecycle_status AS lifecycleStatus, tags_json AS tags, description FROM companies WHERE organization_id = ? AND archived_at IS NULL${query.text ? ' AND (name LIKE ? OR external_reference LIKE ?)' : ''} ORDER BY name COLLATE NOCASE`,
+              )
+              .all(
+                session.organizationId,
+                ...(query.text ? [`%${query.text}%`, `%${query.text}%`] : []),
+              )
+          : database
+              .prepare(
+                `SELECT first_name AS firstName, last_name AS lastName, email, phone, job_title AS jobTitle, status, tags_json AS tags, communication_preference AS communicationPreference FROM contacts WHERE organization_id = ? AND archived_at IS NULL${query.text ? ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)' : ''} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`,
+              )
+              .all(
+                session.organizationId,
+                ...(query.text ? [`%${query.text}%`, `%${query.text}%`, `%${query.text}%`] : []),
+              );
+      const columns = Object.keys(
+        rows[0] ||
+          (resource === 'companies'
+            ? {
+                name: '',
+                externalReference: '',
+                website: '',
+                phone: '',
+                industry: '',
+                size: '',
+                address: '',
+                lifecycleStatus: '',
+                tags: '',
+                description: '',
+              }
+            : {
+                firstName: '',
+                lastName: '',
+                email: '',
+                phone: '',
+                jobTitle: '',
+                status: '',
+                tags: '',
+                communicationPreference: '',
+              }),
+      );
+      const body = [
+        columns.join(','),
+        ...rows.map((row: any) =>
+          columns
+            .map((column) =>
+              escapeCsv(
+                column === 'tags' ? JSON.parse(row[column] || '[]').join('; ') : row[column],
+              ),
+            )
+            .join(','),
+        ),
+      ].join('\r\n');
+      response.setHeader('content-type', 'text/csv; charset=utf-8');
+      response.setHeader('content-disposition', `attachment; filename="${resource}.csv"`);
+      return response.send(body);
+    } catch (error) {
+      return response.status(error instanceof AuthError ? 401 : 400).json({
+        error: {
+          code: error instanceof AuthError ? 'UNAUTHENTICATED' : 'VALIDATION',
+          message: 'Export could not be created.',
+        },
+      });
     }
   });
 

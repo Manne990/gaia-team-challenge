@@ -825,6 +825,79 @@ function Activities({ canWrite }: { canWrite: boolean }) {
   );
 }
 
+function Imports({ canWrite }: { canWrite: boolean }) {
+  const [resource, setResource] = useState<'companies' | 'contacts'>('companies');
+  const [csv, setCsv] = useState('name,external reference\nExample AB,EXAMPLE-1');
+  const [preview, setPreview] = useState<any>(null);
+  const [message, setMessage] = useState('');
+  const createPreview = async () => {
+    setMessage('Preparing preview…');
+    const response = await fetch('/api/imports/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, csv }),
+    });
+    const body = await response.json();
+    if (!response.ok) return setMessage(body.error?.message || 'Preview could not be created.');
+    setPreview(body);
+    setMessage(`${body.validRows} rows are ready; invalid or duplicate rows will not be imported.`);
+  };
+  return (
+    <section aria-labelledby="imports-heading">
+      <h2 id="imports-heading">Imports and exports</h2>
+      <p>Preview CSV rows before committing. Existing records are never merged automatically.</p>
+      <label>
+        Record type{' '}
+        <select value={resource} onChange={(event) => setResource(event.target.value as any)}>
+          <option value="companies">Companies</option>
+          <option value="contacts">Contacts</option>
+        </select>
+      </label>
+      <label>
+        CSV content{' '}
+        <textarea value={csv} onChange={(event) => setCsv(event.target.value)} rows={8} />
+      </label>
+      {canWrite && <button onClick={() => void createPreview()}>Preview import</button>}
+      <a href={`/api/exports/${resource}.csv`} download>
+        Export filtered {resource}
+      </a>
+      {message && <p role="status">{message}</p>}
+      {preview && (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Line</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.rows.map((row: any) => (
+                <tr key={row.line}>
+                  <td>{row.line}</td>
+                  <td>
+                    {row.errors.join(' ') ||
+                      (row.duplicate ? `Possible duplicate: ${row.duplicate.name}` : 'Ready')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button
+            onClick={async () => {
+              const response = await fetch(`/api/imports/${preview.id}/commit`, { method: 'POST' });
+              setMessage(response.ok ? 'Import committed.' : 'Import could not be committed.');
+            }}
+            disabled={!canWrite || !preview.validRows}
+          >
+            Commit valid rows
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -915,6 +988,7 @@ function App() {
       workspace={session.organization}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
+      importsContent={<Imports canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
