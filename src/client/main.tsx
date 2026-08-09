@@ -967,6 +967,195 @@ function Imports({ canWrite }: { canWrite: boolean }) {
     </section>
   );
 }
+function Tasks({ canWrite }: { canWrite: boolean }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [message, setMessage] = useState('');
+  const [due, setDue] = useState('');
+  const [mine, setMine] = useState(false);
+  const [relation, setRelation] = useState('');
+  const load = async (nextDue = due) => {
+    const query = new URLSearchParams({ sort: 'dueAt' });
+    if (nextDue) query.set('due', nextDue);
+    if (mine) query.set('assigneeId', 'me');
+    if (relation) {
+      const [kind, id] = relation.split(':');
+      query.set('relation', kind);
+      query.set('relationId', id);
+    }
+    const response = await fetch(`/api/tasks?${query}`);
+    if (response.ok) setItems((await response.json()).items);
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const action = async (id: string, name: string) => {
+    const response = await fetch(`/api/tasks/${id}/${name}`, { method: 'POST' });
+    if (response.ok) {
+      setMessage(
+        `Task ${name === 'archive' ? 'archived' : name === 'complete' ? 'completed' : 'reopened'}.`,
+      );
+      await load();
+    }
+  };
+  const rename = async (task: any) => {
+    const title = window.prompt('Task title', task.title);
+    if (!title) return;
+    const response = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: task.description || '',
+        assigneeId: task.assignee_id,
+        dueAt: task.due_at,
+        priority: task.priority,
+        status: task.status,
+        companyId: task.company_id,
+        contactId: task.contact_id,
+        dealId: task.deal_id,
+        version: task.version,
+      }),
+    });
+    if (response.status === 409) setMessage('This task changed. Refresh it before saving.');
+    else if (response.ok) {
+      setMessage('Task updated.');
+      await load();
+    }
+  };
+  return (
+    <section aria-labelledby="tasks-heading">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Operations · UTC</p>
+          <h1 id="tasks-heading">Tasks</h1>
+        </div>
+      </div>
+      <form
+        aria-label="Task views"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          Due state
+          <select value={due} onChange={(event) => setDue(event.target.value)}>
+            <option value="">All active tasks</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+          </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={mine}
+            onChange={(event) => setMine(event.target.checked)}
+          />{' '}
+          Assigned to me
+        </label>
+        <label>
+          Related record
+          <input
+            value={relation}
+            placeholder="company:co_acme"
+            onChange={(event) => setRelation(event.target.value)}
+          />
+        </label>
+        <button>Apply view</button>
+      </form>
+      {canWrite && (
+        <form
+          aria-label="Create task"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const formElement = e.currentTarget;
+            const form = new FormData(formElement);
+            const response = await fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                title: form.get('title'),
+                description: form.get('description'),
+                dueAt: form.get('dueAt') ? new Date(String(form.get('dueAt'))).toISOString() : null,
+                priority: form.get('priority'),
+                assigneeId: form.get('assigneeId') || null,
+                companyId: form.get('companyId') || null,
+                contactId: form.get('contactId') || null,
+              }),
+            });
+            if (response.ok) {
+              formElement.reset();
+              setMessage('Task created.');
+              await load();
+            }
+          }}
+        >
+          <h2>Create task</h2>
+          <label>
+            Title
+            <input name="title" required />
+          </label>
+          <label>
+            Description
+            <textarea name="description" />
+          </label>
+          <label>
+            Due time
+            <input name="dueAt" type="datetime-local" />
+          </label>
+          <label>
+            Priority
+            <select name="priority">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label>
+            Assignee ID
+            <input name="assigneeId" />
+          </label>
+          <label>
+            Company ID
+            <input name="companyId" />
+          </label>
+          <label>
+            Contact ID
+            <input name="contactId" />
+          </label>
+          <button>Create task</button>
+        </form>
+      )}
+      {message && <p role="status">{message}</p>}
+      <ul aria-label="Task results" className="task-list">
+        {items.map((task) => (
+          <li key={task.id}>
+            <div>
+              <strong>{task.title}</strong>
+              <small>{task.status}</small>
+            </div>
+            {canWrite &&
+              (task.status === 'completed' ? (
+                <button onClick={() => void action(task.id, 'reopen')}>Reopen task</button>
+              ) : (
+                <button onClick={() => void action(task.id, 'complete')}>Complete task</button>
+              ))}
+            {canWrite && (
+              <button
+                onClick={() => void action(task.id, task.archived_at ? 'restore' : 'archive')}
+              >
+                {task.archived_at ? 'Restore task' : 'Archive task'}
+              </button>
+            )}
+            {canWrite && <button onClick={() => void rename(task)}>Edit task</button>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
   const [deals, setDeals] = useState<any[]>([]);
@@ -1368,6 +1557,7 @@ function App() {
       dealsContent={
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
+      tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

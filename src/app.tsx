@@ -936,6 +936,7 @@ export function App({
   activitiesContent,
   dealsContent,
   importsContent,
+  tasksContent,
   onSignOut,
 }: {
   role: Role;
@@ -945,6 +946,7 @@ export function App({
   activitiesContent?: ReactNode;
   dealsContent?: ReactNode;
   importsContent?: ReactNode;
+  tasksContent?: ReactNode;
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -978,6 +980,8 @@ export function App({
       importsContent
     ) : page === 'Deals' && dealsContent ? (
       dealsContent
+    ) : page === 'Tasks' && tasksContent ? (
+      tasksContent
     ) : page === 'Companies' || page === 'Contacts' ? (
       <ListPage page={page} workspace={workspace} user={user} role={role} />
     ) : (
@@ -1021,7 +1025,11 @@ export function App({
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button className="profile" onClick={(event) => openDialog(event.currentTarget)}>
+          <button
+            className="profile"
+            aria-label={`${user.displayName} ${role} — Open account menu`}
+            onClick={(event) => openDialog(event.currentTarget)}
+          >
             <span className="avatar">LB</span>
             <span>
               <strong>{user.displayName}</strong>
