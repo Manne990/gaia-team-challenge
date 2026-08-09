@@ -67,6 +67,11 @@ try {
   );
   assert.throws(() =>
     db
+      .prepare('UPDATE companies SET organization_id = ? WHERE id = ?')
+      .run('org_outside', 'co_acme'),
+  );
+  assert.throws(() =>
+    db
       .prepare(
         'INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
