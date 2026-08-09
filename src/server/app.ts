@@ -626,14 +626,12 @@ export function createApp(config: AppConfig) {
         )
         .run(input.name, now, session.organizationId, input.version);
       if (!result.changes)
-        return response
-          .status(409)
-          .json({
-            error: {
-              code: 'CONFLICT',
-              message: 'Organization settings changed. Refresh and try again.',
-            },
-          });
+        return response.status(409).json({
+          error: {
+            code: 'CONFLICT',
+            message: 'Organization settings changed. Refresh and try again.',
+          },
+        });
       database
         .prepare(
           'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
