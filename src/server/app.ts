@@ -1122,7 +1122,7 @@ export function createApp(config: AppConfig) {
         .all(s.organizationId);
       const trend = database
         .prepare(
-          `SELECT pipeline_stages.kind, count(DISTINCT deal_stage_history.deal_id) AS count FROM deal_stage_history JOIN pipeline_stages ON pipeline_stages.id = deal_stage_history.to_stage_id AND pipeline_stages.organization_id = deal_stage_history.organization_id WHERE deal_stage_history.organization_id = ? AND deal_stage_history.changed_at >= ? AND pipeline_stages.kind IN ('won', 'lost') GROUP BY pipeline_stages.kind`,
+          `SELECT pipeline_stages.kind, count(DISTINCT deal_stage_history.deal_id) AS count FROM deal_stage_history JOIN pipeline_stages ON pipeline_stages.id = deal_stage_history.to_stage_id AND pipeline_stages.organization_id = deal_stage_history.organization_id JOIN deals ON deals.id = deal_stage_history.deal_id AND deals.organization_id = deal_stage_history.organization_id AND deals.status = pipeline_stages.kind AND deals.archived_at IS NULL WHERE deal_stage_history.organization_id = ? AND deal_stage_history.changed_at >= ? AND pipeline_stages.kind IN ('won', 'lost') GROUP BY pipeline_stages.kind`,
         )
         .all(s.organizationId, stale.toISOString());
       return response.json({
