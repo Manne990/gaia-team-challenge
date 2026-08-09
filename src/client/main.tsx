@@ -399,14 +399,11 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                         setError(body.error?.message || 'Company could not be updated.');
                         return;
                       }
-                      setDetail({
-                        ...(await response.json()),
-                        contacts: detail.contacts,
-                        activities: detail.activities,
-                        deals: detail.deals,
-                        tasks: detail.tasks,
-                        history: detail.history,
-                      });
+                      const updated = await response.json();
+                      const detailResponse = await fetch(`/api/companies/${updated.id}`);
+                      if (!detailResponse.ok)
+                        return setError('Company details could not be refreshed.');
+                      setDetail(await detailResponse.json());
                       await load('');
                     }}
                   >
@@ -479,14 +476,11 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                       });
                       if (!response.ok)
                         return setError('Company lifecycle change could not be saved.');
-                      setDetail({
-                        ...(await response.json()),
-                        contacts: detail.contacts,
-                        activities: detail.activities,
-                        deals: detail.deals,
-                        tasks: detail.tasks,
-                        history: detail.history,
-                      });
+                      const updated = await response.json();
+                      const detailResponse = await fetch(`/api/companies/${updated.id}`);
+                      if (!detailResponse.ok)
+                        return setError('Company details could not be refreshed.');
+                      setDetail(await detailResponse.json());
                       await load('');
                     }}
                   >

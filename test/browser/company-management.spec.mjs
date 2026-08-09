@@ -111,6 +111,9 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     expect(archiveResponse.status()).toBe(200);
     expect((await archiveResponse.json()).archived_at).toBeTruthy();
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Company change history' })).toContainText(
+      'company.archived',
+    );
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
     await navigateTo(page, 'Companies');
