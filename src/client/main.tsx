@@ -1070,7 +1070,8 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           aria-label="Create task"
           onSubmit={async (e) => {
             e.preventDefault();
-            const form = new FormData(e.currentTarget);
+            const formElement = e.currentTarget;
+            const form = new FormData(formElement);
             const response = await fetch('/api/tasks', {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
@@ -1085,7 +1086,7 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
               }),
             });
             if (response.ok) {
-              e.currentTarget.reset();
+              formElement.reset();
               setMessage('Task created.');
               await load();
             }
