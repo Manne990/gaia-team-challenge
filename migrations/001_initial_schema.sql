@@ -270,11 +270,41 @@ END;
 CREATE TRIGGER activities_creator_guard BEFORE INSERT ON activities FOR EACH ROW WHEN NEW.creator_id IS NOT NULL BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.creator_id) THEN RAISE(ABORT, 'activity creator is not an organization member') END;
 END;
+CREATE TRIGGER activities_creator_update_guard BEFORE UPDATE OF organization_id, creator_id ON activities FOR EACH ROW WHEN NEW.creator_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.creator_id) THEN RAISE(ABORT, 'activity creator is not an organization member') END;
+END;
+CREATE TRIGGER deal_stage_history_actor_guard BEFORE INSERT ON deal_stage_history FOR EACH ROW WHEN NEW.actor_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.actor_id) THEN RAISE(ABORT, 'deal history actor is not an organization member') END;
+END;
+CREATE TRIGGER deal_stage_history_actor_update_guard BEFORE UPDATE OF organization_id, actor_id ON deal_stage_history FOR EACH ROW WHEN NEW.actor_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.actor_id) THEN RAISE(ABORT, 'deal history actor is not an organization member') END;
+END;
+CREATE TRIGGER notifications_user_guard BEFORE INSERT ON notifications FOR EACH ROW BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'notification user is not an organization member') END;
+END;
+CREATE TRIGGER notifications_user_update_guard BEFORE UPDATE OF organization_id, user_id ON notifications FOR EACH ROW BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'notification user is not an organization member') END;
+END;
 CREATE TRIGGER saved_views_membership_guard BEFORE INSERT ON saved_views FOR EACH ROW BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'saved view user is not an organization member') END;
 END;
 CREATE TRIGGER saved_views_membership_update_guard BEFORE UPDATE OF organization_id, user_id ON saved_views FOR EACH ROW BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'saved view user is not an organization member') END;
+END;
+CREATE TRIGGER imports_creator_guard BEFORE INSERT ON imports FOR EACH ROW WHEN NEW.created_by_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.created_by_id) THEN RAISE(ABORT, 'import creator is not an organization member') END;
+END;
+CREATE TRIGGER imports_creator_update_guard BEFORE UPDATE OF organization_id, created_by_id ON imports FOR EACH ROW WHEN NEW.created_by_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.created_by_id) THEN RAISE(ABORT, 'import creator is not an organization member') END;
+END;
+CREATE TRIGGER merge_redirects_creator_guard BEFORE INSERT ON merge_redirects FOR EACH ROW WHEN NEW.created_by_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.created_by_id) THEN RAISE(ABORT, 'merge creator is not an organization member') END;
+END;
+CREATE TRIGGER merge_redirects_creator_update_guard BEFORE UPDATE OF organization_id, created_by_id ON merge_redirects FOR EACH ROW WHEN NEW.created_by_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.created_by_id) THEN RAISE(ABORT, 'merge creator is not an organization member') END;
+END;
+CREATE TRIGGER audit_events_actor_guard BEFORE INSERT ON audit_events FOR EACH ROW WHEN NEW.actor_id IS NOT NULL BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.actor_id) THEN RAISE(ABORT, 'audit actor is not an organization member') END;
 END;
 CREATE TRIGGER audit_events_immutable_update BEFORE UPDATE ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit events are immutable'); END;
 CREATE TRIGGER audit_events_immutable_delete BEFORE DELETE ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit events are immutable'); END;

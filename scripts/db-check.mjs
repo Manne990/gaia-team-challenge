@@ -17,6 +17,8 @@ try {
   db.prepare("INSERT INTO sessions (id, user_id, organization_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)").run("session_test", "usr_owner", "org_northstar", "test-token", "2026-02-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
   assert.throws(() => db.prepare("UPDATE sessions SET organization_id = ? WHERE id = ?").run("org_outside", "session_test"));
   assert.throws(() => db.prepare("INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run("bad-view", "org_outside", "usr_owner", "companies", "Cross tenant", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z"));
+  assert.throws(() => db.prepare("INSERT INTO notifications (id, organization_id, user_id, type, dedupe_key, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run("bad-note", "org_northstar", "usr_outside", "deal_changed", "cross", "{}", "2026-01-01T00:00:00.000Z"));
+  assert.throws(() => db.prepare("UPDATE activities SET creator_id = ? WHERE id = ?").run("usr_outside", "act_1"));
   db.prepare("INSERT INTO audit_events (id, organization_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run("audit_test", "org_northstar", "created", "company", "co_acme", "{}", "2026-01-15T12:00:00.000Z");
   assert.throws(() => db.prepare("DELETE FROM audit_events WHERE id = ?").run("audit_test"));
   db.exec("BEGIN");
