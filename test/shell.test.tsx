@@ -26,8 +26,7 @@ describe('CRM application shell', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Audit' }));
     expect(screen.getByRole('heading', { name: 'No audit event found' })).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Preview role' }), 'viewer');
-    expect(screen.queryByRole('button', { name: 'Administration' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Administration' })).toBeInTheDocument();
   });
 
   it('restores focus to the account trigger after the dialog closes', async () => {

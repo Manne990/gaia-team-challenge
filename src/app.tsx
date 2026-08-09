@@ -397,8 +397,9 @@ function Placeholder({ page, role }: { page: Page; role: Role }) {
 export function App() {
   const [page, setPage] = useState<Page>('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [role, setRole] = useState<Role>('owner');
+  const role: Role = 'owner';
   const [dialog, setDialog] = useState(false);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [notice, setNotice] = useState('Updates are saved automatically.');
   const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const navigate = (next: Page) => {
@@ -407,6 +408,7 @@ export function App() {
   };
   const openDialog = (trigger: HTMLButtonElement) => {
     dialogTriggerRef.current = trigger;
+    setConfirmingSignOut(false);
     setDialog(true);
   };
   const closeDialog = () => {
@@ -460,18 +462,6 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <label>
-            Preview role
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value as Role)}
-              aria-label="Preview role"
-            >
-              <option value="owner">Owner</option>
-              <option value="member">Member</option>
-              <option value="viewer">Viewer</option>
-            </select>
-          </label>
           <button className="profile" onClick={(event) => openDialog(event.currentTarget)}>
             <span className="avatar">LB</span>
             <span>
@@ -530,20 +520,30 @@ export function App() {
       {dialog && (
         <Dialog title="Account menu" onClose={closeDialog}>
           <p>
-            Signed in as <strong>Lina Berg</strong>.
+            {confirmingSignOut ? (
+              'Signing out ends this session on this device. Unsaved changes will be lost.'
+            ) : (
+              <>
+                Signed in as <strong>Lina Berg</strong>.
+              </>
+            )}
           </p>
           <div className="dialog-actions">
             <button className="secondary" onClick={closeDialog}>
-              Cancel
+              {confirmingSignOut ? 'Keep working' : 'Cancel'}
             </button>
             <button
               className="danger"
               onClick={() => {
+                if (!confirmingSignOut) {
+                  setConfirmingSignOut(true);
+                  return;
+                }
                 closeDialog();
                 setNotice('You have been signed out.');
               }}
             >
-              Sign out
+              {confirmingSignOut ? 'Confirm sign out' : 'Sign out'}
             </button>
           </div>
         </Dialog>
