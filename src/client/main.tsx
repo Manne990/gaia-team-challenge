@@ -2151,7 +2151,19 @@ function App() {
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
       globalSearchContent={(navigate) => <GlobalSearch onNavigate={navigate} />}
-      notificationsContent={<Notifications navigate={() => {}} />}
+      notificationsContent={(navigate) => (
+        <Notifications
+          navigate={(page, recordId) => {
+            if (recordId)
+              window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}?record=${encodeURIComponent(recordId)}`,
+              );
+            navigate(page);
+          }}
+        />
+      )}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

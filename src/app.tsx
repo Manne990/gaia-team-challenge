@@ -1099,7 +1099,7 @@ export function App({
   importsContent?: ReactNode;
   tasksContent?: ReactNode;
   globalSearchContent?: ReactNode | ((navigate: (page: Page) => void) => ReactNode);
-  notificationsContent?: ReactNode;
+  notificationsContent?: ReactNode | ((navigate: (page: Page) => void) => ReactNode);
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -1212,7 +1212,9 @@ export function App({
           )}
           <div className="top-actions">
             <IconButton label="Help">?</IconButton>
-            {notificationsContent || <IconButton label="Notifications">♧</IconButton>}
+            {(typeof notificationsContent === 'function'
+              ? notificationsContent(navigate)
+              : notificationsContent) || <IconButton label="Notifications">♧</IconButton>}
             <button
               className="mobile-avatar"
               aria-label="Open account menu"
