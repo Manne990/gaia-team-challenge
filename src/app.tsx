@@ -668,6 +668,29 @@ function ListPage({
               >
                 Keep {candidate.targetFirstName} {candidate.targetLastName}
               </button>
+              <button
+                className="secondary"
+                onClick={async () => {
+                  const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      resource: 'contacts',
+                      sourceId: candidate.targetId,
+                      targetId: candidate.sourceId,
+                      sourceVersion: candidate.targetVersion,
+                      targetVersion: candidate.sourceVersion,
+                      fields: {},
+                    }),
+                  });
+                  if (response.ok) {
+                    setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
+                    refreshContacts();
+                  }
+                }}
+              >
+                Keep {candidate.sourceFirstName} {candidate.sourceLastName}
+              </button>
             </div>
           ))}
         </section>
