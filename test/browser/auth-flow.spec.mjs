@@ -27,7 +27,7 @@ const waitForHealth = async (url) => {
   throw new Error('Northstar server did not become ready');
 };
 const signOut = async (page) => {
-  await page.getByRole('button', { name: 'Open account menu' }).click();
+  await page.getByRole('button', { name: 'Open account menu', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.getByRole('button', { name: 'Confirm sign out' }).click();
 };
@@ -151,9 +151,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
       .getByRole('complementary', { name: 'Primary navigation' })
       .getByRole('button', { name: 'Close navigation' })
       .click();
-    const accountTrigger = page.getByRole('button', { name: 'Open account menu' });
+    const accountTrigger = page.getByRole('button', { name: /Northstar Owner owner/ });
     await accountTrigger.focus();
-    await accountTrigger.click();
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog', { name: 'Account menu' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(accountTrigger).toBeFocused();
