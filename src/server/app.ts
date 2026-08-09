@@ -122,14 +122,12 @@ export function createApp(config: AppConfig) {
       });
     } catch (error) {
       if (error instanceof AuthError && error.code === 'FORBIDDEN') {
-        return response
-          .status(403)
-          .json({
-            error: {
-              code: 'FORBIDDEN',
-              message: 'You do not have permission to perform this action.',
-            },
-          });
+        return response.status(403).json({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to perform this action.',
+          },
+        });
       }
       return response
         .status(401)
