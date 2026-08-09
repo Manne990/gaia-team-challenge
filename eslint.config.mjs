@@ -10,6 +10,8 @@ export default [
       globals: {
         console: 'readonly',
         Buffer: 'readonly',
+        fetch: 'readonly',
+        setTimeout: 'readonly',
         process: 'readonly',
         URL: 'readonly',
         structuredClone: 'readonly',
