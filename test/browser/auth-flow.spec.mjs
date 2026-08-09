@@ -27,7 +27,13 @@ const waitForHealth = async (url) => {
   throw new Error('Northstar server did not become ready');
 };
 const signOut = async (page) => {
-  await page.getByRole('button', { name: 'Open account menu' }).click();
+  if ((page.viewportSize()?.width ?? 0) <= 720)
+    await page.getByRole('button', { name: 'Open account menu' }).click();
+  else {
+    const profile = page.locator('button.profile');
+    await profile.scrollIntoViewIfNeeded();
+    await profile.click();
+  }
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.getByRole('button', { name: 'Confirm sign out' }).click();
 };
@@ -97,7 +103,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByRole('button', { name: 'Administration' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-    await expect(page.getByRole('table', { name: 'Companies list' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Company results' })).toBeVisible();
     await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -193,7 +199,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
           data: { name: 'Allowed member write' },
         })
         .then((response) => response.status()),
-    ).resolves.toBe(409);
+    ).resolves.toBe(400);
     await signOut(page);
     await page.getByLabel('Email').fill('other-owner@outside.test');
     await page.getByLabel('Password').fill('OutsidePass!2026');

@@ -443,11 +443,13 @@ export function App({
   role,
   user,
   workspace,
+  companiesContent,
   onSignOut,
 }: {
   role: Role;
   user: ShellUser;
   workspace: Workspace;
+  companiesContent?: ReactNode;
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -473,6 +475,8 @@ export function App({
   const content =
     page === 'Dashboard' ? (
       <Dashboard user={user} workspace={workspace} />
+    ) : page === 'Companies' && companiesContent ? (
+      companiesContent
     ) : page === 'Companies' || page === 'Contacts' ? (
       <ListPage page={page} workspace={workspace} user={user} />
     ) : (

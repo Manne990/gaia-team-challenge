@@ -29,6 +29,21 @@ const companyInput = z.object({
   lifecycleStatus: z.enum(['lead', 'prospect', 'customer', 'inactive']).default('lead'),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
   description: z.string().max(5000).default(''),
+  ownerId: z.string().trim().min(1).max(100).nullable().optional(),
+});
+const companyUpdate = companyInput.extend({ version: z.coerce.number().int().positive() });
+const companyListQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  text: z.string().trim().optional(),
+  lifecycle: z.enum(['lead', 'prospect', 'customer', 'inactive']).optional(),
+  ownerId: z.string().trim().min(1).optional(),
+  industry: z.string().trim().min(1).optional(),
+  size: z.string().trim().min(1).optional(),
+  tag: z.string().trim().min(1).optional(),
+  includeArchived: z.coerce.boolean().default(false),
+  sort: z.enum(['name', 'createdAt', 'updatedAt', 'lifecycle']).default('name'),
+  direction: z.enum(['asc', 'desc']).default('asc'),
 });
 const cookieToken = (cookie = '') =>
   cookie
@@ -98,16 +113,10 @@ export function createApp(config: AppConfig) {
   app.get('/api/companies', (request, response) => {
     try {
       const session = auth.authenticate(cookieToken(request.headers.cookie));
-      const query = z
-        .object({
-          page: z.coerce.number().int().min(1).default(1),
-          pageSize: z.coerce.number().int().min(1).max(100).default(25),
-          text: z.string().trim().optional(),
-          lifecycle: z.enum(['lead', 'prospect', 'customer', 'inactive']).optional(),
-        })
-        .parse(request.query);
+      const query = companyListQuery.parse(request.query);
       const terms = ['organization_id = ?'];
       const values: unknown[] = [session.organizationId];
+      if (!query.includeArchived) terms.push('archived_at IS NULL');
       if (query.text) {
         terms.push('(name LIKE ? OR external_reference LIKE ?)');
         values.push(`%${query.text}%`, `%${query.text}%`);
@@ -116,20 +125,46 @@ export function createApp(config: AppConfig) {
         terms.push('lifecycle_status = ?');
         values.push(query.lifecycle);
       }
+      if (query.ownerId) {
+        terms.push('owner_id = ?');
+        values.push(query.ownerId);
+      }
+      if (query.industry) {
+        terms.push('industry = ?');
+        values.push(query.industry);
+      }
+      if (query.size) {
+        terms.push('size = ?');
+        values.push(query.size);
+      }
+      if (query.tag) {
+        terms.push('EXISTS (SELECT 1 FROM json_each(companies.tags_json) WHERE value = ?)');
+        values.push(query.tag);
+      }
       const where = terms.join(' AND ');
+      const order = {
+        name: 'name COLLATE NOCASE',
+        createdAt: 'created_at',
+        updatedAt: 'updated_at',
+        lifecycle: 'lifecycle_status',
+      }[query.sort];
       const total = database
         .prepare(`SELECT count(*) AS total FROM companies WHERE ${where}`)
         .get(...values).total;
       const rows = database
         .prepare(
-          `SELECT * FROM companies WHERE ${where} ORDER BY name COLLATE NOCASE LIMIT ? OFFSET ?`,
+          `SELECT * FROM companies WHERE ${where} ORDER BY ${order} ${query.direction.toUpperCase()}, id ASC LIMIT ? OFFSET ?`,
         )
         .all(...values, query.pageSize, (query.page - 1) * query.pageSize);
       return response.json({ items: rows, page: query.page, pageSize: query.pageSize, total });
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthError)
+        return response.status(401).json({
+          error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' },
+        });
       return response
-        .status(401)
-        .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
+        .status(400)
+        .json({ error: { code: 'VALIDATION', message: 'Check the list filters and try again.' } });
     }
   });
   app.post('/api/companies', (request, response) => {
@@ -141,51 +176,70 @@ export function createApp(config: AppConfig) {
       const input = companyInput.parse(request.body);
       const now = new Date().toISOString();
       const id = `co_${randomUUID()}`;
-      database
-        .prepare(
-          'INSERT INTO companies (id, organization_id, name, external_reference, website, phone, industry, size, address, lifecycle_status, owner_id, tags_json, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        )
-        .run(
-          id,
-          session.organizationId,
-          input.name,
-          input.externalReference || null,
-          input.website || null,
-          input.phone || null,
-          input.industry || null,
-          input.size || null,
-          input.address || null,
-          input.lifecycleStatus,
-          session.userId,
-          JSON.stringify(input.tags),
-          input.description,
-          now,
-          now,
-        );
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database
+          .prepare(
+            'INSERT INTO companies (id, organization_id, name, external_reference, website, phone, industry, size, address, lifecycle_status, owner_id, tags_json, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            id,
+            session.organizationId,
+            input.name,
+            input.externalReference || null,
+            input.website || null,
+            input.phone || null,
+            input.industry || null,
+            input.size || null,
+            input.address || null,
+            input.lifecycleStatus,
+            input.ownerId === undefined ? session.userId : input.ownerId,
+            JSON.stringify(input.tags),
+            input.description,
+            now,
+            now,
+          );
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            session.organizationId,
+            session.userId,
+            'company.created',
+            'company',
+            id,
+            JSON.stringify({ name: input.name }),
+            now,
+          );
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
       return response
         .status(201)
         .json(database.prepare('SELECT * FROM companies WHERE id = ?').get(id));
     } catch (error) {
       if (error instanceof AuthError && error.code === 'FORBIDDEN')
-        return response
-          .status(403)
-          .json({
-            error: {
-              code: 'FORBIDDEN',
-              message: 'You do not have permission to perform this action.',
-            },
-          });
-      if (String(error).includes('UNIQUE constraint failed'))
-        return response
-          .status(409)
-          .json({
-            error: { code: 'CONFLICT', message: 'A company already uses this external reference.' },
-          });
-      return response
-        .status(400)
-        .json({
-          error: { code: 'VALIDATION', message: 'Check the company fields and try again.' },
+        return response.status(403).json({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to perform this action.',
+          },
         });
+      if (error instanceof AuthError)
+        return response
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
+      if (String(error).includes('UNIQUE constraint failed'))
+        return response.status(409).json({
+          error: { code: 'CONFLICT', message: 'A company already uses this external reference.' },
+        });
+      return response.status(400).json({
+        error: { code: 'VALIDATION', message: 'Check the company fields and try again.' },
+      });
     }
   });
 
@@ -193,13 +247,40 @@ export function createApp(config: AppConfig) {
     try {
       const session = auth.authenticate(cookieToken(request.headers.cookie));
       const company = database
-        .prepare('SELECT id, name FROM companies WHERE id = ? AND organization_id = ?')
+        .prepare('SELECT * FROM companies WHERE id = ? AND organization_id = ?')
         .get(request.params.id, session.organizationId);
       if (!company)
         return response
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
-      return response.json(company);
+      return response.json({
+        ...company,
+        contacts: database
+          .prepare(
+            'SELECT * FROM contacts WHERE organization_id = ? AND company_id = ? ORDER BY last_name, first_name',
+          )
+          .all(session.organizationId, company.id),
+        activities: database
+          .prepare(
+            'SELECT * FROM activities WHERE organization_id = ? AND company_id = ? ORDER BY occurred_at DESC, id DESC',
+          )
+          .all(session.organizationId, company.id),
+        deals: database
+          .prepare(
+            'SELECT * FROM deals WHERE organization_id = ? AND company_id = ? ORDER BY updated_at DESC, id DESC',
+          )
+          .all(session.organizationId, company.id),
+        tasks: database
+          .prepare(
+            'SELECT * FROM tasks WHERE organization_id = ? AND company_id = ? ORDER BY due_at ASC, id ASC',
+          )
+          .all(session.organizationId, company.id),
+        history: database
+          .prepare(
+            "SELECT * FROM audit_events WHERE organization_id = ? AND entity_type = 'company' AND entity_id = ? ORDER BY created_at DESC, id DESC",
+          )
+          .all(session.organizationId, company.id),
+      });
     } catch (error) {
       if (error instanceof AuthError && error.code === 'FORBIDDEN') {
         return response.status(403).json({
@@ -221,15 +302,64 @@ export function createApp(config: AppConfig) {
         'member',
       ]);
       const company = database
-        .prepare('SELECT id FROM companies WHERE id = ? AND organization_id = ?')
+        .prepare('SELECT * FROM companies WHERE id = ? AND organization_id = ?')
         .get(request.params.id, session.organizationId);
       if (!company)
         return response
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
-      return response.status(409).json({
-        error: { code: 'NOT_IMPLEMENTED', message: 'Company editing is not available yet.' },
-      });
+      const input = companyUpdate.parse(request.body);
+      if (company.version !== input.version)
+        return response.status(409).json({
+          error: { code: 'CONFLICT', message: 'This company changed. Refresh it before saving.' },
+        });
+      const now = new Date().toISOString();
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        const update = database
+          .prepare(
+            'UPDATE companies SET name = ?, external_reference = ?, website = ?, phone = ?, industry = ?, size = ?, address = ?, lifecycle_status = ?, owner_id = ?, tags_json = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
+          )
+          .run(
+            input.name,
+            input.externalReference || null,
+            input.website || null,
+            input.phone || null,
+            input.industry || null,
+            input.size || null,
+            input.address || null,
+            input.lifecycleStatus,
+            input.ownerId === undefined ? company.owner_id : input.ownerId,
+            JSON.stringify(input.tags),
+            input.description,
+            now,
+            company.id,
+            session.organizationId,
+            input.version,
+          );
+        if (!update.changes) throw new AuthError('CONFLICT');
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            session.organizationId,
+            session.userId,
+            'company.updated',
+            'company',
+            company.id,
+            JSON.stringify({ changed: ['company fields'] }),
+            now,
+          );
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+      return response.json(
+        database.prepare('SELECT * FROM companies WHERE id = ?').get(company.id),
+      );
     } catch (error) {
       if (error instanceof AuthError && error.code === 'FORBIDDEN') {
         return response.status(403).json({
@@ -239,11 +369,88 @@ export function createApp(config: AppConfig) {
           },
         });
       }
+      if (error instanceof AuthError && error.code === 'CONFLICT')
+        return response.status(409).json({
+          error: { code: 'CONFLICT', message: 'This company changed. Refresh it before saving.' },
+        });
+      if (String(error).includes('UNIQUE constraint failed'))
+        return response.status(409).json({
+          error: { code: 'CONFLICT', message: 'A company already uses this external reference.' },
+        });
+      if (error instanceof z.ZodError)
+        return response.status(400).json({
+          error: { code: 'VALIDATION', message: 'Check the company fields and try again.' },
+        });
       return response
         .status(401)
         .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
     }
   });
+  for (const [action, value] of [
+    ['archive', 'archived'],
+    ['restore', 'restored'],
+  ] as const) {
+    app.post(`/api/companies/:id/${action}`, (request, response) => {
+      try {
+        const session = auth.requireRole(auth.authenticate(cookieToken(request.headers.cookie)), [
+          'owner',
+          'member',
+        ]);
+        const company = database
+          .prepare('SELECT * FROM companies WHERE id = ? AND organization_id = ?')
+          .get(request.params.id, session.organizationId);
+        if (!company)
+          return response
+            .status(404)
+            .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+        const now = new Date().toISOString();
+        database.exec('BEGIN IMMEDIATE');
+        try {
+          database
+            .prepare(
+              'UPDATE companies SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ?',
+            )
+            .run(action === 'archive' ? now : null, now, company.id, session.organizationId);
+          database
+            .prepare(
+              'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              `aud_${randomUUID()}`,
+              session.organizationId,
+              session.userId,
+              `company.${value}`,
+              'company',
+              company.id,
+              JSON.stringify({ archived: action === 'archive' }),
+              now,
+            );
+          database.exec('COMMIT');
+        } catch (error) {
+          database.exec('ROLLBACK');
+          throw error;
+        }
+        return response.json(
+          database.prepare('SELECT * FROM companies WHERE id = ?').get(company.id),
+        );
+      } catch (error) {
+        if ((error as { code?: string })?.code === 'FORBIDDEN')
+          return response.status(403).json({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'You do not have permission to perform this action.',
+            },
+          });
+        if (error instanceof z.ZodError)
+          return response.status(400).json({
+            error: { code: 'VALIDATION', message: 'Check the company fields and try again.' },
+          });
+        return response
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
+      }
+    });
+  }
 
   app.use('/api', (_request, response) => {
     response.status(404).json({
