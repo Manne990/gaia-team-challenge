@@ -713,6 +713,12 @@ function ListPage({
                   }),
                 });
                 if (response.ok) {
+                  const saved = await response.json();
+                  setContactNotice(
+                    saved.duplicateWarning
+                      ? `Possible duplicate: ${saved.duplicateWarning.firstName} ${saved.duplicateWarning.lastName} already uses this email. No records were merged.`
+                      : '',
+                  );
                   const detail = await fetch(`/api/contacts/${selectedContact.id}`);
                   if (detail.ok) setSelectedContact(await detail.json());
                   refreshContacts();

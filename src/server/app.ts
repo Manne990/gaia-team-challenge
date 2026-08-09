@@ -326,6 +326,14 @@ export function createApp(config: AppConfig) {
       const c = contactUpdateInput.parse(request.body);
       const now = new Date().toISOString();
       assertContactOwner(s.organizationId, c.ownerId);
+      const email = c.email ? c.email.toLowerCase() : null;
+      const duplicate =
+        email &&
+        database
+          .prepare(
+            'SELECT id, first_name AS firstName, last_name AS lastName FROM contacts WHERE organization_id = ? AND lower(email) = ? AND archived_at IS NULL AND id != ?',
+          )
+          .get(s.organizationId, email, request.params.id);
       const result = transaction(() => {
         const result = database
           .prepare(
@@ -335,7 +343,7 @@ export function createApp(config: AppConfig) {
             c.companyId || null,
             c.firstName,
             c.lastName,
-            c.email ? c.email.toLowerCase() : null,
+            email,
             c.phone || null,
             c.jobTitle || null,
             c.ownerId || null,
@@ -360,11 +368,12 @@ export function createApp(config: AppConfig) {
             message: 'This contact changed or is unavailable. Refresh and try again.',
           },
         });
-      return response.json(
-        database
+      return response.json({
+        ...database
           .prepare(`SELECT ${contactFields} FROM contacts WHERE id = ?`)
           .get(request.params.id),
-      );
+        duplicateWarning: duplicate || null,
+      });
     } catch (e) {
       return sendContactError(e, response);
     }
