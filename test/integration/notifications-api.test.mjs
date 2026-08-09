@@ -75,6 +75,34 @@ describe('notifications API', () => {
       ).status,
     ).toBe(200);
     const outsider = await signIn('other-owner@outside.test', 'OutsidePass!2026');
+    const deal = await fetch(`${url}/api/deals/deal_acme`, { headers: { cookie: owner } });
+    const currentDeal = await deal.json();
+    expect(
+      (
+        await fetch(`${url}/api/deals/deal_acme`, {
+          method: 'PATCH',
+          headers: { cookie: owner, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: currentDeal.name,
+            companyId: currentDeal.companyId,
+            ownerId: 'usr_outside',
+            amountCents: currentDeal.amountCents,
+            currency: currentDeal.currency,
+            probability: currentDeal.probability,
+            version: currentDeal.version,
+          }),
+        })
+      ).status,
+    ).toBe(400);
+    const notificationCheck = openDatabase(environment.databasePath);
+    expect(
+      notificationCheck
+        .prepare(
+          'SELECT count(*) AS total FROM notifications WHERE organization_id = ? AND user_id = ?',
+        )
+        .get('org_northstar', 'usr_outside').total,
+    ).toBe(0);
+    notificationCheck.close();
     expect(
       (
         await fetch(`${url}/api/notifications/${items[0].id}/read`, {
