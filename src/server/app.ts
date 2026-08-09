@@ -184,6 +184,15 @@ const notificationListQuery = z.object({
   ),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+const mergeResource = z.enum(['companies', 'contacts']);
+const mergeCommitInput = z.object({
+  resource: mergeResource,
+  sourceId: z.string().trim().min(1),
+  targetId: z.string().trim().min(1),
+  sourceVersion: z.coerce.number().int().positive(),
+  targetVersion: z.coerce.number().int().positive(),
+  fields: z.record(z.string(), z.string().nullable()).default({}),
+});
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
@@ -439,6 +448,48 @@ export function createApp(config: AppConfig) {
       validRows: rows.filter((row) => !row.errors.length && !row.duplicate).length,
     };
   };
+  const duplicateCandidates = (organizationId: string, resource: 'companies' | 'contacts') =>
+    resource === 'contacts'
+      ? database
+          .prepare(
+            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion, a.first_name AS sourceFirstName, a.last_name AS sourceLastName,
+              b.first_name AS targetFirstName, b.last_name AS targetLastName, a.email AS email
+             FROM contacts a JOIN contacts b ON a.organization_id = b.organization_id
+              AND a.id < b.id AND lower(a.email) = lower(b.email)
+             WHERE a.organization_id = ? AND a.archived_at IS NULL AND b.archived_at IS NULL AND a.email IS NOT NULL`,
+          )
+          .all(organizationId)
+          .map((row: any) => ({
+            ...row,
+            facts: [
+              {
+                field: 'email',
+                normalized: row.email.toLowerCase(),
+                source: row.email,
+                target: row.email,
+              },
+            ],
+          }))
+      : database
+          .prepare(
+            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion, a.name AS sourceName, b.name AS targetName,
+              a.external_reference AS externalReference
+             FROM companies a JOIN companies b ON a.organization_id = b.organization_id
+              AND a.id < b.id AND a.external_reference = b.external_reference
+             WHERE a.organization_id = ? AND a.archived_at IS NULL AND b.archived_at IS NULL AND a.external_reference IS NOT NULL`,
+          )
+          .all(organizationId)
+          .map((row: any) => ({
+            ...row,
+            facts: [
+              {
+                field: 'externalReference',
+                normalized: row.externalReference.toLowerCase(),
+                source: row.externalReference,
+                target: row.externalReference,
+              },
+            ],
+          }));
   const sessionCookie = (token: string, expiresAt: string) =>
     `northstar_session=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}${config.environment === 'production' ? '; Secure' : ''}`;
 
@@ -489,6 +540,180 @@ export function createApp(config: AppConfig) {
       'northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
     );
     return response.status(204).end();
+  });
+
+  app.get('/api/duplicates/:resource', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const resource = mergeResource.parse(request.params.resource);
+      return response.json({ items: duplicateCandidates(session.organizationId, resource) });
+    } catch (error) {
+      return response.status(error instanceof z.ZodError ? 400 : 401).json({
+        error: {
+          code: error instanceof z.ZodError ? 'VALIDATION' : 'UNAUTHENTICATED',
+          message: 'Duplicate suggestions could not be loaded.',
+        },
+      });
+    }
+  });
+  app.post('/api/merges', (request, response) => {
+    try {
+      const session = auth.requireRole(auth.authenticate(cookieToken(request.headers.cookie)), [
+        'owner',
+        'member',
+      ]);
+      const input = mergeCommitInput.parse(request.body);
+      if (input.sourceId === input.targetId) throw new Error('INVALID_MERGE');
+      const table = input.resource;
+      const source = database
+        .prepare(
+          `SELECT * FROM ${table} WHERE id = ? AND organization_id = ? AND archived_at IS NULL`,
+        )
+        .get(input.sourceId, session.organizationId);
+      const target = database
+        .prepare(
+          `SELECT * FROM ${table} WHERE id = ? AND organization_id = ? AND archived_at IS NULL`,
+        )
+        .get(input.targetId, session.organizationId);
+      if (!source || !target) throw new Error('INVALID_MERGE');
+      if (source.version !== input.sourceVersion || target.version !== input.targetVersion)
+        return response.status(409).json({
+          error: {
+            code: 'CONFLICT',
+            message: 'A record changed. Refresh the review before merging.',
+          },
+        });
+      const now = new Date().toISOString();
+      transaction(() => {
+        if (input.resource === 'contacts') {
+          database
+            .prepare(
+              'INSERT OR IGNORE INTO deal_contacts (deal_id, contact_id, organization_id) SELECT deal_id, ?, organization_id FROM deal_contacts WHERE contact_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, input.sourceId, session.organizationId);
+          database
+            .prepare('DELETE FROM deal_contacts WHERE contact_id = ? AND organization_id = ?')
+            .run(input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE tasks SET contact_id = ?, updated_at = ? WHERE contact_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, now, input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE activities SET contact_id = ? WHERE contact_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE contacts SET first_name = ?, last_name = ?, email = ?, phone = ?, job_title = ?, company_id = ?, owner_id = ?, status = ?, tags_json = ?, communication_preference = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
+            )
+            .run(
+              input.fields.firstName ?? target.first_name,
+              input.fields.lastName ?? target.last_name,
+              input.fields.email ?? target.email,
+              input.fields.phone ?? target.phone,
+              input.fields.jobTitle ?? target.job_title,
+              input.fields.companyId ?? target.company_id,
+              input.fields.ownerId ?? target.owner_id,
+              input.fields.status ?? target.status,
+              input.fields.tagsJson ?? target.tags_json,
+              input.fields.communicationPreference ?? target.communication_preference,
+              now,
+              input.targetId,
+              session.organizationId,
+              input.targetVersion,
+            );
+        } else {
+          database
+            .prepare(
+              'UPDATE contacts SET company_id = ?, updated_at = ? WHERE company_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, now, input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE deals SET company_id = ?, updated_at = ? WHERE company_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, now, input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE tasks SET company_id = ?, updated_at = ? WHERE company_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, now, input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE activities SET company_id = ? WHERE company_id = ? AND organization_id = ?',
+            )
+            .run(input.targetId, input.sourceId, session.organizationId);
+          database
+            .prepare(
+              'UPDATE companies SET name = ?, external_reference = ?, website = ?, phone = ?, industry = ?, size = ?, address = ?, lifecycle_status = ?, owner_id = ?, tags_json = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
+            )
+            .run(
+              input.fields.name ?? target.name,
+              input.fields.externalReference ?? target.external_reference,
+              input.fields.website ?? target.website,
+              input.fields.phone ?? target.phone,
+              input.fields.industry ?? target.industry,
+              input.fields.size ?? target.size,
+              input.fields.address ?? target.address,
+              input.fields.lifecycleStatus ?? target.lifecycle_status,
+              input.fields.ownerId ?? target.owner_id,
+              input.fields.tagsJson ?? target.tags_json,
+              input.fields.description ?? target.description,
+              now,
+              input.targetId,
+              session.organizationId,
+              input.targetVersion,
+            );
+        }
+        database
+          .prepare(
+            `UPDATE ${table} SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?`,
+          )
+          .run(now, now, input.sourceId, session.organizationId, input.sourceVersion);
+        database
+          .prepare(
+            'INSERT INTO merge_redirects (id, organization_id, resource, source_id, target_id, created_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `mr_${randomUUID()}`,
+            session.organizationId,
+            input.resource,
+            input.sourceId,
+            input.targetId,
+            session.userId,
+            now,
+          );
+        for (const id of [input.sourceId, input.targetId])
+          database
+            .prepare(
+              'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              `aud_${randomUUID()}`,
+              session.organizationId,
+              session.userId,
+              'merged',
+              input.resource.slice(0, -1),
+              id,
+              JSON.stringify({ sourceId: input.sourceId, targetId: input.targetId }),
+              now,
+            );
+      });
+      return response
+        .status(201)
+        .json({ resource: input.resource, sourceId: input.sourceId, targetId: input.targetId });
+    } catch (error) {
+      return response
+        .status(error instanceof z.ZodError || String(error).includes('INVALID_MERGE') ? 400 : 500)
+        .json({
+          error: {
+            code: 'VALIDATION',
+            message: 'Review both records and resolve their fields before merging.',
+          },
+        });
+    }
   });
 
   const contactSession = (request: express.Request) =>
@@ -639,11 +864,24 @@ export function createApp(config: AppConfig) {
   app.get('/api/contacts/:id', (request, response) => {
     try {
       const s = contactSession(request);
-      const c = database
+      let c = database
         .prepare(
           `SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName, contacts.email, contacts.phone, contacts.job_title AS jobTitle, contacts.company_id AS companyId, contacts.owner_id AS ownerId, contacts.status, contacts.tags_json AS tagsJson, contacts.communication_preference AS communicationPreference, contacts.created_at AS createdAt, contacts.updated_at AS updatedAt, contacts.archived_at AS archivedAt, contacts.version, companies.name AS companyName FROM contacts LEFT JOIN companies ON companies.id = contacts.company_id AND companies.organization_id = contacts.organization_id WHERE contacts.id = ? AND contacts.organization_id = ?`,
         )
         .get(request.params.id, s.organizationId);
+      if (!c || c.archivedAt) {
+        const redirect = database
+          .prepare(
+            "SELECT target_id FROM merge_redirects WHERE organization_id = ? AND resource = 'contacts' AND source_id = ?",
+          )
+          .get(s.organizationId, request.params.id);
+        if (redirect)
+          c = database
+            .prepare(
+              `SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName, contacts.email, contacts.phone, contacts.job_title AS jobTitle, contacts.company_id AS companyId, contacts.owner_id AS ownerId, contacts.status, contacts.tags_json AS tagsJson, contacts.communication_preference AS communicationPreference, contacts.created_at AS createdAt, contacts.updated_at AS updatedAt, contacts.archived_at AS archivedAt, contacts.version, companies.name AS companyName FROM contacts LEFT JOIN companies ON companies.id = contacts.company_id AND companies.organization_id = contacts.organization_id WHERE contacts.id = ? AND contacts.organization_id = ?`,
+            )
+            .get(redirect.target_id, s.organizationId);
+      }
       return c
         ? response.json({
             ...c,

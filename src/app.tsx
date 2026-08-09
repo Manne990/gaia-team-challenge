@@ -332,6 +332,7 @@ function ListPage({
   const [contactViews, setContactViews] = useState<
     Array<{ id: string; name: string; filters: Record<string, unknown> }>
   >([]);
+  const [duplicateCandidates, setDuplicateCandidates] = useState<any[]>([]);
   const contactRequest = useRef(0);
   const refreshContacts = () => setContactRefresh((value) => value + 1);
   const loadContactViews = () =>
@@ -641,6 +642,35 @@ function ListPage({
             ))}
           </ul>
         </div>
+      {page === 'Contacts' && duplicateCandidates.length > 0 && (
+        <section className="panel" aria-label="Duplicate contact review">
+          <h2>Duplicate contact review</h2>
+          {duplicateCandidates.map((candidate) => (
+            <div key={`${candidate.sourceId}-${candidate.targetId}`}>
+              <p>
+                {candidate.sourceFirstName} {candidate.sourceLastName} and{' '}
+                {candidate.targetFirstName} {candidate.targetLastName} share{' '}
+                {candidate.facts[0].field}: {candidate.facts[0].normalized}.
+              </p>
+              <button
+                className="secondary"
+                onClick={async () => {
+                  const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ resource: 'contacts', ...candidate, fields: {} }),
+                  });
+                  if (response.ok) {
+                    setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
+                    refreshContacts();
+                  }
+                }}
+              >
+                Keep {candidate.targetFirstName} {candidate.targetLastName}
+              </button>
+            </div>
+          ))}
+        </section>
       )}
       <section className="panel table-panel">
         <div className="toolbar">
@@ -687,6 +717,17 @@ function ListPage({
           >
             Clear all
           </button>
+          {page === 'Contacts' && canEdit && (
+            <button
+              className="secondary"
+              onClick={async () => {
+                const response = await fetch('/api/duplicates/contacts');
+                if (response.ok) setDuplicateCandidates((await response.json()).items);
+              }}
+            >
+              Review duplicates
+            </button>
+          )}
         </div>
         {page === 'Contacts' && showContactFilters && (
           <div className="toolbar" aria-label="Contact filters">
