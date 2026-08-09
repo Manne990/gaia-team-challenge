@@ -23,8 +23,9 @@ test('mobile shell opens navigation without page-level horizontal overflow', asy
 });
 
 test('account dialog restores focus to its trigger when dismissed', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  const trigger = page.getByRole('button', { name: /Lina Berg.*owner/ });
+  const trigger = page.getByRole('button', { name: 'Open account menu' });
   await trigger.focus();
   await trigger.click();
   await expect(page.getByRole('dialog', { name: 'Account menu' })).toBeVisible();
