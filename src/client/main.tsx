@@ -277,6 +277,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
     page: Math.max(1, Number(initialQuery.get('page')) || 1),
   }));
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
+  const [duplicateCandidates, setDuplicateCandidates] = useState<any[]>([]);
   const load = async (search = text, nextFilters = filters) => {
     setState('loading');
     try {
@@ -331,6 +332,69 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   return (
     <section aria-labelledby="companies-heading">
       <h2 id="companies-heading">Companies</h2>
+      {canWrite && (
+        <button
+          type="button"
+          onClick={async () => {
+            const response = await fetch('/api/duplicates/companies');
+            if (response.ok) setDuplicateCandidates((await response.json()).items);
+          }}
+        >
+          Review duplicate companies
+        </button>
+      )}
+      {duplicateCandidates.length > 0 && (
+        <section aria-label="Duplicate company review">
+          <h3>Duplicate company review</h3>
+          {duplicateCandidates.map((candidate) => (
+            <div key={`${candidate.sourceId}-${candidate.targetId}`}>
+              <p>
+                {candidate.sourceName} and {candidate.targetName} share {candidate.facts[0].field}:{' '}
+                {candidate.facts[0].normalized}.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ resource: 'companies', ...candidate, fields: {} }),
+                  });
+                  if (response.ok) {
+                    setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
+                    await load('');
+                  }
+                }}
+              >
+                Keep {candidate.targetName}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      resource: 'companies',
+                      sourceId: candidate.targetId,
+                      targetId: candidate.sourceId,
+                      sourceVersion: candidate.targetVersion,
+                      targetVersion: candidate.sourceVersion,
+                      fields: {},
+                    }),
+                  });
+                  if (response.ok) {
+                    setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
+                    await load('');
+                  }
+                }}
+              >
+                Keep {candidate.sourceName}
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
       <form
         role="search"
         onSubmit={(event) => {
