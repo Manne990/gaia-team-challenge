@@ -240,6 +240,9 @@ CREATE TABLE audit_events (
 CREATE TRIGGER sessions_membership_guard BEFORE INSERT ON sessions FOR EACH ROW BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'session user is not an organization member') END;
 END;
+CREATE TRIGGER sessions_membership_update_guard BEFORE UPDATE OF organization_id, user_id ON sessions FOR EACH ROW BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'session user is not an organization member') END;
+END;
 CREATE TRIGGER companies_owner_guard BEFORE INSERT ON companies FOR EACH ROW WHEN NEW.owner_id IS NOT NULL BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.owner_id) THEN RAISE(ABORT, 'company owner is not an organization member') END;
 END;
@@ -266,6 +269,12 @@ CREATE TRIGGER tasks_assignee_update_guard BEFORE UPDATE OF organization_id, ass
 END;
 CREATE TRIGGER activities_creator_guard BEFORE INSERT ON activities FOR EACH ROW WHEN NEW.creator_id IS NOT NULL BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.creator_id) THEN RAISE(ABORT, 'activity creator is not an organization member') END;
+END;
+CREATE TRIGGER saved_views_membership_guard BEFORE INSERT ON saved_views FOR EACH ROW BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'saved view user is not an organization member') END;
+END;
+CREATE TRIGGER saved_views_membership_update_guard BEFORE UPDATE OF organization_id, user_id ON saved_views FOR EACH ROW BEGIN
+  SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'saved view user is not an organization member') END;
 END;
 CREATE TRIGGER audit_events_immutable_update BEFORE UPDATE ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit events are immutable'); END;
 CREATE TRIGGER audit_events_immutable_delete BEFORE DELETE ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit events are immutable'); END;
