@@ -154,7 +154,10 @@ const taskListQuery = z.object({
   direction: z.enum(['asc', 'desc']).default('asc'),
 });
 const notificationListQuery = z.object({
-  unread: z.coerce.boolean().default(false),
+  unread: z.preprocess(
+    (value) => (value === 'true' ? true : value === 'false' ? false : value),
+    z.boolean().default(false),
+  ),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 const cookieToken = (cookie = '') =>

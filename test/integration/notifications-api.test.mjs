@@ -74,6 +74,10 @@ describe('notifications API', () => {
         })
       ).status,
     ).toBe(200);
+    const allNotifications = await (
+      await fetch(`${url}/api/notifications?unread=false`, { headers: { cookie: owner } })
+    ).json();
+    expect(allNotifications.items.map((item) => item.id)).toContain(items[0].id);
     const outsider = await signIn('other-owner@outside.test', 'OutsidePass!2026');
     const deal = await fetch(`${url}/api/deals/deal_acme`, { headers: { cookie: owner } });
     const currentDeal = await deal.json();
