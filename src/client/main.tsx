@@ -968,6 +968,312 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   );
 }
 
+function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
+  const [deals, setDeals] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [stages, setStages] = useState<any[]>([]);
+  const [error, setError] = useState('');
+  const [stageFilter, setStageFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const load = (stage = stageFilter, status = statusFilter) => {
+    const query = new URLSearchParams();
+    if (stage) query.set('stageId', stage);
+    if (status) query.set('status', status);
+    if (includeArchived) query.set('includeArchived', 'true');
+    return Promise.all([
+      fetch(`/api/deals?${query}`).then((r) => r.json()),
+      fetch('/api/pipeline/stages').then((r) => r.json()),
+    ]).then(([list, pipeline]) => {
+      setDeals(list.items || []);
+      setTotal(list.total || 0);
+      setStages(pipeline || []);
+    });
+  };
+  useEffect(() => {
+    load().catch(() => setError('Deals could not be loaded.'));
+  }, []);
+  return (
+    <section aria-labelledby="deals-heading">
+      <h2 id="deals-heading">Deals</h2>
+      {error && <p role="alert">{error}</p>}
+      {canWrite && (
+        <form
+          aria-label="Create deal"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const response = await fetch('/api/deals', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                name: form.get('name'),
+                companyId: form.get('companyId'),
+                stageId: form.get('stageId'),
+                amountCents: Number(form.get('amountCents')),
+                currency: form.get('currency'),
+                probability: Number(form.get('probability')),
+                contactIds: String(form.get('contactIds') || '')
+                  .split(',')
+                  .map((id) => id.trim())
+                  .filter(Boolean),
+              }),
+            });
+            if (!response.ok) return setError('Deal could not be created.');
+            event.currentTarget.reset();
+            void load();
+          }}
+        >
+          <h3>New deal</h3>
+          <label>
+            Name
+            <input name="name" required />
+          </label>
+          <label>
+            Company ID
+            <input name="companyId" required />
+          </label>
+          <label>
+            Stage
+            <select name="stageId" required>
+              {stages
+                .filter((stage) => stage.kind === 'open')
+                .map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Amount (cents)
+            <input name="amountCents" type="number" min="0" required />
+          </label>
+          <label>
+            Currency
+            <input name="currency" defaultValue="USD" required />
+          </label>
+          <label>
+            Probability
+            <input name="probability" type="number" min="0" max="100" defaultValue="0" required />
+          </label>
+          <label>
+            Contact IDs (comma-separated)
+            <input name="contactIds" />
+          </label>
+          <button>Create deal</button>
+        </form>
+      )}
+      {canConfigure && (
+        <form
+          aria-label="Add pipeline stage"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const response = await fetch('/api/pipeline/stages', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                name: form.get('name'),
+                position: Number(form.get('position')),
+              }),
+            });
+            if (!response.ok) return setError('Pipeline stage could not be created.');
+            event.currentTarget.reset();
+            void load();
+          }}
+        >
+          <h3>Add pipeline stage</h3>
+          <label>
+            Name <input name="name" required />
+          </label>
+          <label>
+            Position{' '}
+            <input name="position" type="number" min="0" defaultValue={stages.length} required />
+          </label>
+          <button>Add stage</button>
+        </form>
+      )}
+      <form
+        aria-label="Deal filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          Stage
+          <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
+            <option value="">All stages</option>
+            {stages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(event) => setIncludeArchived(event.target.checked)}
+          />
+          Include archived deals
+        </label>
+        <label>
+          Status
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="won">Won</option>
+            <option value="lost">Lost</option>
+          </select>
+        </label>
+        <button>Apply filters</button>
+      </form>
+      <p>{total} active deals</p>
+      <div className="pipeline" aria-label="Pipeline view">
+        {stages.map((stage) => (
+          <section key={stage.id}>
+            <h3>{stage.name}</h3>
+            <ul>
+              {deals
+                .filter((deal) => deal.stageId === stage.id)
+                .map((deal) => (
+                  <li key={deal.id}>
+                    <strong>{deal.name}</strong>
+                    <br />
+                    {deal.currency} {(deal.amountCents / 100).toLocaleString()} · {deal.probability}
+                    %
+                  </li>
+                ))}
+              {!deals.some((deal) => deal.stageId === stage.id) && <li>No deals</li>}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <table>
+        <caption>Deals list</caption>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Stage</th>
+            <th>Amount</th>
+            <th>Probability</th>
+            {canWrite && <th>Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {deals.map((deal) => (
+            <tr key={deal.id}>
+              <td>{deal.name}</td>
+              <td>{deal.stageName}</td>
+              <td>
+                {deal.currency} {(deal.amountCents / 100).toLocaleString()}
+              </td>
+              <td>{deal.probability}%</td>
+              {canWrite && (
+                <td>
+                  <form
+                    aria-label={`Update ${deal.name}`}
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const form = new FormData(event.currentTarget);
+                      const action = String(form.get('action'));
+                      const response =
+                        action === 'edit'
+                          ? await fetch(`/api/deals/${deal.id}`, {
+                              method: 'PATCH',
+                              headers: { 'content-type': 'application/json' },
+                              body: JSON.stringify({
+                                name: form.get('name'),
+                                companyId: deal.companyId,
+                                amountCents: Number(form.get('amountCents')),
+                                currency: deal.currency,
+                                probability: Number(form.get('probability')),
+                                version: deal.version,
+                              }),
+                            })
+                          : action === 'archive' || action === 'restore'
+                            ? await fetch(`/api/deals/${deal.id}/${action}`, { method: 'POST' })
+                            : await fetch(`/api/deals/${deal.id}/transition`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({
+                                  stageId: form.get('stageId'),
+                                  version: deal.version,
+                                  lossReason: form.get('lossReason') || undefined,
+                                }),
+                              });
+                      if (!response.ok)
+                        return setError('Deal could not be updated. Refresh and try again.');
+                      void load();
+                    }}
+                  >
+                    <label>
+                      Name
+                      <input name="name" defaultValue={deal.name} required />
+                    </label>
+                    <label>
+                      Amount (cents)
+                      <input
+                        name="amountCents"
+                        type="number"
+                        min="0"
+                        defaultValue={deal.amountCents}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Probability
+                      <input
+                        name="probability"
+                        type="number"
+                        min="0"
+                        max="100"
+                        defaultValue={deal.probability}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Move to
+                      <select name="stageId" defaultValue={deal.stageId}>
+                        {stages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Loss reason
+                      <input name="lossReason" />
+                    </label>
+                    <button name="action" value="transition">
+                      Move
+                    </button>
+                    <button name="action" value="edit">
+                      Save details
+                    </button>
+                    <button name="action" value="archive">
+                      Archive
+                    </button>
+                    {deal.archivedAt && (
+                      <button name="action" value="restore">
+                        Restore
+                      </button>
+                    )}
+                  </form>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -1059,6 +1365,9 @@ function App() {
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
       importsContent={<Imports canWrite={session.role !== 'viewer'} />}
+      dealsContent={
+        <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
+      }
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

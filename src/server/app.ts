@@ -50,6 +50,24 @@ const companyListQuery = z.object({
   sort: z.enum(['name', 'createdAt', 'updatedAt', 'lifecycle']).default('name'),
   direction: z.enum(['asc', 'desc']).default('asc'),
 });
+const dealInput = z.object({
+  name: z.string().trim().min(1).max(240),
+  companyId: z.string().min(1),
+  ownerId: z.string().min(1).nullable().optional(),
+  stageId: z.string().min(1),
+  amountCents: z.number().int().nonnegative(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .default('USD'),
+  expectedCloseDate: z.string().date().nullable().optional(),
+  probability: z.number().int().min(0).max(100).default(0),
+  lossReason: z.string().trim().max(500).nullable().optional(),
+  contactIds: z.array(z.string().min(1)).max(50).default([]),
+});
+const dealUpdate = dealInput
+  .omit({ stageId: true, contactIds: true })
+  .extend({ version: z.number().int().positive() });
 const contactInput = z.object({
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),
@@ -1450,6 +1468,386 @@ export function createApp(config: AppConfig) {
     }
   });
 
+  const dealFields =
+    'deals.id, deals.company_id AS companyId, deals.owner_id AS ownerId, deals.stage_id AS stageId, deals.name, deals.amount_cents AS amountCents, deals.currency, deals.expected_close_date AS expectedCloseDate, deals.probability, deals.status, deals.loss_reason AS lossReason, deals.created_at AS createdAt, deals.updated_at AS updatedAt, deals.archived_at AS archivedAt, deals.version';
+  const dealSession = (request: express.Request) =>
+    auth.authenticate(cookieToken(request.headers.cookie));
+  const dealError = (error: unknown, response: express.Response) => {
+    if (error instanceof AuthError)
+      return response
+        .status(error.code === 'FORBIDDEN' ? 403 : 401)
+        .json({ error: { code: error.code, message: 'You do not have permission to do that.' } });
+    if (error instanceof z.ZodError)
+      return response
+        .status(400)
+        .json({ error: { code: 'VALIDATION', message: 'Check the deal fields and try again.' } });
+    return response.status(500).json({
+      error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
+    });
+  };
+  app.get('/api/deals', (request, response) => {
+    try {
+      const s = dealSession(request);
+      const page = Math.max(1, Number(request.query.page) || 1);
+      const size = Math.min(100, Math.max(1, Number(request.query.pageSize) || 25));
+      const includeArchived = request.query.includeArchived === 'true';
+      const where = ['deals.organization_id = ?'];
+      if (!includeArchived) where.push('deals.archived_at IS NULL');
+      const args: unknown[] = [s.organizationId];
+      for (const [key, column] of [
+        ['companyId', 'company_id'],
+        ['ownerId', 'owner_id'],
+        ['stageId', 'stage_id'],
+        ['status', 'status'],
+      ] as const)
+        if (typeof request.query[key] === 'string') {
+          where.push(`deals.${column} = ?`);
+          args.push(request.query[key]);
+        }
+      const clause = where.join(' AND ');
+      const total = database
+        .prepare(`SELECT count(*) AS total FROM deals WHERE ${clause}`)
+        .get(...args).total;
+      const aggregates = database
+        .prepare(
+          `SELECT currency, count(*) AS count, coalesce(sum(amount_cents), 0) AS amountCents FROM deals WHERE ${clause} GROUP BY currency ORDER BY currency`,
+        )
+        .all(...args);
+      const items = database
+        .prepare(
+          `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE ${clause} ORDER BY deals.updated_at DESC LIMIT ? OFFSET ?`,
+        )
+        .all(...args, size, (page - 1) * size);
+      return response.json({ items, page, pageSize: size, total, aggregates });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.get('/api/pipeline/stages', (request, response) => {
+    try {
+      const s = dealSession(request);
+      return response.json(
+        database
+          .prepare(
+            'SELECT id, name, position, kind FROM pipeline_stages WHERE organization_id = ? ORDER BY position',
+          )
+          .all(s.organizationId),
+      );
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.post('/api/pipeline/stages', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner']);
+      const input = z
+        .object({
+          name: z.string().trim().min(1).max(120),
+          position: z.number().int().nonnegative(),
+        })
+        .parse(request.body);
+      const stage = transaction(() => {
+        const now = new Date().toISOString();
+        database
+          .prepare(
+            'UPDATE pipeline_stages SET position = position + 1000 WHERE organization_id = ? AND position >= ?',
+          )
+          .run(s.organizationId, input.position);
+        database
+          .prepare(
+            'UPDATE pipeline_stages SET position = position - 999 WHERE organization_id = ? AND position >= ?',
+          )
+          .run(s.organizationId, input.position + 1000);
+        const id = `stage_${randomUUID()}`;
+        database
+          .prepare(
+            'INSERT INTO pipeline_stages (id, organization_id, name, position, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(id, s.organizationId, input.name, input.position, 'open', now);
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            s.organizationId,
+            s.userId,
+            'pipeline.stage_created',
+            'pipeline_stage',
+            id,
+            JSON.stringify({ name: input.name, position: input.position }),
+            now,
+          );
+        return database
+          .prepare('SELECT id, name, position, kind FROM pipeline_stages WHERE id = ?')
+          .get(id);
+      });
+      return response.status(201).json(stage);
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.post('/api/deals', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      const d = dealInput.parse(request.body);
+      const stage = database
+        .prepare('SELECT kind FROM pipeline_stages WHERE id = ? AND organization_id = ?')
+        .get(d.stageId, s.organizationId);
+      if (!stage || stage.kind !== 'open')
+        return response
+          .status(400)
+          .json({ error: { code: 'VALIDATION', message: 'Choose an active pipeline stage.' } });
+      const id = `deal_${randomUUID()}`;
+      const now = new Date().toISOString();
+      transaction(() => {
+        database
+          .prepare(
+            'INSERT INTO deals (id, organization_id, company_id, owner_id, stage_id, name, amount_cents, currency, expected_close_date, probability, status, loss_reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            id,
+            s.organizationId,
+            d.companyId,
+            d.ownerId || s.userId,
+            d.stageId,
+            d.name,
+            d.amountCents,
+            d.currency,
+            d.expectedCloseDate || null,
+            d.probability,
+            'open',
+            null,
+            now,
+            now,
+          );
+        for (const contactId of d.contactIds)
+          database
+            .prepare(
+              'INSERT INTO deal_contacts (deal_id, contact_id, organization_id) VALUES (?, ?, ?)',
+            )
+            .run(id, contactId, s.organizationId);
+        database
+          .prepare(
+            'INSERT INTO deal_stage_history (id, organization_id, deal_id, to_stage_id, actor_id, changed_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(`dsh_${randomUUID()}`, s.organizationId, id, d.stageId, s.userId, now);
+      });
+      return response
+        .status(201)
+        .json(database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(id));
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.get('/api/deals/:id', (request, response) => {
+    try {
+      const s = dealSession(request);
+      const deal = database
+        .prepare(
+          `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE deals.id = ? AND deals.organization_id = ?`,
+        )
+        .get(request.params.id, s.organizationId);
+      if (!deal)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This deal was not found.' } });
+      return response.json({
+        ...deal,
+        contacts: database
+          .prepare(
+            'SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName FROM deal_contacts JOIN contacts ON contacts.id = deal_contacts.contact_id WHERE deal_contacts.deal_id = ? AND deal_contacts.organization_id = ?',
+          )
+          .all(deal.id, s.organizationId),
+        history: database
+          .prepare(
+            'SELECT deal_stage_history.id, from_stage_id AS fromStageId, to_stage_id AS toStageId, actor_id AS actorId, changed_at AS changedAt, reason FROM deal_stage_history WHERE deal_id = ? AND organization_id = ? ORDER BY changed_at DESC',
+          )
+          .all(deal.id, s.organizationId),
+      });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.patch('/api/deals/:id', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      const d = dealUpdate.parse(request.body);
+      const now = new Date().toISOString();
+      const result = database
+        .prepare(
+          'UPDATE deals SET company_id = ?, owner_id = ?, name = ?, amount_cents = ?, currency = ?, expected_close_date = ?, probability = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND archived_at IS NULL AND version = ?',
+        )
+        .run(
+          d.companyId,
+          d.ownerId || null,
+          d.name,
+          d.amountCents,
+          d.currency,
+          d.expectedCloseDate || null,
+          d.probability,
+          now,
+          request.params.id,
+          s.organizationId,
+          d.version,
+        );
+      if (!result.changes)
+        return response.status(409).json({
+          error: {
+            code: 'CONFLICT',
+            message: 'This deal changed or is unavailable. Refresh and try again.',
+          },
+        });
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          s.organizationId,
+          s.userId,
+          'deal.updated',
+          'deal',
+          request.params.id,
+          JSON.stringify({ version: d.version }),
+          now,
+        );
+      return response.json(
+        database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
+      );
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.post('/api/deals/:id/transition', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      const input = z
+        .object({
+          stageId: z.string().min(1),
+          version: z.number().int().positive(),
+          lossReason: z.string().trim().min(1).max(500).optional(),
+        })
+        .parse(request.body);
+      const now = new Date().toISOString();
+      const changed = transaction(() => {
+        const current = database
+          .prepare(
+            'SELECT stage_id AS stageId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
+          )
+          .get(request.params.id, s.organizationId);
+        const target = database
+          .prepare('SELECT kind FROM pipeline_stages WHERE id = ? AND organization_id = ?')
+          .get(input.stageId, s.organizationId);
+        if (
+          !current ||
+          !target ||
+          current.version !== input.version ||
+          (target.kind === 'lost' && !input.lossReason)
+        )
+          return null;
+        const update = database
+          .prepare(
+            'UPDATE deals SET stage_id = ?, status = ?, loss_reason = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
+          )
+          .run(
+            input.stageId,
+            target.kind,
+            target.kind === 'lost' ? input.lossReason : null,
+            now,
+            request.params.id,
+            s.organizationId,
+            input.version,
+          );
+        if (!update.changes) return null;
+        database
+          .prepare(
+            'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, actor_id, changed_at, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `dsh_${randomUUID()}`,
+            s.organizationId,
+            request.params.id,
+            current.stageId,
+            input.stageId,
+            s.userId,
+            now,
+            input.lossReason || null,
+          );
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            s.organizationId,
+            s.userId,
+            'deal.transitioned',
+            'deal',
+            request.params.id,
+            JSON.stringify({ fromStageId: current.stageId, toStageId: input.stageId }),
+            now,
+          );
+        return true;
+      });
+      return changed
+        ? response.json(
+            database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
+          )
+        : response.status(409).json({
+            error: {
+              code: 'CONFLICT',
+              message: 'The deal changed, stage is invalid, or a loss reason is required.',
+            },
+          });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.post('/api/deals/:id/:action', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      if (!['archive', 'restore'].includes(request.params.action))
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'That action does not exist.' } });
+      const archive = request.params.action === 'archive';
+      const now = new Date().toISOString();
+      const changed = transaction(() => {
+        const result = database
+          .prepare(
+            `UPDATE deals SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND archived_at IS ${archive ? 'NULL' : 'NOT NULL'}`,
+          )
+          .run(archive ? now : null, now, request.params.id, s.organizationId);
+        if (result.changes)
+          database
+            .prepare(
+              'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              `aud_${randomUUID()}`,
+              s.organizationId,
+              s.userId,
+              archive ? 'deal.archived' : 'deal.restored',
+              'deal',
+              request.params.id,
+              '{}',
+              now,
+            );
+        return result.changes;
+      });
+      return changed
+        ? response.status(204).end()
+        : response.status(409).json({
+            error: {
+              code: 'CONFLICT',
+              message: 'The deal is already in that state or unavailable.',
+            },
+          });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
   app.use('/api', (_request, response) => {
     response.status(404).json({
       error: { code: 'NOT_FOUND', message: 'That API endpoint does not exist.' },

@@ -51,6 +51,7 @@ try {
       '003_company_archiving.sql',
       '003_contact_archival.sql',
       '004_activity_history.sql',
+      '004_deal_archival.sql',
     ],
   );
   assert.equal(
