@@ -202,6 +202,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                 size: form.get('size'),
                 address: form.get('address'),
                 lifecycleStatus: form.get('lifecycleStatus'),
+                ownerId: form.get('ownerId') || undefined,
                 tags: String(form.get('tags') || '')
                   .split(',')
                   .map((tag) => tag.trim())
@@ -255,6 +256,10 @@ function Companies({ canWrite }: { canWrite: boolean }) {
               <option value="customer">Customer</option>
               <option value="inactive">Inactive</option>
             </select>
+          </label>
+          <label>
+            Owner ID
+            <input name="ownerId" />
           </label>
           <label>
             Tags
@@ -380,6 +385,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                           size: form.get('size'),
                           address: form.get('address'),
                           lifecycleStatus: form.get('lifecycleStatus'),
+                          ownerId: form.get('ownerId') || undefined,
                           tags: String(form.get('tags') || '')
                             .split(',')
                             .map((tag) => tag.trim())
@@ -443,6 +449,10 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                         <option value="customer">Customer</option>
                         <option value="inactive">Inactive</option>
                       </select>
+                    </label>
+                    <label>
+                      Owner ID
+                      <input name="ownerId" defaultValue={detail.owner_id || ''} />
                     </label>
                     <label>
                       Tags
