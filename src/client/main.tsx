@@ -971,8 +971,18 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
   const [items, setItems] = useState<any[]>([]);
   const [message, setMessage] = useState('');
   const [due, setDue] = useState('');
+  const [mine, setMine] = useState(false);
+  const [relation, setRelation] = useState('');
   const load = async (nextDue = due) => {
-    const response = await fetch(`/api/tasks?sort=dueAt${nextDue ? `&due=${nextDue}` : ''}`);
+    const query = new URLSearchParams({ sort: 'dueAt' });
+    if (nextDue) query.set('due', nextDue);
+    if (mine) query.set('assigneeId', 'me');
+    if (relation) {
+      const [kind, id] = relation.split(':');
+      query.set('relation', kind);
+      query.set('relationId', id);
+    }
+    const response = await fetch(`/api/tasks?${query}`);
     if (response.ok) setItems((await response.json()).items);
   };
   useEffect(() => {
@@ -1036,6 +1046,22 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
             <option value="upcoming">Upcoming</option>
             <option value="completed">Completed</option>
           </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={mine}
+            onChange={(event) => setMine(event.target.checked)}
+          />{' '}
+          Assigned to me
+        </label>
+        <label>
+          Related record
+          <input
+            value={relation}
+            placeholder="company:co_acme"
+            onChange={(event) => setRelation(event.target.value)}
+          />
         </label>
         <button>Apply view</button>
       </form>
