@@ -451,6 +451,19 @@ function ListPage({
                       >
                         ⋯
                       </IconButton>
+                      {page === 'Contacts' && (
+                        <button
+                          className="text-button"
+                          onClick={async () => {
+                            await fetch(`/api/contacts/${contactIdAt(index)}/restore`, {
+                              method: 'POST',
+                            });
+                            setContactSearch('');
+                          }}
+                        >
+                          Restore
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
