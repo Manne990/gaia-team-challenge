@@ -9,13 +9,18 @@ function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState('');
+  const [expired, setExpired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let active = true;
     fetch('/api/auth/session')
-      .then((response) => {
-        if (response.status === 401) return null;
+      .then(async (response) => {
+        if (response.status === 401) {
+          const body = await response.json();
+          if (body.error?.code === 'SESSION_EXPIRED') setExpired(true);
+          return null;
+        }
         if (!response.ok) throw new Error('Service unavailable');
         return response.json();
       })
@@ -53,6 +58,7 @@ function App() {
       <main>
         <p className="eyebrow">Northstar CRM</p>
         <h1>Sign in</h1>
+        {expired && <p role="alert">Your session has expired. Please sign in again.</p>}
         <form
           onSubmit={async (event) => {
             event.preventDefault();

@@ -104,8 +104,9 @@ export function createAuthService(
       WHERE sessions.token_hash = ?`,
       )
       .get(tokenHash(token));
-    if (!session || session.revoked_at || Date.parse(session.expires_at) <= clock().getTime())
-      throw new AuthError('UNAUTHENTICATED');
+    if (!session || session.revoked_at) throw new AuthError('UNAUTHENTICATED');
+    if (Date.parse(session.expires_at) <= clock().getTime())
+      throw new AuthError('SESSION_EXPIRED', 'Your session has expired. Please sign in again.');
     return {
       sessionId: session.id,
       userId: session.user_id,

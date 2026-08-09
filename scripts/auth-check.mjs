@@ -16,10 +16,9 @@ const authError = (fn, code) =>
   assert.throws(fn, (error) => error instanceof AuthError && error.code === code);
 try {
   const db = resetAndSeed(filename);
-  const auth = createAuthService(db, {
-    clock: () => new Date('2026-01-15T12:00:00.000Z'),
-    sessionLifetimeMs: 60_000,
-  });
+  let currentTime = new Date('2026-01-15T12:00:00.000Z');
+  const auth = createAuthService(db, { clock: () => currentTime, sessionLifetimeMs: 60_000 });
+  authError(() => auth.authenticate(), 'UNAUTHENTICATED');
   const owner = auth.signIn({ email: 'owner@northstar.test', password: 'OwnerPass!2026' });
   const member = auth.signIn({ email: 'member@northstar.test', password: 'MemberPass!2026' });
   const viewer = auth.signIn({ email: 'viewer@northstar.test', password: 'ViewerPass!2026' });
@@ -46,6 +45,9 @@ try {
   authError(() => auth.removeMember(auth.authenticate(owner.token), 'mem_owner'), 'LAST_OWNER');
   auth.logout(owner.token);
   authError(() => auth.authenticate(owner.token), 'UNAUTHENTICATED');
+  const expiring = auth.signIn({ email: 'owner@northstar.test', password: 'OwnerPass!2026' });
+  currentTime = new Date('2026-01-15T12:01:01.000Z');
+  authError(() => auth.authenticate(expiring.token), 'SESSION_EXPIRED');
   const first = hashPassword('A long enough password');
   const second = hashPassword('A long enough password');
   assert.notEqual(first, second, 'password salts must be random');
