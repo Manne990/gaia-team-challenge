@@ -166,6 +166,20 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const ownerCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
+    const invalidCompanyOwner = await page.request.post(`${url}/api/companies`, {
+      headers: { cookie: ownerCookieHeader, 'content-type': 'application/json' },
+      data: {
+        name: 'Cross-organization owner must be rejected',
+        lifecycleStatus: 'lead',
+        ownerId: 'usr_outside',
+        tags: [],
+        description: '',
+      },
+    });
+    expect(invalidCompanyOwner.status()).toBe(400);
+    await expect(invalidCompanyOwner.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION', message: 'Company owner must belong to this organization.' },
+    });
     await expect(
       page.request
         .get(`${url}/api/companies/co_outside`, { headers: { cookie: ownerCookieHeader } })

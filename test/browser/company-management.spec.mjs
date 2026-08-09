@@ -111,6 +111,17 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     expect(archiveResponse.status()).toBe(200);
     expect((await archiveResponse.json()).archived_at).toBeTruthy();
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await navigateTo(page, 'Companies');
+    const filters = page.getByRole('form', { name: 'Company filters' });
+    await filters.getByLabel('Include archived companies').check();
+    await filters.getByRole('button', { name: 'Apply filters' }).click();
+    await page.getByRole('button', { name: 'Browser Test Company Updated', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Company change history' })).toContainText(
+      'company.archived',
+    );
     const [restoreResponse] = await Promise.all([
       page.waitForResponse((response) =>
         response.url().endsWith(`/api/companies/${created.id}/restore`),

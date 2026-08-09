@@ -174,6 +174,16 @@ export function createApp(config: AppConfig) {
         'member',
       ]);
       const input = companyInput.parse(request.body);
+      const ownerId = input.ownerId === undefined ? session.userId : input.ownerId;
+      if (
+        ownerId !== null &&
+        !database
+          .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+          .get(session.organizationId, ownerId)
+      )
+        return response.status(400).json({
+          error: { code: 'VALIDATION', message: 'Company owner must belong to this organization.' },
+        });
       const now = new Date().toISOString();
       const id = `co_${randomUUID()}`;
       database.exec('BEGIN IMMEDIATE');
@@ -193,7 +203,7 @@ export function createApp(config: AppConfig) {
             input.size || null,
             input.address || null,
             input.lifecycleStatus,
-            input.ownerId === undefined ? session.userId : input.ownerId,
+            ownerId,
             JSON.stringify(input.tags),
             input.description,
             now,
@@ -313,6 +323,16 @@ export function createApp(config: AppConfig) {
         return response.status(409).json({
           error: { code: 'CONFLICT', message: 'This company changed. Refresh it before saving.' },
         });
+      const ownerId = input.ownerId === undefined ? company.owner_id : input.ownerId;
+      if (
+        ownerId !== null &&
+        !database
+          .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+          .get(session.organizationId, ownerId)
+      )
+        return response.status(400).json({
+          error: { code: 'VALIDATION', message: 'Company owner must belong to this organization.' },
+        });
       const now = new Date().toISOString();
       database.exec('BEGIN IMMEDIATE');
       try {
@@ -329,7 +349,7 @@ export function createApp(config: AppConfig) {
             input.size || null,
             input.address || null,
             input.lifecycleStatus,
-            input.ownerId === undefined ? company.owner_id : input.ownerId,
+            ownerId,
             JSON.stringify(input.tags),
             input.description,
             now,
