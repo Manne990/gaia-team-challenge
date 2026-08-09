@@ -972,21 +972,56 @@ function Deals() {
   const [deals, setDeals] = useState<any[]>([]);
   const [stages, setStages] = useState<any[]>([]);
   const [error, setError] = useState('');
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/deals').then((r) => r.json()),
+  const [stageFilter, setStageFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const load = (stage = stageFilter, status = statusFilter) => {
+    const query = new URLSearchParams();
+    if (stage) query.set('stageId', stage);
+    if (status) query.set('status', status);
+    return Promise.all([
+      fetch(`/api/deals?${query}`).then((r) => r.json()),
       fetch('/api/pipeline/stages').then((r) => r.json()),
-    ])
-      .then(([list, pipeline]) => {
-        setDeals(list.items || []);
-        setStages(pipeline || []);
-      })
-      .catch(() => setError('Deals could not be loaded.'));
+    ]).then(([list, pipeline]) => {
+      setDeals(list.items || []);
+      setStages(pipeline || []);
+    });
+  };
+  useEffect(() => {
+    load().catch(() => setError('Deals could not be loaded.'));
   }, []);
   return (
     <section aria-labelledby="deals-heading">
       <h2 id="deals-heading">Deals</h2>
       {error && <p role="alert">{error}</p>}
+      <form
+        aria-label="Deal filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          Stage
+          <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
+            <option value="">All stages</option>
+            {stages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="won">Won</option>
+            <option value="lost">Lost</option>
+          </select>
+        </label>
+        <button>Apply filters</button>
+      </form>
       <p>{deals.length} active deals</p>
       <div className="pipeline" aria-label="Pipeline view">
         {stages.map((stage) => (
