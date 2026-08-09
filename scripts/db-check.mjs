@@ -13,7 +13,7 @@ try {
     db
       .prepare('SELECT count(*) AS total FROM companies WHERE organization_id = ?')
       .get('org_northstar').total,
-    5,
+    30,
   );
   seedDatabase(db);
   assert.equal(

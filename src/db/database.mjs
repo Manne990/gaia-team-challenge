@@ -213,6 +213,87 @@ export function seedDatabase(db) {
         creator_name_snapshot: 'Northstar Member',
         created_at: seedTime,
       });
+    const fixtureStages = [
+      'stage_qualified',
+      'stage_proposal',
+      'stage_negotiation',
+      'stage_won',
+      'stage_lost',
+    ];
+    const fixtureTypes = ['call', 'email', 'meeting', 'note', 'status_change'];
+    for (let index = 1; index <= 25; index += 1) {
+      const suffix = String(index).padStart(2, '0');
+      const companyId = `co_fixture_${suffix}`;
+      const contactId = `ct_fixture_${suffix}`;
+      const stageId = fixtureStages[index % fixtureStages.length];
+      const status = stageId === 'stage_won' ? 'won' : stageId === 'stage_lost' ? 'lost' : 'open';
+      const taskStatus = index % 5 === 0 ? 'completed' : index % 3 === 0 ? 'in_progress' : 'open';
+      insert(db, 'companies', {
+        id: companyId,
+        organization_id: 'org_northstar',
+        name: `Northstar Fixture ${suffix}`,
+        external_reference: `FIX-${suffix}`,
+        lifecycle_status: ['lead', 'prospect', 'customer'][index % 3],
+        owner_id: index % 2 === 0 ? 'usr_owner' : 'usr_member',
+        tags_json: JSON.stringify([index % 2 === 0 ? 'enterprise' : 'growth', 'fixture']),
+        created_at: `2025-12-${String((index % 28) + 1).padStart(2, '0')}T09:00:00.000Z`,
+        updated_at: seedTime,
+      });
+      insert(db, 'contacts', {
+        id: contactId,
+        organization_id: 'org_northstar',
+        company_id: companyId,
+        first_name: `Fixture${suffix}`,
+        last_name: `Contact${suffix}`,
+        email: `fixture-${suffix}@example.test`,
+        owner_id: index % 2 === 0 ? 'usr_owner' : 'usr_member',
+        created_at: seedTime,
+        updated_at: seedTime,
+      });
+      insert(db, 'deals', {
+        id: `deal_fixture_${suffix}`,
+        organization_id: 'org_northstar',
+        name: `Fixture opportunity ${suffix}`,
+        company_id: companyId,
+        owner_id: index % 2 === 0 ? 'usr_owner' : 'usr_member',
+        stage_id: stageId,
+        amount_cents: 50000 + index * 12500,
+        currency: 'USD',
+        probability: status === 'won' ? 100 : status === 'lost' ? 0 : 20 + (index % 4) * 20,
+        status,
+        loss_reason: status === 'lost' ? 'Budget deferred' : null,
+        created_at: seedTime,
+        updated_at: seedTime,
+      });
+      insert(db, 'tasks', {
+        id: `task_fixture_${suffix}`,
+        organization_id: 'org_northstar',
+        title: `Fixture follow-up ${suffix}`,
+        due_at: `2026-01-${String((index % 25) + 1).padStart(2, '0')}T${String(8 + (index % 8)).padStart(2, '0')}:00:00.000Z`,
+        status: taskStatus,
+        priority: ['low', 'medium', 'high'][index % 3],
+        assignee_id: index % 2 === 0 ? 'usr_owner' : 'usr_member',
+        company_id: companyId,
+        contact_id: contactId,
+        deal_id: `deal_fixture_${suffix}`,
+        completed_at: taskStatus === 'completed' ? seedTime : null,
+        created_at: seedTime,
+        updated_at: seedTime,
+      });
+      insert(db, 'activities', {
+        id: `act_fixture_${suffix}`,
+        organization_id: 'org_northstar',
+        type: fixtureTypes[index % fixtureTypes.length],
+        subject: `Fixture activity ${suffix}`,
+        occurred_at: `2026-01-${String((index % 20) + 1).padStart(2, '0')}T10:00:00.000Z`,
+        creator_id: index % 2 === 0 ? 'usr_owner' : 'usr_member',
+        company_id: companyId,
+        contact_id: contactId,
+        deal_id: `deal_fixture_${suffix}`,
+        creator_name_snapshot: index % 2 === 0 ? 'Northstar Owner' : 'Northstar Member',
+        created_at: seedTime,
+      });
+    }
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
