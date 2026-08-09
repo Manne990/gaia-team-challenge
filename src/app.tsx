@@ -273,12 +273,13 @@ function ListPage({
   const [contactRows, setContactRows] = useState<Array<string[]>>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [contactSort, setContactSort] = useState('name');
+  const [contactStatus, setContactStatus] = useState('');
   const [contactPage, setContactPage] = useState(1);
   const [contactTotal, setContactTotal] = useState(0);
   useEffect(() => {
     if (page === 'Contacts')
       fetch(
-        `/api/contacts?query=${encodeURIComponent(contactSearch)}&sort=${contactSort}&page=${contactPage}`,
+        `/api/contacts?query=${encodeURIComponent(contactSearch)}&sort=${contactSort}&status=${contactStatus}&page=${contactPage}`,
       )
         .then((response) => (response.ok ? response.json() : { items: [] }))
         .then((data) => {
@@ -293,7 +294,7 @@ function ListPage({
             ]),
           );
         });
-  }, [page, contactSearch, contactSort, contactPage]);
+  }, [page, contactSearch, contactSort, contactStatus, contactPage]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
   const companies = page === 'Contacts' ? contactRows : companiesFor(workspace, user);
   return (
@@ -343,7 +344,14 @@ function ListPage({
               }
             />
           </label>
-          <button className="secondary">
+          <button
+            className="secondary"
+            onClick={
+              page === 'Contacts'
+                ? () => setContactStatus(contactStatus ? '' : 'active')
+                : undefined
+            }
+          >
             Filter <span aria-hidden="true">⌄</span>
           </button>
           <button
