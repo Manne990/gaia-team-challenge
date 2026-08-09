@@ -394,7 +394,7 @@ function Placeholder({ page, role }: { page: Page; role: Role }) {
   );
 }
 
-export function App({ role = 'owner' }: { role?: Role }) {
+export function App({ role }: { role: Role }) {
   const [page, setPage] = useState<Page>('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dialog, setDialog] = useState(false);

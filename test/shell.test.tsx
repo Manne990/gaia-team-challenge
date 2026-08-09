@@ -5,7 +5,7 @@ import { App } from '../src/app';
 describe('CRM application shell', () => {
   it('renders operational navigation and changes to the companies workspace', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App role="owner" />);
     expect(screen.getByRole('heading', { name: 'Good morning, Lina' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Companies' }));
     expect(screen.getByRole('heading', { name: 'Companies' })).toBeInTheDocument();
@@ -15,7 +15,7 @@ describe('CRM application shell', () => {
 
   it('renders deliberate loading, error, not-found, and conflict states', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App role="owner" />);
     await user.click(screen.getByRole('button', { name: 'Activities' }));
     expect(screen.getByRole('heading', { name: 'Loading activity' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Deals' }));
@@ -37,7 +37,7 @@ describe('CRM application shell', () => {
 
   it('restores focus to the account trigger after the dialog closes', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App role="owner" />);
     const trigger = screen.getByRole('button', { name: /Lina Berg.*owner/ });
     trigger.focus();
     await user.click(trigger);
