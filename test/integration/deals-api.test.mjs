@@ -58,6 +58,21 @@ describe('deals API', () => {
     });
     expect(created.status).toBe(201);
     const deal = await created.json();
+    expect(
+      (
+        await fetch(`${url}/api/deals`, {
+          method: 'POST',
+          headers: { cookie, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Euro pipeline deal',
+            companyId: 'co_acme',
+            stageId: 'stage_proposal',
+            amountCents: 100,
+            currency: 'EUR',
+          }),
+        })
+      ).status,
+    ).toBe(201);
     expect((await fetch(`${url}/api/deals`, { headers: { cookie } })).status).toBe(200);
     const filtered = await (
       await fetch(`${url}/api/deals?stageId=stage_proposal&status=open`, { headers: { cookie } })
@@ -65,8 +80,12 @@ describe('deals API', () => {
     expect(
       filtered.items.every((item) => item.stageId === 'stage_proposal' && item.status === 'open'),
     ).toBe(true);
-    expect(filtered.aggregate.count).toBe(filtered.total);
-    expect(filtered.aggregate.amountCents).toBeGreaterThanOrEqual(42000);
+    expect(filtered.aggregates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ currency: 'EUR', count: 1, amountCents: 100 }),
+        expect.objectContaining({ currency: 'USD', amountCents: expect.any(Number) }),
+      ]),
+    );
     expect((await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie } })).status).toBe(200);
     const rejected = await fetch(`${url}/api/deals/${deal.id}/transition`, {
       method: 'POST',

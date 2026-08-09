@@ -1508,17 +1508,17 @@ export function createApp(config: AppConfig) {
       const total = database
         .prepare(`SELECT count(*) AS total FROM deals WHERE ${clause}`)
         .get(...args).total;
-      const aggregate = database
+      const aggregates = database
         .prepare(
-          `SELECT count(*) AS count, coalesce(sum(amount_cents), 0) AS amountCents FROM deals WHERE ${clause}`,
+          `SELECT currency, count(*) AS count, coalesce(sum(amount_cents), 0) AS amountCents FROM deals WHERE ${clause} GROUP BY currency ORDER BY currency`,
         )
-        .get(...args);
+        .all(...args);
       const items = database
         .prepare(
           `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE ${clause} ORDER BY deals.updated_at DESC LIMIT ? OFFSET ?`,
         )
         .all(...args, size, (page - 1) * size);
-      return response.json({ items, page, pageSize: size, total, aggregate });
+      return response.json({ items, page, pageSize: size, total, aggregates });
     } catch (error) {
       return dealError(error, response);
     }
