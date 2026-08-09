@@ -273,6 +273,7 @@ function ListPage({
   role: Role;
 }) {
   const canEdit = role !== 'viewer';
+  const initialContactQuery = new URLSearchParams(window.location.search);
   type Contact = {
     id: string;
     firstName: string;
@@ -301,24 +302,48 @@ function ListPage({
     history?: Array<{ id: string; action: string; createdAt: string }>;
   };
   const [contactRows, setContactRows] = useState<Contact[]>([]);
-  const [contactSearch, setContactSearch] = useState('');
-  const [contactSort, setContactSort] = useState('name');
-  const [contactStatus, setContactStatus] = useState('');
-  const [contactCompany, setContactCompany] = useState('');
-  const [contactOwner, setContactOwner] = useState('');
-  const [contactTag, setContactTag] = useState('');
-  const [showContactFilters, setShowContactFilters] = useState(false);
-  const [showArchivedContacts, setShowArchivedContacts] = useState(false);
-  const [contactPage, setContactPage] = useState(1);
+  const [contactSearch, setContactSearch] = useState(() => initialContactQuery.get('query') || '');
+  const [contactSort, setContactSort] = useState(() => initialContactQuery.get('sort') || 'name');
+  const [contactStatus, setContactStatus] = useState(() => initialContactQuery.get('status') || '');
+  const [contactCompany, setContactCompany] = useState(
+    () => initialContactQuery.get('companyId') || '',
+  );
+  const [contactOwner, setContactOwner] = useState(() => initialContactQuery.get('ownerId') || '');
+  const [contactTag, setContactTag] = useState(() => initialContactQuery.get('tag') || '');
+  const [showContactFilters, setShowContactFilters] = useState(() =>
+    Boolean(
+      initialContactQuery.get('status') ||
+      initialContactQuery.get('companyId') ||
+      initialContactQuery.get('ownerId') ||
+      initialContactQuery.get('tag'),
+    ),
+  );
+  const [showArchivedContacts, setShowArchivedContacts] = useState(
+    () => initialContactQuery.get('archived') === 'true',
+  );
+  const [contactPage, setContactPage] = useState(() =>
+    Math.max(1, Number(initialContactQuery.get('page')) || 1),
+  );
   const [contactTotal, setContactTotal] = useState(0);
   const [showContactForm, setShowContactForm] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [contactNotice, setContactNotice] = useState('');
   const [contactRefresh, setContactRefresh] = useState(0);
+  const [contactViews, setContactViews] = useState<
+    Array<{ id: string; name: string; filters: Record<string, unknown> }>
+  >([]);
   const contactRequest = useRef(0);
   const refreshContacts = () => setContactRefresh((value) => value + 1);
+  const loadContactViews = () =>
+    fetch('/api/saved-views?resource=contacts')
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((body) => setContactViews(body.items || []));
+  useEffect(() => {
+    if (page === 'Contacts') void loadContactViews();
+  }, [page]);
   useEffect(() => {
     if (page === 'Contacts') {
+      const record = new URLSearchParams(window.location.search).get('record');
       const requestNumber = contactRequest.current + 1;
       contactRequest.current = requestNumber;
       const query = new URLSearchParams({
@@ -331,6 +356,7 @@ function ListPage({
         page: String(contactPage),
       });
       if (showArchivedContacts) query.set('archived', 'true');
+      window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
       fetch(`/api/contacts?${query}`)
         .then((response) => (response.ok ? response.json() : { items: [] }))
         .then((data) => {
@@ -338,6 +364,11 @@ function ListPage({
           setContactTotal(data.total || 0);
           setContactRows(data.items || []);
         });
+      if (record)
+        fetch(`/api/contacts/${encodeURIComponent(record)}`)
+          .then((response) => (response.ok ? response.json() : null))
+          .then((contact) => contact && setSelectedContact(contact))
+          .catch(() => undefined);
     }
   }, [
     page,
@@ -492,6 +523,124 @@ function ListPage({
         <p className="panel" role="status">
           {contactNotice}
         </p>
+      )}
+      {page === 'Contacts' && (
+        <div className="panel" aria-label="Manage saved views for contacts">
+          <h2>Saved views</h2>
+          <button
+            type="button"
+            onClick={async () => {
+              const name = window.prompt('Saved view name');
+              if (!name?.trim()) return;
+              const response = await fetch('/api/saved-views', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  resource: 'contacts',
+                  name: name.trim(),
+                  filters: {
+                    query: contactSearch,
+                    sort: contactSort,
+                    status: contactStatus,
+                    companyId: contactCompany,
+                    ownerId: contactOwner,
+                    tag: contactTag,
+                    archived: showArchivedContacts,
+                  },
+                }),
+              });
+              if (response.ok) await loadContactViews();
+            }}
+          >
+            Save current view
+          </button>
+          <ul>
+            {contactViews.map((view) => (
+              <li key={view.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filters = view.filters || {};
+                    setContactSearch(typeof filters.query === 'string' ? filters.query : '');
+                    setContactSort(
+                      ['name', 'email', 'createdAt', 'updatedAt'].includes(String(filters.sort))
+                        ? String(filters.sort)
+                        : 'name',
+                    );
+                    setContactStatus(
+                      ['active', 'inactive', 'lead'].includes(String(filters.status))
+                        ? String(filters.status)
+                        : '',
+                    );
+                    setContactCompany(
+                      typeof filters.companyId === 'string' ? filters.companyId : '',
+                    );
+                    setContactOwner(typeof filters.ownerId === 'string' ? filters.ownerId : '');
+                    setContactTag(typeof filters.tag === 'string' ? filters.tag : '');
+                    setShowArchivedContacts(filters.archived === true);
+                    setContactPage(1);
+                  }}
+                >
+                  {view.name}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Rename ${view.name}`}
+                  onClick={async () => {
+                    const name = window.prompt('Saved view name', view.name);
+                    if (!name?.trim()) return;
+                    await fetch(`/api/saved-views/${view.id}`, {
+                      method: 'PUT',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({
+                        resource: 'contacts',
+                        name: name.trim(),
+                        filters: view.filters,
+                      }),
+                    });
+                    await loadContactViews();
+                  }}
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await fetch(`/api/saved-views/${view.id}`, {
+                      method: 'PUT',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({
+                        resource: 'contacts',
+                        name: view.name,
+                        filters: {
+                          query: contactSearch,
+                          sort: contactSort,
+                          status: contactStatus,
+                          companyId: contactCompany,
+                          ownerId: contactOwner,
+                          tag: contactTag,
+                          archived: showArchivedContacts,
+                        },
+                      }),
+                    });
+                    await loadContactViews();
+                  }}
+                >
+                  Update
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await fetch(`/api/saved-views/${view.id}`, { method: 'DELETE' });
+                    await loadContactViews();
+                  }}
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <section className="panel table-panel">
         <div className="toolbar">

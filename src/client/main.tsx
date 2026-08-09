@@ -457,7 +457,9 @@ function Companies({ canWrite }: { canWrite: boolean }) {
             industry: typeof view.industry === 'string' ? view.industry : '',
             size: typeof view.size === 'string' ? view.size : '',
             tag: typeof view.tag === 'string' ? view.tag : '',
-            sort: typeof view.sort === 'string' ? view.sort : 'name',
+            sort: ['name', 'createdAt', 'updatedAt', 'lifecycle'].includes(String(view.sort))
+              ? String(view.sort)
+              : 'name',
             direction: view.direction === 'desc' ? 'desc' : 'asc',
             includeArchived: view.includeArchived === true,
             page: 1,
@@ -1233,11 +1235,17 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   );
 }
 function Tasks({ canWrite }: { canWrite: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
+  const selectedRecord = initialQuery.get('record');
   const [items, setItems] = useState<any[]>([]);
   const [message, setMessage] = useState('');
-  const [due, setDue] = useState('');
-  const [mine, setMine] = useState(false);
-  const [relation, setRelation] = useState('');
+  const [due, setDue] = useState(() => initialQuery.get('due') || '');
+  const [mine, setMine] = useState(() => initialQuery.get('assigneeId') === 'me');
+  const [relation, setRelation] = useState(() => {
+    const kind = initialQuery.get('relation');
+    const id = initialQuery.get('relationId');
+    return kind && id ? `${kind}:${id}` : '';
+  });
   const load = async (nextDue = due, nextMine = mine, nextRelation = relation) => {
     const query = new URLSearchParams({ sort: 'dueAt' });
     if (nextDue) query.set('due', nextDue);
@@ -1254,6 +1262,9 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    if (selectedRecord && items.length) document.getElementById(`task-${selectedRecord}`)?.focus();
+  }, [items, selectedRecord]);
   const action = async (id: string, name: string) => {
     const response = await fetch(`/api/tasks/${id}/${name}`, { method: 'POST' });
     if (response.ok) {
@@ -1410,7 +1421,12 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       {message && <p role="status">{message}</p>}
       <ul aria-label="Task results" className="task-list">
         {items.map((task) => (
-          <li key={task.id}>
+          <li
+            key={task.id}
+            id={`task-${task.id}`}
+            tabIndex={task.id === selectedRecord ? -1 : undefined}
+            aria-current={task.id === selectedRecord ? 'true' : undefined}
+          >
             <div>
               <strong>{task.title}</strong>
               <small>{task.status}</small>
@@ -1437,13 +1453,17 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
 }
 
 function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
+  const selectedRecord = initialQuery.get('record');
   const [deals, setDeals] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [stages, setStages] = useState<any[]>([]);
   const [error, setError] = useState('');
-  const [stageFilter, setStageFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const [stageFilter, setStageFilter] = useState(() => initialQuery.get('stageId') || '');
+  const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
+  const [includeArchived, setIncludeArchived] = useState(
+    () => initialQuery.get('includeArchived') === 'true',
+  );
   const load = (stage = stageFilter, status = statusFilter, archived = includeArchived) => {
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
@@ -1462,6 +1482,9 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   useEffect(() => {
     load().catch(() => setError('Deals could not be loaded.'));
   }, []);
+  useEffect(() => {
+    if (selectedRecord && deals.length) document.getElementById(`deal-${selectedRecord}`)?.focus();
+  }, [deals, selectedRecord]);
   return (
     <section aria-labelledby="deals-heading">
       <h2 id="deals-heading">Deals</h2>
@@ -1647,7 +1670,12 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
         </thead>
         <tbody>
           {deals.map((deal) => (
-            <tr key={deal.id}>
+            <tr
+              key={deal.id}
+              id={`deal-${deal.id}`}
+              tabIndex={deal.id === selectedRecord ? -1 : undefined}
+              aria-current={deal.id === selectedRecord ? 'true' : undefined}
+            >
               <td>{deal.name}</td>
               <td>{deal.stageName}</td>
               <td>
