@@ -968,6 +968,73 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   );
 }
 
+function Deals() {
+  const [deals, setDeals] = useState<any[]>([]);
+  const [stages, setStages] = useState<any[]>([]);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/deals').then((r) => r.json()),
+      fetch('/api/pipeline/stages').then((r) => r.json()),
+    ])
+      .then(([list, pipeline]) => {
+        setDeals(list.items || []);
+        setStages(pipeline || []);
+      })
+      .catch(() => setError('Deals could not be loaded.'));
+  }, []);
+  return (
+    <section aria-labelledby="deals-heading">
+      <h2 id="deals-heading">Deals</h2>
+      {error && <p role="alert">{error}</p>}
+      <p>{deals.length} active deals</p>
+      <div className="pipeline" aria-label="Pipeline view">
+        {stages.map((stage) => (
+          <section key={stage.id}>
+            <h3>{stage.name}</h3>
+            <ul>
+              {deals
+                .filter((deal) => deal.stageId === stage.id)
+                .map((deal) => (
+                  <li key={deal.id}>
+                    <strong>{deal.name}</strong>
+                    <br />
+                    {deal.currency} {(deal.amountCents / 100).toLocaleString()} · {deal.probability}
+                    %
+                  </li>
+                ))}
+              {!deals.some((deal) => deal.stageId === stage.id) && <li>No deals</li>}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <table>
+        <caption>Deals list</caption>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Stage</th>
+            <th>Amount</th>
+            <th>Probability</th>
+          </tr>
+        </thead>
+        <tbody>
+          {deals.map((deal) => (
+            <tr key={deal.id}>
+              <td>{deal.name}</td>
+              <td>{deal.stageName}</td>
+              <td>
+                {deal.currency} {(deal.amountCents / 100).toLocaleString()}
+              </td>
+              <td>{deal.probability}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -1058,6 +1125,7 @@ function App() {
       workspace={session.organization}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
+      dealsContent={<Deals />}
       importsContent={<Imports canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
@@ -1072,3 +1140,4 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
+

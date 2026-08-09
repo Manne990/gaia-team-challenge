@@ -934,6 +934,7 @@ export function App({
   workspace,
   companiesContent,
   activitiesContent,
+  dealsContent,
   importsContent,
   onSignOut,
 }: {
@@ -942,6 +943,7 @@ export function App({
   workspace: Workspace;
   companiesContent?: ReactNode;
   activitiesContent?: ReactNode;
+  dealsContent?: ReactNode;
   importsContent?: ReactNode;
   onSignOut?: () => Promise<void>;
 }) {
@@ -974,6 +976,8 @@ export function App({
       activitiesContent
     ) : page === 'Imports' && importsContent ? (
       importsContent
+    ) : page === 'Deals' && dealsContent ? (
+      dealsContent
     ) : page === 'Companies' || page === 'Contacts' ? (
       <ListPage page={page} workspace={workspace} user={user} role={role} />
     ) : (
@@ -1107,3 +1111,4 @@ export function App({
     </div>
   );
 }
+
