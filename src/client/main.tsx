@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App as ShellApp, type Role, type Workspace } from '../app';
 import './styles.css';
@@ -43,23 +43,239 @@ type CompanyDetail = Company & {
   history: { id: string; action: string; created_at: string; summary_json: string }[];
 };
 
+type SearchItem = { id: string; label: string; context: string | null };
+type SearchGroups = Record<'companies' | 'contacts' | 'deals' | 'tasks', SearchItem[]>;
+type SavedView = { id: string; name: string; resource: string; filters: Record<string, unknown> };
+
+function SavedViews({
+  resource,
+  filters,
+  onChoose,
+}: {
+  resource: 'companies' | 'contacts' | 'deals' | 'tasks';
+  filters: Record<string, unknown>;
+  onChoose: (filters: Record<string, unknown>) => void;
+}) {
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const load = () =>
+    fetch(`/api/saved-views?${new URLSearchParams({ resource })}`)
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((body) => setViews(body.items || []));
+  useEffect(() => {
+    void load();
+  }, [resource]);
+  const save = async () => {
+    if (!name.trim()) return setMessage('Name this view before saving.');
+    const response = await fetch('/api/saved-views', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, name, filters }),
+    });
+    if (!response.ok) return setMessage('This view could not be saved.');
+    setName('');
+    setMessage('Saved view created.');
+    await load();
+  };
+  const update = async (view: SavedView, nextName = view.name) => {
+    const response = await fetch(`/api/saved-views/${view.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, name: nextName, filters }),
+    });
+    if (!response.ok) return setMessage('This view could not be updated.');
+    setMessage('Saved view updated.');
+    await load();
+  };
+  return (
+    <div aria-label={`Manage saved views for ${resource}`}>
+      <h3>Saved views</h3>
+      <label>
+        New saved view name
+        <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} />
+      </label>
+      <button type="button" onClick={() => void save()}>
+        Save current view
+      </button>
+      <ul>
+        {views.map((view) => (
+          <li key={view.id}>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  onChoose(view.filters);
+                  setMessage(`Applied ${view.name}.`);
+                } catch {
+                  setMessage('This saved view is no longer valid.');
+                }
+              }}
+            >
+              {view.name}
+            </button>
+            <button
+              type="button"
+              aria-label={`Rename ${view.name}`}
+              onClick={() => {
+                const nextName = window.prompt('Saved view name', view.name);
+                if (nextName?.trim()) void update(view, nextName.trim());
+              }}
+            >
+              Rename
+            </button>
+            <button type="button" onClick={() => void update(view)}>
+              Update
+            </button>
+            <button
+              type="button"
+              aria-label={`Delete ${view.name}`}
+              onClick={async () => {
+                const response = await fetch(`/api/saved-views/${view.id}`, { method: 'DELETE' });
+                if (!response.ok) return setMessage('This view could not be deleted.');
+                setMessage('Saved view deleted.');
+                await load();
+              }}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+      {message && <p role="status">{message}</p>}
+    </div>
+  );
+}
+
+function GlobalSearch({
+  onNavigate,
+}: {
+  onNavigate: (page: 'Companies' | 'Contacts' | 'Deals' | 'Tasks') => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const [groups, setGroups] = useState<SearchGroups | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+  useEffect(() => {
+    const focus = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        (event.key.toLowerCase() === 'k' || event.code === 'KeyK')
+      ) {
+        event.preventDefault();
+        input.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', focus);
+    return () => document.removeEventListener('keydown', focus);
+  }, []);
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setGroups(null);
+      setState('idle');
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setState('loading');
+      fetch(`/api/search?${new URLSearchParams({ q: term })}`, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Search failed');
+          return response.json();
+        })
+        .then((body) => {
+          setGroups(body.groups);
+          setState('idle');
+        })
+        .catch((error: unknown) => {
+          if ((error as { name?: string }).name !== 'AbortError') setState('error');
+        });
+    }, 200);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+  const labels: Record<keyof SearchGroups, string> = {
+    companies: 'Companies',
+    contacts: 'Contacts',
+    deals: 'Deals',
+    tasks: 'Tasks',
+  };
+  const noMatches = groups && Object.values(groups).every((items) => items.length === 0);
+  return (
+    <div className="global-search">
+      <label>
+        <span className="sr-only">Search CRM</span>
+        <span aria-hidden="true">⌕</span>
+        <input
+          ref={input}
+          aria-label="Search CRM"
+          placeholder="Search companies, contacts, deals…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      <kbd>⌘ K</kbd>
+      {state === 'loading' && <span aria-live="polite">Searching…</span>}
+      {state === 'error' && <span role="alert">Search is unavailable.</span>}
+      {noMatches && <p role="status">No records match “{query}”.</p>}
+      {groups && !noMatches && (
+        <div aria-label="Search results">
+          {(Object.keys(labels) as Array<keyof SearchGroups>).map((resource) =>
+            groups[resource].length ? (
+              <section key={resource} aria-label={labels[resource]}>
+                <strong>{labels[resource]}</strong>
+                <ul>
+                  {groups[resource].map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const page = (resource.charAt(0).toUpperCase() + resource.slice(1)) as
+                            'Companies' | 'Contacts' | 'Deals' | 'Tasks';
+                          window.history.replaceState(
+                            null,
+                            '',
+                            `${window.location.pathname}?record=${encodeURIComponent(item.id)}`,
+                          );
+                          onNavigate(page);
+                        }}
+                      >
+                        {item.label}
+                        {item.context && <small> — {item.context}</small>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null,
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Companies({ canWrite }: { canWrite: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [total, setTotal] = useState(0);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
-  const [text, setText] = useState('');
-  const [filters, setFilters] = useState({
-    lifecycle: '',
-    ownerId: '',
-    industry: '',
-    size: '',
-    tag: '',
-    sort: 'name',
-    direction: 'asc',
-    includeArchived: false,
-    page: 1,
-  });
+  const [text, setText] = useState(() => initialQuery.get('text') || '');
+  const [filters, setFilters] = useState(() => ({
+    lifecycle: initialQuery.get('lifecycle') || '',
+    ownerId: initialQuery.get('ownerId') || '',
+    industry: initialQuery.get('industry') || '',
+    size: initialQuery.get('size') || '',
+    tag: initialQuery.get('tag') || '',
+    sort: initialQuery.get('sort') || 'name',
+    direction: initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
+    includeArchived: initialQuery.get('includeArchived') === 'true',
+    page: Math.max(1, Number(initialQuery.get('page')) || 1),
+  }));
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
   const load = async (search = text, nextFilters = filters) => {
     setState('loading');
@@ -79,6 +295,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
       }))
         if (value) query.set(key, value);
       if (nextFilters.includeArchived) query.set('includeArchived', 'true');
+      window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
       const response = await fetch(`/api/companies?${query}`);
       if (!response.ok) throw new Error('Unable to load companies.');
       const body = await response.json();
@@ -91,7 +308,13 @@ function Companies({ canWrite }: { canWrite: boolean }) {
     }
   };
   useEffect(() => {
-    void load('');
+    const record = new URLSearchParams(window.location.search).get('record');
+    void load();
+    if (record)
+      fetch(`/api/companies/${encodeURIComponent(record)}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((company) => company && setDetail(company))
+        .catch(() => undefined);
   }, []);
   const exportQuery = new URLSearchParams();
   if (text) exportQuery.set('text', text);
@@ -202,7 +425,56 @@ function Companies({ canWrite }: { canWrite: boolean }) {
           Include archived companies
         </label>
         <button>Apply filters</button>
+        <button
+          type="button"
+          onClick={() => {
+            const next = {
+              lifecycle: '',
+              ownerId: '',
+              industry: '',
+              size: '',
+              tag: '',
+              sort: 'name',
+              direction: 'asc',
+              includeArchived: false,
+              page: 1,
+            };
+            setText('');
+            setFilters(next);
+            void load('', next);
+          }}
+        >
+          Clear company filters
+        </button>
       </form>
+      <SavedViews
+        resource="companies"
+        filters={{ text, ...filters }}
+        onChoose={(view) => {
+          if (
+            view.lifecycle !== undefined &&
+            !['', 'lead', 'prospect', 'customer', 'inactive'].includes(String(view.lifecycle))
+          )
+            throw new Error('Invalid saved company lifecycle');
+          const next = {
+            lifecycle: typeof view.lifecycle === 'string' ? view.lifecycle : '',
+            ownerId: typeof view.ownerId === 'string' ? view.ownerId : '',
+            industry: typeof view.industry === 'string' ? view.industry : '',
+            size: typeof view.size === 'string' ? view.size : '',
+            tag: typeof view.tag === 'string' ? view.tag : '',
+            sort: ['name', 'createdAt', 'updatedAt', 'lifecycle'].includes(String(view.sort))
+              ? String(view.sort)
+              : 'name',
+            direction: view.direction === 'desc' ? 'desc' : 'asc',
+            includeArchived: view.includeArchived === true,
+            page: 1,
+          };
+          const savedText = typeof view.text === 'string' ? view.text : '';
+          setText(savedText);
+          setFilters(next);
+          void load(savedText, next);
+        }}
+      />
       <a href={companyExportHref} download>
         Export filtered companies
       </a>
@@ -968,32 +1240,65 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   );
 }
 function Tasks({ canWrite }: { canWrite: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
+  const selectedRecord = initialQuery.get('record');
+  const selectedRecordPending = useRef(selectedRecord);
   const [items, setItems] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('');
-  const [due, setDue] = useState('');
-  const [mine, setMine] = useState(false);
-  const [relation, setRelation] = useState('');
-  const load = async (nextDue = due) => {
-    const query = new URLSearchParams({ sort: 'dueAt' });
+  const [due, setDue] = useState(() => initialQuery.get('due') || '');
+  const [mine, setMine] = useState(() => initialQuery.get('assigneeId') === 'me');
+  const [relation, setRelation] = useState(() => {
+    const kind = initialQuery.get('relation');
+    const id = initialQuery.get('relationId');
+    return kind && id ? `${kind}:${id}` : '';
+  });
+  const [page, setPage] = useState(() => Math.max(1, Number(initialQuery.get('page')) || 1));
+  const [sort, setSort] = useState(() => initialQuery.get('sort') || 'dueAt');
+  const [direction, setDirection] = useState(() =>
+    initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
+  );
+  const load = async (
+    nextDue = due,
+    nextMine = mine,
+    nextRelation = relation,
+    nextPage = page,
+    nextSort = sort,
+    nextDirection = direction,
+  ) => {
+    const query = new URLSearchParams({
+      sort: nextSort,
+      direction: nextDirection,
+      page: String(nextPage),
+    });
     if (nextDue) query.set('due', nextDue);
-    if (mine) query.set('assigneeId', 'me');
-    if (relation) {
-      const [kind, id] = relation.split(':');
+    if (nextMine) query.set('assigneeId', 'me');
+    if (nextRelation) {
+      const [kind, id] = nextRelation.split(':');
       query.set('relation', kind);
       query.set('relationId', id);
     }
+    window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
     const response = await fetch(`/api/tasks?${query}`);
-    if (response.ok) setItems((await response.json()).items);
+    if (response.ok) {
+      const body = await response.json();
+      let nextItems = body.items;
+      const record = selectedRecordPending.current;
+      selectedRecordPending.current = null;
+      if (record && !nextItems.some((item: any) => item.id === record)) {
+        const detail = await fetch(`/api/tasks/${encodeURIComponent(record)}`);
+        if (detail.ok) nextItems = [await detail.json(), ...nextItems];
+      }
+      setItems(nextItems);
+      setTotal(body.total);
+    }
   };
   useEffect(() => {
-    const id = window.location.hash.match(/^#tasks\/([^/]+)$/)?.[1];
-    if (id)
-      void fetch(`/api/tasks/${id}`).then(async (response) => {
-        if (response.ok) setItems([await response.json()]);
-        else setMessage('The related task is unavailable.');
-      });
-    else void load();
+    void load();
   }, []);
+  useEffect(() => {
+    if (selectedRecord && items.length) document.getElementById(`task-${selectedRecord}`)?.focus();
+  }, [items, selectedRecord]);
   const action = async (id: string, name: string) => {
     const response = await fetch(`/api/tasks/${id}/${name}`, { method: 'POST' });
     if (response.ok) {
@@ -1070,7 +1375,65 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           />
         </label>
         <button>Apply view</button>
+        <label>
+          Sort{' '}
+          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="dueAt">Due date</option>
+            <option value="createdAt">Created</option>
+            <option value="updatedAt">Updated</option>
+            <option value="priority">Priority</option>
+          </select>
+        </label>
+        <label>
+          Direction{' '}
+          <select value={direction} onChange={(event) => setDirection(event.target.value)}>
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setDue('');
+            setMine(false);
+            setRelation('');
+            setPage(1);
+            setSort('dueAt');
+            setDirection('asc');
+            void load('', false, '', 1, 'dueAt', 'asc');
+          }}
+        >
+          Clear task filters
+        </button>
       </form>
+      <SavedViews
+        resource="tasks"
+        filters={{ due, mine, relation, page, sort, direction }}
+        onChoose={(view) => {
+          if (
+            view.due !== undefined &&
+            !['', 'overdue', 'today', 'upcoming', 'completed'].includes(String(view.due))
+          )
+            throw new Error('Invalid saved task due state');
+          const nextDue = typeof view.due === 'string' ? view.due : '';
+          const nextMine = view.mine === true;
+          const nextRelation = typeof view.relation === 'string' ? view.relation : '';
+          setDue(nextDue);
+          setMine(nextMine);
+          setRelation(nextRelation);
+          const nextPage = Math.max(1, Number(view.page) || 1);
+          const nextSort = ['dueAt', 'createdAt', 'updatedAt', 'priority'].includes(
+            String(view.sort),
+          )
+            ? String(view.sort)
+            : 'dueAt';
+          const nextDirection = view.direction === 'desc' ? 'desc' : 'asc';
+          setPage(nextPage);
+          setSort(nextSort);
+          setDirection(nextDirection);
+          void load(nextDue, nextMine, nextRelation, nextPage, nextSort, nextDirection);
+        }}
+      />
       {canWrite && (
         <form
           aria-label="Create task"
@@ -1137,7 +1500,12 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       {message && <p role="status">{message}</p>}
       <ul aria-label="Task results" className="task-list">
         {items.map((task) => (
-          <li key={task.id}>
+          <li
+            key={task.id}
+            id={`task-${task.id}`}
+            tabIndex={task.id === selectedRecord ? -1 : undefined}
+            aria-current={task.id === selectedRecord ? 'true' : undefined}
+          >
             <div>
               <strong>{task.title}</strong>
               <small>{task.status}</small>
@@ -1159,41 +1527,89 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           </li>
         ))}
       </ul>
+      <nav aria-label="Task pagination">
+        <button
+          disabled={page === 1}
+          onClick={() => {
+            const next = page - 1;
+            setPage(next);
+            void load(due, mine, relation, next);
+          }}
+        >
+          Previous tasks
+        </button>
+        <span>Page {page}</span>
+        <button
+          disabled={page * 25 >= total}
+          onClick={() => {
+            const next = page + 1;
+            setPage(next);
+            void load(due, mine, relation, next);
+          }}
+        >
+          Next tasks
+        </button>
+      </nav>
     </section>
   );
 }
 
 function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
+  const selectedRecord = initialQuery.get('record');
+  const selectedRecordPending = useRef(selectedRecord);
   const [deals, setDeals] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [stages, setStages] = useState<any[]>([]);
   const [error, setError] = useState('');
-  const [stageFilter, setStageFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const load = (stage = stageFilter, status = statusFilter) => {
+  const [stageFilter, setStageFilter] = useState(() => initialQuery.get('stageId') || '');
+  const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
+  const [includeArchived, setIncludeArchived] = useState(
+    () => initialQuery.get('includeArchived') === 'true',
+  );
+  const [page, setPage] = useState(() => Math.max(1, Number(initialQuery.get('page')) || 1));
+  const [sort, setSort] = useState(() => initialQuery.get('sort') || 'updatedAt');
+  const [direction, setDirection] = useState(() =>
+    initialQuery.get('direction') === 'asc' ? 'asc' : 'desc',
+  );
+  const load = (
+    stage = stageFilter,
+    status = statusFilter,
+    archived = includeArchived,
+    nextPage = page,
+    nextSort = sort,
+    nextDirection = direction,
+  ) => {
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
     if (status) query.set('status', status);
-    if (includeArchived) query.set('includeArchived', 'true');
+    if (archived) query.set('includeArchived', 'true');
+    query.set('page', String(nextPage));
+    query.set('sort', nextSort);
+    query.set('direction', nextDirection);
+    window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
     return Promise.all([
       fetch(`/api/deals?${query}`).then((r) => r.json()),
       fetch('/api/pipeline/stages').then((r) => r.json()),
-    ]).then(([list, pipeline]) => {
-      setDeals(list.items || []);
+    ]).then(async ([list, pipeline]) => {
+      let nextDeals = list.items || [];
+      const record = selectedRecordPending.current;
+      selectedRecordPending.current = null;
+      if (record && !nextDeals.some((deal: any) => deal.id === record)) {
+        const detail = await fetch(`/api/deals/${encodeURIComponent(record)}`);
+        if (detail.ok) nextDeals = [await detail.json(), ...nextDeals];
+      }
+      setDeals(nextDeals);
       setTotal(list.total || 0);
       setStages(pipeline || []);
     });
   };
   useEffect(() => {
-    const id = window.location.hash.match(/^#deals\/([^/]+)$/)?.[1];
-    if (id)
-      void fetch(`/api/deals/${id}`).then(async (response) => {
-        if (response.ok) setDeals([await response.json()]);
-        else setError('The related deal is unavailable.');
-      });
-    else load().catch(() => setError('Deals could not be loaded.'));
+    load().catch(() => setError('Deals could not be loaded.'));
   }, []);
+  useEffect(() => {
+    if (selectedRecord && deals.length) document.getElementById(`deal-${selectedRecord}`)?.focus();
+  }, [deals, selectedRecord]);
   return (
     <section aria-labelledby="deals-heading">
       <h2 id="deals-heading">Deals</h2>
@@ -1331,8 +1747,101 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
           </select>
         </label>
         <button>Apply filters</button>
+        <label>
+          Sort{' '}
+          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="updatedAt">Updated</option>
+            <option value="createdAt">Created</option>
+            <option value="name">Name</option>
+            <option value="amount">Amount</option>
+            <option value="expectedCloseDate">Close date</option>
+          </select>
+        </label>
+        <label>
+          Direction{' '}
+          <select value={direction} onChange={(event) => setDirection(event.target.value)}>
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setStageFilter('');
+            setStatusFilter('');
+            setIncludeArchived(false);
+            setPage(1);
+            setSort('updatedAt');
+            setDirection('desc');
+            void load('', '', false, 1, 'updatedAt', 'desc');
+          }}
+        >
+          Clear deal filters
+        </button>
       </form>
+      <SavedViews
+        resource="deals"
+        filters={{
+          stageId: stageFilter,
+          status: statusFilter,
+          includeArchived,
+          page,
+          sort,
+          direction,
+        }}
+        onChoose={(view) => {
+          const stage = typeof view.stageId === 'string' ? view.stageId : '';
+          if (
+            view.status !== undefined &&
+            !['', 'open', 'won', 'lost'].includes(String(view.status))
+          )
+            throw new Error('Invalid saved deal status');
+          const status = typeof view.status === 'string' ? view.status : '';
+          const archived = view.includeArchived === true;
+          setStageFilter(stage);
+          setStatusFilter(status);
+          setIncludeArchived(archived);
+          const nextPage = Math.max(1, Number(view.page) || 1);
+          const nextSort = [
+            'updatedAt',
+            'createdAt',
+            'name',
+            'amount',
+            'expectedCloseDate',
+          ].includes(String(view.sort))
+            ? String(view.sort)
+            : 'updatedAt';
+          const nextDirection = view.direction === 'asc' ? 'asc' : 'desc';
+          setPage(nextPage);
+          setSort(nextSort);
+          setDirection(nextDirection);
+          void load(stage, status, archived, nextPage, nextSort, nextDirection);
+        }}
+      />
       <p>{total} active deals</p>
+      <nav aria-label="Deal pagination">
+        <button
+          disabled={page === 1}
+          onClick={() => {
+            const next = page - 1;
+            setPage(next);
+            void load(stageFilter, statusFilter, includeArchived, next);
+          }}
+        >
+          Previous deals
+        </button>
+        <span>Page {page}</span>
+        <button
+          disabled={page * 25 >= total}
+          onClick={() => {
+            const next = page + 1;
+            setPage(next);
+            void load(stageFilter, statusFilter, includeArchived, next);
+          }}
+        >
+          Next deals
+        </button>
+      </nav>
       <div className="pipeline" aria-label="Pipeline view">
         {stages.map((stage) => (
           <section key={stage.id}>
@@ -1366,7 +1875,12 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
         </thead>
         <tbody>
           {deals.map((deal) => (
-            <tr key={deal.id}>
+            <tr
+              key={deal.id}
+              id={`deal-${deal.id}`}
+              tabIndex={deal.id === selectedRecord ? -1 : undefined}
+              aria-current={deal.id === selectedRecord ? 'true' : undefined}
+            >
               <td>{deal.name}</td>
               <td>{deal.stageName}</td>
               <td>
@@ -1502,7 +2016,7 @@ function Notifications({
         ♧
       </button>
       {open && (
-        <section className="notification-inbox" aria-label="Notifications">
+        <section className="notification-inbox" aria-label="Notifications" role="region">
           <label>
             Show unread only
             <input
@@ -1636,7 +2150,20 @@ function App() {
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
-      notificationsContent={(navigate) => <Notifications navigate={navigate} />}
+      globalSearchContent={(navigate) => <GlobalSearch onNavigate={navigate} />}
+      notificationsContent={(navigate) => (
+        <Notifications
+          navigate={(page, recordId) => {
+            if (recordId)
+              window.history.replaceState(
+                null,
+                '',
+                `${window.location.pathname}?record=${encodeURIComponent(recordId)}`,
+              );
+            navigate(page);
+          }}
+        />
+      )}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

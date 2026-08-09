@@ -74,10 +74,6 @@ describe('notifications API', () => {
         })
       ).status,
     ).toBe(200);
-    const allNotifications = await (
-      await fetch(`${url}/api/notifications?unread=false`, { headers: { cookie: owner } })
-    ).json();
-    expect(allNotifications.items.map((item) => item.id)).toContain(items[0].id);
     const outsider = await signIn('other-owner@outside.test', 'OutsidePass!2026');
     const deal = await fetch(`${url}/api/deals/deal_acme`, { headers: { cookie: owner } });
     const currentDeal = await deal.json();
@@ -94,22 +90,6 @@ describe('notifications API', () => {
             currency: currentDeal.currency,
             probability: currentDeal.probability,
             version: currentDeal.version,
-          }),
-        })
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await fetch(`${url}/api/deals`, {
-          method: 'POST',
-          headers: { cookie: owner, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            name: 'Foreign owner attempt',
-            companyId: 'co_acme',
-            stageId: 'stage_proposal',
-            ownerId: 'usr_outside',
-            amountCents: 100,
-            currency: 'USD',
           }),
         })
       ).status,

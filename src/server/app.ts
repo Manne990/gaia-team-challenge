@@ -144,6 +144,7 @@ const taskUpdateInput = taskInput.extend({ version: z.coerce.number().int().posi
 const taskListQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  text: z.string().trim().max(200).optional(),
   assigneeId: z.string().trim().optional(),
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
   relation: z.enum(['company', 'contact', 'deal']).optional(),
@@ -152,6 +153,29 @@ const taskListQuery = z.object({
   includeArchived: z.coerce.boolean().default(false),
   sort: z.enum(['dueAt', 'createdAt', 'updatedAt', 'priority']).default('dueAt'),
   direction: z.enum(['asc', 'desc']).default('asc'),
+});
+const dealListQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  text: z.string().trim().max(200).optional(),
+  companyId: z.string().trim().min(1).optional(),
+  ownerId: z.string().trim().min(1).optional(),
+  stageId: z.string().trim().min(1).optional(),
+  status: z.enum(['open', 'won', 'lost']).optional(),
+  includeArchived: z.coerce.boolean().default(false),
+  sort: z
+    .enum(['name', 'amount', 'createdAt', 'updatedAt', 'expectedCloseDate'])
+    .default('updatedAt'),
+  direction: z.enum(['asc', 'desc']).default('desc'),
+});
+const searchQuery = z.object({
+  q: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(25).default(10),
+});
+const savedViewInput = z.object({
+  resource: z.enum(['companies', 'contacts', 'deals', 'tasks']),
+  name: z.string().trim().min(1).max(120),
+  filters: z.record(z.string(), z.unknown()).refine((filters) => Object.keys(filters).length <= 30),
 });
 const notificationListQuery = z.object({
   unread: z.preprocess(
@@ -187,10 +211,10 @@ export function createApp(config: AppConfig) {
   const createNotification = (
     organizationId: string,
     userId: string | null,
-    type: 'task_assigned' | 'task_due' | 'task_overdue' | 'deal_changed',
+    type: 'task_due' | 'task_overdue',
     dedupeKey: string,
     payload: unknown,
-    createdAt = new Date().toISOString(),
+    createdAt: string,
   ) => {
     if (!userId) return;
     database
@@ -210,12 +234,12 @@ export function createApp(config: AppConfig) {
   const generateDueNotifications = (organizationId: string, now = new Date()) => {
     const instant = now.toISOString();
     const day = instant.slice(0, 10);
-    const approaching = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    const approaching = new Date(now.getTime() + 86400000).toISOString();
     for (const task of database
       .prepare(
         "SELECT id, title, assignee_id AS assigneeId, due_at AS dueAt FROM tasks WHERE organization_id = ? AND archived_at IS NULL AND status NOT IN ('completed', 'cancelled') AND assignee_id IS NOT NULL AND due_at IS NOT NULL AND due_at <= ?",
       )
-      .all(organizationId, approaching)) {
+      .all(organizationId, approaching) as any[]) {
       const overdue = task.dueAt < instant;
       createNotification(
         organizationId,
@@ -514,6 +538,7 @@ export function createApp(config: AppConfig) {
       const ownerId = typeof request.query.ownerId === 'string' ? request.query.ownerId : null;
       const tag = typeof request.query.tag === 'string' ? request.query.tag : null;
       const sort = typeof request.query.sort === 'string' ? request.query.sort : 'name';
+      const direction = request.query.direction === 'desc' ? 'DESC' : 'ASC';
       const archived = request.query.archived === 'true';
       const where = [
         'organization_id = ?',
@@ -543,12 +568,12 @@ export function createApp(config: AppConfig) {
       const clause = where.join(' AND ');
       const order =
         sort === 'createdAt'
-          ? 'created_at DESC'
+          ? `created_at ${direction}`
           : sort === 'updatedAt'
-            ? 'updated_at DESC'
+            ? `updated_at ${direction}`
             : sort === 'email'
-              ? 'email COLLATE NOCASE'
-              : 'last_name COLLATE NOCASE, first_name COLLATE NOCASE';
+              ? `email COLLATE NOCASE ${direction}`
+              : `last_name COLLATE NOCASE ${direction}, first_name COLLATE NOCASE ${direction}`;
       const total = database
         .prepare(`SELECT count(*) AS total FROM contacts WHERE ${clause}`)
         .get(...args).total;
@@ -870,6 +895,10 @@ export function createApp(config: AppConfig) {
       const where = ['organization_id = ?'];
       const args: unknown[] = [s.organizationId];
       if (!query.includeArchived) where.push('archived_at IS NULL');
+      if (query.text) {
+        where.push('(title LIKE ? OR description LIKE ?)');
+        args.push(`%${query.text}%`, `%${query.text}%`);
+      }
       if (query.assigneeId === 'me') {
         where.push('assignee_id = ?');
         args.push(s.userId);
@@ -956,18 +985,6 @@ export function createApp(config: AppConfig) {
             now,
             now,
           );
-        createNotification(
-          s.organizationId,
-          input.assigneeId || null,
-          'task_assigned',
-          `${id}:assignment:${input.assigneeId}`,
-          {
-            recordType: 'task',
-            recordId: id,
-            title: input.title,
-          },
-          now,
-        );
         auditTask(s.organizationId, s.userId, 'task.created', id, { title: input.title });
       });
       return response
@@ -1037,19 +1054,6 @@ export function createApp(config: AppConfig) {
             existing.id,
             s.organizationId,
             input.version,
-          );
-        if (input.assigneeId && input.assigneeId !== existing.assignee_id)
-          createNotification(
-            s.organizationId,
-            input.assigneeId,
-            'task_assigned',
-            `${existing.id}:assignment:${input.assigneeId}:${now}`,
-            {
-              recordType: 'task',
-              recordId: existing.id,
-              title: input.title,
-            },
-            now,
           );
         auditTask(s.organizationId, s.userId, 'task.updated', existing.id, {
           status: input.status,
@@ -1466,6 +1470,158 @@ export function createApp(config: AppConfig) {
       }
     });
   }
+
+  app.get('/api/search', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const params = new URL(request.originalUrl, 'http://localhost').searchParams;
+      const { q, limit } = searchQuery.parse({
+        q: params.get('q') ?? undefined,
+        limit: params.get('limit') ?? undefined,
+      });
+      const like = `%${q}%`;
+      const grouped = {
+        companies: database
+          .prepare(
+            'SELECT id, name AS label, coalesce(industry, lifecycle_status) AS context FROM companies WHERE organization_id = ? AND archived_at IS NULL AND (name LIKE ? OR external_reference LIKE ?) ORDER BY name COLLATE NOCASE, id LIMIT ?',
+          )
+          .all(session.organizationId, like, like, limit),
+        contacts: database
+          .prepare(
+            "SELECT id, first_name || ' ' || last_name AS label, coalesce(email, job_title, '') AS context FROM contacts WHERE organization_id = ? AND archived_at IS NULL AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?) ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE, id LIMIT ?",
+          )
+          .all(session.organizationId, like, like, like, limit),
+        deals: database
+          .prepare(
+            "SELECT id, name AS label, currency || ' ' || amount_cents AS context FROM deals WHERE organization_id = ? AND archived_at IS NULL AND name LIKE ? ORDER BY updated_at DESC, id LIMIT ?",
+          )
+          .all(session.organizationId, like, limit),
+        tasks: database
+          .prepare(
+            'SELECT id, title AS label, status AS context FROM tasks WHERE organization_id = ? AND archived_at IS NULL AND (title LIKE ? OR description LIKE ?) ORDER BY updated_at DESC, id LIMIT ?',
+          )
+          .all(session.organizationId, like, like, limit),
+      };
+      return response.json({ query: q, groups: grouped });
+    } catch (error) {
+      if (error instanceof AuthError)
+        return response.status(401).json({
+          error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' },
+        });
+      return response.status(400).json({
+        error: { code: 'VALIDATION', message: 'Enter a search term up to 200 characters.' },
+      });
+    }
+  });
+
+  app.get('/api/saved-views', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const params = new URL(request.originalUrl, 'http://localhost').searchParams;
+      const resource = z
+        .enum(['companies', 'contacts', 'deals', 'tasks'])
+        .optional()
+        .parse(params.get('resource') ?? undefined);
+      const suffix = resource ? ' AND resource = ?' : '';
+      const rows = database
+        .prepare(
+          `SELECT id, resource, name, filters_json AS filtersJson, created_at AS createdAt, updated_at AS updatedAt FROM saved_views WHERE organization_id = ? AND user_id = ?${suffix} ORDER BY resource, name COLLATE NOCASE`,
+        )
+        .all(session.organizationId, session.userId, ...(resource ? [resource] : []));
+      return response.json({
+        items: rows.map((row: any) => ({ ...row, filters: JSON.parse(row.filtersJson) })),
+      });
+    } catch (error) {
+      return response.status(error instanceof AuthError ? 401 : 400).json({
+        error: {
+          code: error instanceof AuthError ? 'UNAUTHENTICATED' : 'VALIDATION',
+          message: 'Saved views could not be loaded.',
+        },
+      });
+    }
+  });
+  app.post('/api/saved-views', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const input = savedViewInput.parse(request.body);
+      const now = new Date().toISOString();
+      const id = `view_${randomUUID()}`;
+      database
+        .prepare(
+          'INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          id,
+          session.organizationId,
+          session.userId,
+          input.resource,
+          input.name,
+          JSON.stringify(input.filters),
+          now,
+          now,
+        );
+      return response.status(201).json({ id, ...input, createdAt: now, updatedAt: now });
+    } catch (error) {
+      if (String(error).includes('UNIQUE constraint'))
+        return response
+          .status(409)
+          .json({ error: { code: 'CONFLICT', message: 'A saved view already has this name.' } });
+      return response.status(error instanceof AuthError ? 401 : 400).json({
+        error: {
+          code: error instanceof AuthError ? 'UNAUTHENTICATED' : 'VALIDATION',
+          message: 'Saved view could not be created.',
+        },
+      });
+    }
+  });
+  app.put('/api/saved-views/:id', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const input = savedViewInput.parse(request.body);
+      const result = database
+        .prepare(
+          'UPDATE saved_views SET resource = ?, name = ?, filters_json = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND user_id = ?',
+        )
+        .run(
+          input.resource,
+          input.name,
+          JSON.stringify(input.filters),
+          new Date().toISOString(),
+          request.params.id,
+          session.organizationId,
+          session.userId,
+        );
+      if (!result.changes)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'Saved view was not found.' } });
+      return response.status(204).end();
+    } catch (error) {
+      return response.status(error instanceof AuthError ? 401 : 400).json({
+        error: {
+          code: error instanceof AuthError ? 'UNAUTHENTICATED' : 'VALIDATION',
+          message: 'Saved view could not be updated.',
+        },
+      });
+    }
+  });
+  app.delete('/api/saved-views/:id', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const result = database
+        .prepare('DELETE FROM saved_views WHERE id = ? AND organization_id = ? AND user_id = ?')
+        .run(request.params.id, session.organizationId, session.userId);
+      return result.changes
+        ? response.status(204).end()
+        : response
+            .status(404)
+            .json({ error: { code: 'NOT_FOUND', message: 'Saved view was not found.' } });
+    } catch (error) {
+      return response
+        .status(401)
+        .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
+    }
+  });
 
   app.get('/api/activities', (request, response) => {
     try {
@@ -1913,11 +2069,9 @@ export function createApp(config: AppConfig) {
   app.get('/api/deals', (request, response) => {
     try {
       const s = dealSession(request);
-      const page = Math.max(1, Number(request.query.page) || 1);
-      const size = Math.min(100, Math.max(1, Number(request.query.pageSize) || 25));
-      const includeArchived = request.query.includeArchived === 'true';
+      const query = dealListQuery.parse(request.query);
       const where = ['deals.organization_id = ?'];
-      if (!includeArchived) where.push('deals.archived_at IS NULL');
+      if (!query.includeArchived) where.push('deals.archived_at IS NULL');
       const args: unknown[] = [s.organizationId];
       for (const [key, column] of [
         ['companyId', 'company_id'],
@@ -1925,10 +2079,14 @@ export function createApp(config: AppConfig) {
         ['stageId', 'stage_id'],
         ['status', 'status'],
       ] as const)
-        if (typeof request.query[key] === 'string') {
+        if (query[key]) {
           where.push(`deals.${column} = ?`);
-          args.push(request.query[key]);
+          args.push(query[key]);
         }
+      if (query.text) {
+        where.push('deals.name LIKE ?');
+        args.push(`%${query.text}%`);
+      }
       const clause = where.join(' AND ');
       const total = database
         .prepare(`SELECT count(*) AS total FROM deals WHERE ${clause}`)
@@ -1940,10 +2098,24 @@ export function createApp(config: AppConfig) {
         .all(...args);
       const items = database
         .prepare(
-          `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE ${clause} ORDER BY deals.updated_at DESC LIMIT ? OFFSET ?`,
+          `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE ${clause} ORDER BY deals.${
+            {
+              name: 'name COLLATE NOCASE',
+              amount: 'amount_cents',
+              createdAt: 'created_at',
+              updatedAt: 'updated_at',
+              expectedCloseDate: 'expected_close_date',
+            }[query.sort]
+          } ${query.direction.toUpperCase()}, deals.id ASC LIMIT ? OFFSET ?`,
         )
-        .all(...args, size, (page - 1) * size);
-      return response.json({ items, page, pageSize: size, total, aggregates });
+        .all(...args, query.pageSize, (query.page - 1) * query.pageSize);
+      return response.json({
+        items,
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        aggregates,
+      });
     } catch (error) {
       return dealError(error, response);
     }
@@ -2161,19 +2333,6 @@ export function createApp(config: AppConfig) {
           JSON.stringify({ version: d.version }),
           now,
         );
-      if (d.ownerId && d.ownerId !== s.userId)
-        createNotification(
-          s.organizationId,
-          d.ownerId,
-          'deal_changed',
-          `${request.params.id}:updated:${d.version + 1}`,
-          {
-            recordType: 'deal',
-            recordId: request.params.id,
-            title: d.name,
-          },
-          now,
-        );
       return response.json(
         database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
       );
@@ -2195,7 +2354,7 @@ export function createApp(config: AppConfig) {
       const changed = transaction(() => {
         const current = database
           .prepare(
-            'SELECT stage_id AS stageId, owner_id AS ownerId, name, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
+            'SELECT stage_id AS stageId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
           )
           .get(request.params.id, s.organizationId);
         const target = database
@@ -2222,20 +2381,6 @@ export function createApp(config: AppConfig) {
             input.version,
           );
         if (!update.changes) return null;
-        if (current.ownerId && current.ownerId !== s.userId)
-          createNotification(
-            s.organizationId,
-            current.ownerId,
-            'deal_changed',
-            `${request.params.id}:transition:${input.version + 1}`,
-            {
-              recordType: 'deal',
-              recordId: request.params.id,
-              title: current.name,
-              stageId: input.stageId,
-            },
-            now,
-          );
         database
           .prepare(
             'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, actor_id, changed_at, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
