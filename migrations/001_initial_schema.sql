@@ -174,6 +174,7 @@ CREATE TABLE deal_stage_history (
   changed_at TEXT NOT NULL,
   reason TEXT,
   FOREIGN KEY (organization_id, deal_id) REFERENCES deals(organization_id, id),
+  FOREIGN KEY (organization_id, from_stage_id) REFERENCES pipeline_stages(organization_id, id),
   FOREIGN KEY (organization_id, to_stage_id) REFERENCES pipeline_stages(organization_id, id)
 );
 
@@ -326,6 +327,18 @@ CREATE TRIGGER saved_views_tenant_immutable BEFORE UPDATE OF organization_id ON 
 CREATE TRIGGER imports_tenant_immutable BEFORE UPDATE OF organization_id ON imports FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'import organization is immutable'); END;
 CREATE TRIGGER merge_redirects_tenant_immutable BEFORE UPDATE OF organization_id ON merge_redirects FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'merge redirect organization is immutable'); END;
 CREATE TRIGGER audit_events_tenant_immutable BEFORE UPDATE OF organization_id ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit event organization is immutable'); END;
+
+-- A member cannot be removed while current organization-scoped records still
+-- designate them as an owner, assignee, recipient, or active-session holder.
+CREATE TRIGGER memberships_references_guard BEFORE DELETE ON memberships FOR EACH ROW BEGIN
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM sessions WHERE organization_id = OLD.organization_id AND user_id = OLD.user_id AND revoked_at IS NULL) THEN RAISE(ABORT, 'revoke active sessions before removing membership') END;
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM companies WHERE organization_id = OLD.organization_id AND owner_id = OLD.user_id) THEN RAISE(ABORT, 'reassign company ownership before removing membership') END;
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM contacts WHERE organization_id = OLD.organization_id AND owner_id = OLD.user_id) THEN RAISE(ABORT, 'reassign contact ownership before removing membership') END;
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM deals WHERE organization_id = OLD.organization_id AND owner_id = OLD.user_id) THEN RAISE(ABORT, 'reassign deal ownership before removing membership') END;
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM tasks WHERE organization_id = OLD.organization_id AND assignee_id = OLD.user_id AND status NOT IN ('completed', 'cancelled')) THEN RAISE(ABORT, 'reassign open tasks before removing membership') END;
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM notifications WHERE organization_id = OLD.organization_id AND user_id = OLD.user_id AND read_at IS NULL) THEN RAISE(ABORT, 'resolve notifications before removing membership') END;
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM saved_views WHERE organization_id = OLD.organization_id AND user_id = OLD.user_id) THEN RAISE(ABORT, 'delete saved views before removing membership') END;
+END;
 
 CREATE INDEX companies_org_name_idx ON companies(organization_id, name);
 CREATE INDEX contacts_org_name_idx ON contacts(organization_id, last_name, first_name);

@@ -73,6 +73,21 @@ try {
   assert.throws(() =>
     db
       .prepare(
+        'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, changed_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'bad-history',
+        'org_northstar',
+        'deal_acme',
+        'stage_missing',
+        'stage_won',
+        '2026-01-15T12:00:00.000Z',
+      ),
+  );
+  assert.throws(() => db.prepare('DELETE FROM memberships WHERE id = ?').run('mem_owner'));
+  assert.throws(() =>
+    db
+      .prepare(
         'INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
