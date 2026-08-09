@@ -65,5 +65,13 @@ describe('deals API', () => {
     expect(
       (await (await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie } })).json()).history,
     ).toHaveLength(2);
+    expect(
+      (await fetch(`${url}/api/deals/${deal.id}/archive`, { method: 'POST', headers: { cookie } }))
+        .status,
+    ).toBe(204);
+    expect(
+      (await fetch(`${url}/api/deals/${deal.id}/restore`, { method: 'POST', headers: { cookie } }))
+        .status,
+    ).toBe(204);
   });
 });
