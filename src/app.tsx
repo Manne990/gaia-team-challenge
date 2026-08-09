@@ -272,9 +272,10 @@ function ListPage({
 }) {
   const [contactRows, setContactRows] = useState<Array<string[]>>([]);
   const [contactSearch, setContactSearch] = useState('');
+  const [contactSort, setContactSort] = useState('name');
   useEffect(() => {
     if (page === 'Contacts')
-      fetch(`/api/contacts?query=${encodeURIComponent(contactSearch)}`)
+      fetch(`/api/contacts?query=${encodeURIComponent(contactSearch)}&sort=${contactSort}`)
         .then((response) => (response.ok ? response.json() : { items: [] }))
         .then((data) =>
           setContactRows(
@@ -287,7 +288,7 @@ function ListPage({
             ]),
           ),
         );
-  }, [page, contactSearch]);
+  }, [page, contactSearch, contactSort]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
   const companies = page === 'Contacts' ? contactRows : companiesFor(workspace, user);
   return (
@@ -340,10 +341,29 @@ function ListPage({
           <button className="secondary">
             Filter <span aria-hidden="true">⌄</span>
           </button>
-          <button className="secondary">
+          <button
+            className="secondary"
+            onClick={
+              page === 'Contacts'
+                ? () => setContactSort(contactSort === 'name' ? 'createdAt' : 'name')
+                : undefined
+            }
+          >
             Sort <span aria-hidden="true">⌄</span>
           </button>
-          <button className="text-button">Clear all</button>
+          <button
+            className="text-button"
+            onClick={
+              page === 'Contacts'
+                ? () => {
+                    setContactSearch('');
+                    setContactSort('name');
+                  }
+                : undefined
+            }
+          >
+            Clear all
+          </button>
         </div>
         <div className="table-wrap">
           <table>
