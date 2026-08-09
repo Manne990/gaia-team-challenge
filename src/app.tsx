@@ -643,6 +643,7 @@ function ListPage({
             ))}
           </ul>
         </div>
+      )}
       {page === 'Contacts' && duplicateCandidates.length > 0 && (
         <section className="panel" aria-label="Duplicate contact review">
           <h2>Duplicate contact review</h2>
