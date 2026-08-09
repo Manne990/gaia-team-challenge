@@ -751,11 +751,9 @@ export function createApp(config: AppConfig) {
           )
           .get(session.organizationId).total <= 1
       )
-        return response
-          .status(400)
-          .json({
-            error: { code: 'LAST_OWNER', message: 'An organization must keep at least one owner.' },
-          });
+        return response.status(400).json({
+          error: { code: 'LAST_OWNER', message: 'An organization must keep at least one owner.' },
+        });
       database
         .prepare(
           'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
