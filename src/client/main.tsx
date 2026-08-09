@@ -1989,6 +1989,72 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
+function Notifications({
+  navigate,
+}: {
+  navigate: (page: 'Tasks' | 'Deals', recordId?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [unread, setUnread] = useState(true);
+  const [items, setItems] = useState<any[]>([]);
+  const load = async () => {
+    const response = await fetch(`/api/notifications?unread=${unread}`);
+    if (response.ok) setItems((await response.json()).items);
+  };
+  useEffect(() => {
+    if (open) void load();
+  }, [unread]);
+  return (
+    <div className="notifications">
+      <button
+        aria-label="Notifications"
+        onClick={() => {
+          setOpen(!open);
+          if (!open) void load();
+        }}
+      >
+        ♧
+      </button>
+      {open && (
+        <section className="notification-inbox" aria-label="Notifications">
+          <label>
+            Show unread only
+            <input
+              type="checkbox"
+              checked={unread}
+              onChange={(event) => setUnread(event.target.checked)}
+            />
+          </label>
+          <button
+            onClick={async () => {
+              await fetch('/api/notifications/read-all', { method: 'POST' });
+              await load();
+            }}
+          >
+            Mark all read
+          </button>
+          <ul>
+            {items.map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={async () => {
+                    const payload = JSON.parse(item.payloadJson);
+                    await fetch(`/api/notifications/${item.id}/read`, { method: 'POST' });
+                    navigate(payload.recordType === 'deal' ? 'Deals' : 'Tasks', payload.recordId);
+                  }}
+                >
+                  {JSON.parse(item.payloadJson).title}
+                </button>
+              </li>
+            ))}
+            {!items.length && <li>No unread notifications.</li>}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
