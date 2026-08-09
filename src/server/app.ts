@@ -177,6 +177,13 @@ const savedViewInput = z.object({
   name: z.string().trim().min(1).max(120),
   filters: z.record(z.string(), z.unknown()).refine((filters) => Object.keys(filters).length <= 30),
 });
+const notificationListQuery = z.object({
+  unread: z.preprocess(
+    (value) => (value === 'true' ? true : value === 'false' ? false : value),
+    z.boolean().default(false),
+  ),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
