@@ -970,8 +970,9 @@ function Imports({ canWrite }: { canWrite: boolean }) {
 function Tasks({ canWrite }: { canWrite: boolean }) {
   const [items, setItems] = useState<any[]>([]);
   const [message, setMessage] = useState('');
-  const load = async () => {
-    const response = await fetch('/api/tasks?sort=dueAt');
+  const [due, setDue] = useState('');
+  const load = async (nextDue = due) => {
+    const response = await fetch(`/api/tasks?sort=dueAt${nextDue ? `&due=${nextDue}` : ''}`);
     if (response.ok) setItems((await response.json()).items);
   };
   useEffect(() => {
@@ -994,6 +995,25 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           <h1 id="tasks-heading">Tasks</h1>
         </div>
       </div>
+      <form
+        aria-label="Task views"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          Due state
+          <select value={due} onChange={(event) => setDue(event.target.value)}>
+            <option value="">All active tasks</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+          </select>
+        </label>
+        <button>Apply view</button>
+      </form>
       {canWrite && (
         <form
           aria-label="Create task"
@@ -1008,6 +1028,9 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
                 description: form.get('description'),
                 dueAt: form.get('dueAt') ? new Date(String(form.get('dueAt'))).toISOString() : null,
                 priority: form.get('priority'),
+                assigneeId: form.get('assigneeId') || null,
+                companyId: form.get('companyId') || null,
+                contactId: form.get('contactId') || null,
               }),
             });
             if (response.ok) {
@@ -1037,6 +1060,18 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
+          </label>
+          <label>
+            Assignee ID
+            <input name="assigneeId" />
+          </label>
+          <label>
+            Company ID
+            <input name="companyId" />
+          </label>
+          <label>
+            Contact ID
+            <input name="contactId" />
           </label>
           <button>Create task</button>
         </form>
