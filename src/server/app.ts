@@ -869,18 +869,18 @@ export function createApp(config: AppConfig) {
           `SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName, contacts.email, contacts.phone, contacts.job_title AS jobTitle, contacts.company_id AS companyId, contacts.owner_id AS ownerId, contacts.status, contacts.tags_json AS tagsJson, contacts.communication_preference AS communicationPreference, contacts.created_at AS createdAt, contacts.updated_at AS updatedAt, contacts.archived_at AS archivedAt, contacts.version, companies.name AS companyName FROM contacts LEFT JOIN companies ON companies.id = contacts.company_id AND companies.organization_id = contacts.organization_id WHERE contacts.id = ? AND contacts.organization_id = ?`,
         )
         .get(request.params.id, s.organizationId);
-      if (!c || c.archivedAt) {
+      for (let hop = 0; c?.archivedAt && hop < 20; hop += 1) {
         const redirect = database
           .prepare(
             "SELECT target_id FROM merge_redirects WHERE organization_id = ? AND resource = 'contacts' AND source_id = ?",
           )
-          .get(s.organizationId, request.params.id);
-        if (redirect)
-          c = database
-            .prepare(
-              `SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName, contacts.email, contacts.phone, contacts.job_title AS jobTitle, contacts.company_id AS companyId, contacts.owner_id AS ownerId, contacts.status, contacts.tags_json AS tagsJson, contacts.communication_preference AS communicationPreference, contacts.created_at AS createdAt, contacts.updated_at AS updatedAt, contacts.archived_at AS archivedAt, contacts.version, companies.name AS companyName FROM contacts LEFT JOIN companies ON companies.id = contacts.company_id AND companies.organization_id = contacts.organization_id WHERE contacts.id = ? AND contacts.organization_id = ?`,
-            )
-            .get(redirect.target_id, s.organizationId);
+          .get(s.organizationId, c.id);
+        if (!redirect) break;
+        c = database
+          .prepare(
+            `SELECT contacts.id, contacts.first_name AS firstName, contacts.last_name AS lastName, contacts.email, contacts.phone, contacts.job_title AS jobTitle, contacts.company_id AS companyId, contacts.owner_id AS ownerId, contacts.status, contacts.tags_json AS tagsJson, contacts.communication_preference AS communicationPreference, contacts.created_at AS createdAt, contacts.updated_at AS updatedAt, contacts.archived_at AS archivedAt, contacts.version, companies.name AS companyName FROM contacts LEFT JOIN companies ON companies.id = contacts.company_id AND companies.organization_id = contacts.organization_id WHERE contacts.id = ? AND contacts.organization_id = ?`,
+          )
+          .get(redirect.target_id, s.organizationId);
       }
       return c
         ? response.json({
@@ -1488,10 +1488,21 @@ export function createApp(config: AppConfig) {
   app.get('/api/companies/:id', (request, response) => {
     try {
       const session = auth.authenticate(cookieToken(request.headers.cookie));
-      const company = database
+      let company = database
         .prepare('SELECT * FROM companies WHERE id = ? AND organization_id = ?')
         .get(request.params.id, session.organizationId);
-      if (!company)
+      for (let hop = 0; company?.archived_at && hop < 20; hop += 1) {
+        const redirect = database
+          .prepare(
+            "SELECT target_id FROM merge_redirects WHERE organization_id = ? AND resource = 'companies' AND source_id = ?",
+          )
+          .get(session.organizationId, company.id);
+        if (!redirect) break;
+        company = database
+          .prepare('SELECT * FROM companies WHERE id = ? AND organization_id = ?')
+          .get(redirect.target_id, session.organizationId);
+      }
+      if (!company || company.archived_at)
         return response
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
