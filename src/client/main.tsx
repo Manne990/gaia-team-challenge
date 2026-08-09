@@ -2016,7 +2016,7 @@ function Notifications({
         ♧
       </button>
       {open && (
-        <section className="notification-inbox" aria-label="Notifications">
+        <section className="notification-inbox" aria-label="Notifications" role="region">
           <label>
             Show unread only
             <input
@@ -2151,6 +2151,7 @@ function App() {
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
       globalSearchContent={(navigate) => <GlobalSearch onNavigate={navigate} />}
+      notificationsContent={<Notifications navigate={() => {}} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
