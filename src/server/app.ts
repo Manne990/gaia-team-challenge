@@ -208,6 +208,49 @@ export function createApp(config: AppConfig) {
       throw error;
     }
   };
+  const createNotification = (
+    organizationId: string,
+    userId: string | null,
+    type: 'task_due' | 'task_overdue',
+    dedupeKey: string,
+    payload: unknown,
+    createdAt: string,
+  ) => {
+    if (!userId) return;
+    database
+      .prepare(
+        'INSERT OR IGNORE INTO notifications (id, organization_id, user_id, type, dedupe_key, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        `ntf_${randomUUID()}`,
+        organizationId,
+        userId,
+        type,
+        dedupeKey,
+        JSON.stringify(payload),
+        createdAt,
+      );
+  };
+  const generateDueNotifications = (organizationId: string, now = new Date()) => {
+    const instant = now.toISOString();
+    const day = instant.slice(0, 10);
+    const approaching = new Date(now.getTime() + 86400000).toISOString();
+    for (const task of database
+      .prepare(
+        "SELECT id, title, assignee_id AS assigneeId, due_at AS dueAt FROM tasks WHERE organization_id = ? AND archived_at IS NULL AND status NOT IN ('completed', 'cancelled') AND assignee_id IS NOT NULL AND due_at IS NOT NULL AND due_at <= ?",
+      )
+      .all(organizationId, approaching) as any[]) {
+      const overdue = task.dueAt < instant;
+      createNotification(
+        organizationId,
+        task.assigneeId,
+        overdue ? 'task_overdue' : 'task_due',
+        `${task.id}:${overdue ? 'overdue' : 'due'}:${overdue ? day : task.dueAt.slice(0, 10)}`,
+        { recordType: 'task', recordId: task.id, title: task.title, dueAt: task.dueAt },
+        instant,
+      );
+    }
+  };
   const activityFields = `
     id, type, subject, body, occurred_at AS occurredAt, creator_id AS creatorId,
     creator_name_snapshot AS creatorName, company_id AS companyId,
@@ -797,6 +840,54 @@ export function createApp(config: AppConfig) {
         JSON.stringify(summary),
         new Date().toISOString(),
       );
+  app.get('/api/notifications', (request, response) => {
+    try {
+      const session = taskSession(request);
+      const query = notificationListQuery.parse(request.query);
+      generateDueNotifications(session.organizationId);
+      const where = ['organization_id = ?', 'user_id = ?'];
+      if (query.unread) where.push('read_at IS NULL');
+      return response.json({
+        items: database
+          .prepare(
+            `SELECT id, type, payload_json AS payloadJson, created_at AS createdAt, read_at AS readAt FROM notifications WHERE ${where.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`,
+          )
+          .all(session.organizationId, session.userId, query.limit),
+      });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.post('/api/notifications/:id/read', (request, response) => {
+    try {
+      const session = taskSession(request);
+      const result = database
+        .prepare(
+          'UPDATE notifications SET read_at = coalesce(read_at, ?) WHERE id = ? AND organization_id = ? AND user_id = ?',
+        )
+        .run(new Date().toISOString(), request.params.id, session.organizationId, session.userId);
+      if (!result.changes)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This notification was not found.' } });
+      return response.json({ ok: true });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.post('/api/notifications/read-all', (request, response) => {
+    try {
+      const session = taskSession(request);
+      const result = database
+        .prepare(
+          'UPDATE notifications SET read_at = ? WHERE organization_id = ? AND user_id = ? AND read_at IS NULL',
+        )
+        .run(new Date().toISOString(), session.organizationId, session.userId);
+      return response.json({ updated: result.changes });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
   app.get('/api/tasks', (request, response) => {
     try {
       const s = taskSession(request);
