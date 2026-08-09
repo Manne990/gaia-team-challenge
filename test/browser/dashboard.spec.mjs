@@ -54,6 +54,8 @@ test('dashboard derives metrics and opens their filtered records', async ({ page
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Open pipeline value/ })).toBeVisible();
     const dashboard = async () => {
+      const openNavigation = page.getByRole('button', { name: 'Open navigation' });
+      if (await openNavigation.isVisible()) await openNavigation.click();
       await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     };
