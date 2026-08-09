@@ -31,6 +31,7 @@ const contactInput = z.object({
   communicationPreference: z.enum(['email', 'phone', 'none']).optional().default('email'),
   version: z.number().int().positive().optional(),
 });
+const contactUpdateInput = contactInput.extend({ version: z.number().int().positive() });
 const contactFields = `id, first_name AS firstName, last_name AS lastName, email, phone, job_title AS jobTitle, company_id AS companyId, owner_id AS ownerId, status, tags_json AS tagsJson, communication_preference AS communicationPreference, created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt, version`;
 const cookieToken = (cookie = '') =>
   cookie
@@ -307,12 +308,12 @@ export function createApp(config: AppConfig) {
   app.patch('/api/contacts/:id', (request, response) => {
     try {
       const s = auth.requireRole(contactSession(request), ['owner', 'member']);
-      const c = contactInput.parse(request.body);
+      const c = contactUpdateInput.parse(request.body);
       const now = new Date().toISOString();
       const result = transaction(() => {
         const result = database
           .prepare(
-            `UPDATE contacts SET company_id=?, first_name=?, last_name=?, email=?, phone=?, job_title=?, owner_id=?, status=?, tags_json=?, communication_preference=?, updated_at=?, version=version+1 WHERE id=? AND organization_id=? AND archived_at IS NULL${c.version ? ' AND version = ?' : ''}`,
+            `UPDATE contacts SET company_id=?, first_name=?, last_name=?, email=?, phone=?, job_title=?, owner_id=?, status=?, tags_json=?, communication_preference=?, updated_at=?, version=version+1 WHERE id=? AND organization_id=? AND archived_at IS NULL AND version = ?`,
           )
           .run(
             c.companyId || null,
@@ -328,7 +329,7 @@ export function createApp(config: AppConfig) {
             now,
             request.params.id,
             s.organizationId,
-            ...(c.version ? [c.version] : []),
+            c.version,
           );
         if (result.changes)
           auditContact(s.organizationId, s.userId, 'updated', request.params.id, {

@@ -289,18 +289,7 @@ function ListPage({
         );
   }, [page, contactSearch]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
-  const companies =
-    page === 'Contacts' && contactRows.length
-      ? contactRows
-      : page === 'Contacts'
-        ? workspace.id === 'org_northstar'
-          ? [
-              ['Ada Lovelace', 'Acme Industries', 'Active', 'Northstar Member', 'Today'],
-              ['Grace Hopper', 'Aurora Labs', 'Lead', 'Northstar Member', 'Yesterday'],
-              ['Katherine Johnson', 'Birch & Co', 'Active', 'Northstar Owner', 'Aug 4'],
-            ]
-          : [[workspace.name + ' contact', 'Independent', 'Active', user.displayName, 'Today']]
-        : companiesFor(workspace, user);
+  const companies = page === 'Contacts' ? contactRows : companiesFor(workspace, user);
   return (
     <>
       <div className="page-heading">
