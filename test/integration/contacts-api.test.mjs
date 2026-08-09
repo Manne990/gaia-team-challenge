@@ -49,8 +49,24 @@ describe('contacts API', () => {
     expect(created.status).toBe(201);
     const contact = await created.json();
     expect(contact.email).toBe('new@example.test');
+    const duplicate = await fetch(`${url}/api/contacts`, {
+      method: 'POST',
+      headers: { cookie: owner, 'content-type': 'application/json' },
+      body: JSON.stringify({ firstName: 'Again', lastName: 'Person', email: 'NEW@example.test' }),
+    });
+    expect((await duplicate.json()).duplicateWarning.id).toBe(contact.id);
     expect(
       (await fetch(`${url}/api/contacts?query=New`, { headers: { cookie: owner } })).status,
+    ).toBe(200);
+    expect(
+      (
+        await fetch(`${url}/api/contacts?ownerId=usr_owner&tag=vip&sort=createdAt`, {
+          headers: { cookie: owner },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await fetch(`${url}/api/contacts/${contact.id}`, { headers: { cookie: owner } })).status,
     ).toBe(200);
     expect(
       (
