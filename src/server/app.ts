@@ -2168,7 +2168,7 @@ export function createApp(config: AppConfig) {
       const changed = transaction(() => {
         const current = database
           .prepare(
-            'SELECT stage_id AS stageId, owner_id AS ownerId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
+            'SELECT stage_id AS stageId, owner_id AS ownerId, name, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
           )
           .get(request.params.id, s.organizationId);
         const target = database
@@ -2204,6 +2204,7 @@ export function createApp(config: AppConfig) {
             {
               recordType: 'deal',
               recordId: request.params.id,
+              title: current.name,
               stageId: input.stageId,
             },
             now,

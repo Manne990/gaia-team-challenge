@@ -1465,11 +1465,15 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
 
 function Notifications({ navigate }: { navigate: (page: 'Tasks' | 'Deals') => void }) {
   const [open, setOpen] = useState(false);
+  const [unread, setUnread] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const load = async () => {
-    const response = await fetch('/api/notifications?unread=true');
+    const response = await fetch(`/api/notifications?unread=${unread}`);
     if (response.ok) setItems((await response.json()).items);
   };
+  useEffect(() => {
+    if (open) void load();
+  }, [unread]);
   return (
     <div>
       <button
@@ -1483,6 +1487,14 @@ function Notifications({ navigate }: { navigate: (page: 'Tasks' | 'Deals') => vo
       </button>
       {open && (
         <section aria-label="Notifications">
+          <label>
+            Show unread only
+            <input
+              type="checkbox"
+              checked={unread}
+              onChange={(event) => setUnread(event.target.checked)}
+            />
+          </label>
           <button
             onClick={async () => {
               await fetch('/api/notifications/read-all', { method: 'POST' });
