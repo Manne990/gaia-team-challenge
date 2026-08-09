@@ -45,6 +45,17 @@ export function createApp(config: AppConfig) {
   const database = openDatabase(config.databasePath);
   migrate(database);
   const auth = createAuthService(database);
+  const transaction = <T>(work: () => T): T => {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      const result = work();
+      database.exec('COMMIT');
+      return result;
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error;
+    }
+  };
   const auditContact = (
     organizationId: string,
     actorId: string,
@@ -220,29 +231,31 @@ export function createApp(config: AppConfig) {
             'SELECT id, first_name AS firstName, last_name AS lastName FROM contacts WHERE organization_id = ? AND lower(email) = ? AND archived_at IS NULL',
           )
           .get(s.organizationId, email);
-      database
-        .prepare(
-          `INSERT INTO contacts (id, organization_id, company_id, first_name, last_name, email, phone, job_title, owner_id, status, tags_json, communication_preference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          id,
-          s.organizationId,
-          c.companyId || null,
-          c.firstName,
-          c.lastName,
+      transaction(() => {
+        database
+          .prepare(
+            `INSERT INTO contacts (id, organization_id, company_id, first_name, last_name, email, phone, job_title, owner_id, status, tags_json, communication_preference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            id,
+            s.organizationId,
+            c.companyId || null,
+            c.firstName,
+            c.lastName,
+            email,
+            c.phone || null,
+            c.jobTitle || null,
+            c.ownerId || s.userId,
+            c.status,
+            JSON.stringify(c.tags),
+            c.communicationPreference,
+            now,
+            now,
+          );
+        auditContact(s.organizationId, s.userId, 'created', id, {
           email,
-          c.phone || null,
-          c.jobTitle || null,
-          c.ownerId || s.userId,
-          c.status,
-          JSON.stringify(c.tags),
-          c.communicationPreference,
-          now,
-          now,
-        );
-      auditContact(s.organizationId, s.userId, 'created', id, {
-        email,
-        companyId: c.companyId || null,
+          companyId: c.companyId || null,
+        });
       });
       return response.status(201).json({
         ...database.prepare(`SELECT ${contactFields} FROM contacts WHERE id = ?`).get(id),
@@ -296,26 +309,33 @@ export function createApp(config: AppConfig) {
       const s = auth.requireRole(contactSession(request), ['owner', 'member']);
       const c = contactInput.parse(request.body);
       const now = new Date().toISOString();
-      const result = database
-        .prepare(
-          `UPDATE contacts SET company_id=?, first_name=?, last_name=?, email=?, phone=?, job_title=?, owner_id=?, status=?, tags_json=?, communication_preference=?, updated_at=?, version=version+1 WHERE id=? AND organization_id=? AND archived_at IS NULL${c.version ? ' AND version = ?' : ''}`,
-        )
-        .run(
-          c.companyId || null,
-          c.firstName,
-          c.lastName,
-          c.email ? c.email.toLowerCase() : null,
-          c.phone || null,
-          c.jobTitle || null,
-          c.ownerId || null,
-          c.status,
-          JSON.stringify(c.tags),
-          c.communicationPreference,
-          now,
-          request.params.id,
-          s.organizationId,
-          ...(c.version ? [c.version] : []),
-        );
+      const result = transaction(() => {
+        const result = database
+          .prepare(
+            `UPDATE contacts SET company_id=?, first_name=?, last_name=?, email=?, phone=?, job_title=?, owner_id=?, status=?, tags_json=?, communication_preference=?, updated_at=?, version=version+1 WHERE id=? AND organization_id=? AND archived_at IS NULL${c.version ? ' AND version = ?' : ''}`,
+          )
+          .run(
+            c.companyId || null,
+            c.firstName,
+            c.lastName,
+            c.email ? c.email.toLowerCase() : null,
+            c.phone || null,
+            c.jobTitle || null,
+            c.ownerId || null,
+            c.status,
+            JSON.stringify(c.tags),
+            c.communicationPreference,
+            now,
+            request.params.id,
+            s.organizationId,
+            ...(c.version ? [c.version] : []),
+          );
+        if (result.changes)
+          auditContact(s.organizationId, s.userId, 'updated', request.params.id, {
+            version: c.version || null,
+          });
+        return result;
+      });
       if (!result.changes)
         return response.status(409).json({
           error: {
@@ -323,9 +343,6 @@ export function createApp(config: AppConfig) {
             message: 'This contact changed or is unavailable. Refresh and try again.',
           },
         });
-      auditContact(s.organizationId, s.userId, 'updated', request.params.id, {
-        version: c.version || null,
-      });
       return response.json(
         database
           .prepare(`SELECT ${contactFields} FROM contacts WHERE id = ?`)
@@ -343,19 +360,22 @@ export function createApp(config: AppConfig) {
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'That action does not exist.' } });
       const archived = request.params.action === 'archive' ? new Date().toISOString() : null;
-      const result = database
-        .prepare(
-          'UPDATE contacts SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ?',
-        )
-        .run(archived, new Date().toISOString(), request.params.id, s.organizationId);
-      if (result.changes)
-        auditContact(
-          s.organizationId,
-          s.userId,
-          archived ? 'archived' : 'restored',
-          request.params.id,
-          {},
-        );
+      const result = transaction(() => {
+        const result = database
+          .prepare(
+            'UPDATE contacts SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ?',
+          )
+          .run(archived, new Date().toISOString(), request.params.id, s.organizationId);
+        if (result.changes)
+          auditContact(
+            s.organizationId,
+            s.userId,
+            archived ? 'archived' : 'restored',
+            request.params.id,
+            {},
+          );
+        return result;
+      });
       return result.changes
         ? response.status(204).end()
         : response
