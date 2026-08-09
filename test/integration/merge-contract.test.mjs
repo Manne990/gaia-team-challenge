@@ -68,6 +68,35 @@ describe('explicit contact merge', () => {
     db.prepare(
       'INSERT INTO deal_contacts (deal_id, contact_id, organization_id) VALUES (?, ?, ?)',
     ).run(dealId, 'ct_ada', 'org_northstar');
+    db.prepare(
+      'INSERT INTO tasks (id, organization_id, title, description, priority, status, contact_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      'task_merge',
+      'org_northstar',
+      'Merge task',
+      '',
+      'medium',
+      'open',
+      'ct_duplicate',
+      now,
+      now,
+    );
+    db.prepare(
+      'INSERT INTO activities (id, organization_id, type, subject, body, occurred_at, creator_id, contact_id, participant_names_json, creator_name_snapshot, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      'act_merge',
+      'org_northstar',
+      'note',
+      'Merge history',
+      '',
+      now,
+      'usr_owner',
+      'ct_duplicate',
+      '[]',
+      'Owner',
+      now,
+      now,
+    );
     db.close();
     server = createApp({
       host: '127.0.0.1',
@@ -153,7 +182,11 @@ describe('explicit contact merge', () => {
     expect(retired.status).toBe(200);
     expect((await retired.json()).id).toBe('ct_ada');
     const survivor = await fetch(`${url}/api/contacts/ct_ada`, { headers: { cookie } });
-    expect((await survivor.json()).deals.filter((deal) => deal.id === dealId)).toHaveLength(1);
+    const survivorBody = await survivor.json();
+    expect(survivorBody.deals.filter((deal) => deal.id === dealId)).toHaveLength(1);
+    expect(survivorBody.tasks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'task_merge' })]),
+    );
     const chainedCandidate = (
       await (await fetch(`${url}/api/duplicates/contacts`, { headers: { cookie } })).json()
     ).items.find((item) => item.sourceId === 'ct_ada' && item.targetId === 'ct_third');
