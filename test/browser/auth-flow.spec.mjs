@@ -123,6 +123,11 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
       .join('; ');
     await expect(
       page.request
+        .get(`${url}/api/companies/co_outside`, { headers: { cookie: ownerCookieHeader } })
+        .then((response) => response.status()),
+    ).resolves.toBe(404);
+    await expect(
+      page.request
         .put(`${url}/api/companies/co_outside`, {
           headers: { cookie: ownerCookieHeader, 'content-type': 'application/json' },
           data: { name: 'Mutated outside record' },
@@ -134,6 +139,22 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         .prepare('SELECT name FROM companies WHERE id = ?')
         .get('co_outside'),
     ).toEqual(before);
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByLabel('Email').fill('member@northstar.test');
+    await page.getByLabel('Password').fill('MemberPass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('heading', { name: /Welcome, Northstar Member/ })).toBeVisible();
+    const memberCookieHeader = (await page.context().cookies(url))
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+    await expect(
+      page.request
+        .put(`${url}/api/companies/co_acme`, {
+          headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
+          data: { name: 'Allowed member write' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(409);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
