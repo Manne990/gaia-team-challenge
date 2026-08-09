@@ -1528,6 +1528,56 @@ export function createApp(config: AppConfig) {
       return dealError(error, response);
     }
   });
+  app.post('/api/pipeline/stages', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner']);
+      const input = z
+        .object({
+          name: z.string().trim().min(1).max(120),
+          position: z.number().int().nonnegative(),
+        })
+        .parse(request.body);
+      const stage = transaction(() => {
+        const now = new Date().toISOString();
+        database
+          .prepare(
+            'UPDATE pipeline_stages SET position = position + 1000 WHERE organization_id = ? AND kind = ? AND position >= ?',
+          )
+          .run(s.organizationId, 'open', input.position);
+        database
+          .prepare(
+            'UPDATE pipeline_stages SET position = position - 999 WHERE organization_id = ? AND kind = ? AND position >= ?',
+          )
+          .run(s.organizationId, 'open', input.position + 1000);
+        const id = `stage_${randomUUID()}`;
+        database
+          .prepare(
+            'INSERT INTO pipeline_stages (id, organization_id, name, position, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(id, s.organizationId, input.name, input.position, 'open', now);
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            s.organizationId,
+            s.userId,
+            'pipeline.stage_created',
+            'pipeline_stage',
+            id,
+            JSON.stringify({ name: input.name, position: input.position }),
+            now,
+          );
+        return database
+          .prepare('SELECT id, name, position, kind FROM pipeline_stages WHERE id = ?')
+          .get(id);
+      });
+      return response.status(201).json(stage);
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
   app.post('/api/deals', (request, response) => {
     try {
       const s = auth.requireRole(dealSession(request), ['owner', 'member']);
@@ -1729,14 +1779,12 @@ export function createApp(config: AppConfig) {
       });
       return changed
         ? response.status(204).end()
-        : response
-            .status(409)
-            .json({
-              error: {
-                code: 'CONFLICT',
-                message: 'The deal is already in that state or unavailable.',
-              },
-            });
+        : response.status(409).json({
+            error: {
+              code: 'CONFLICT',
+              message: 'The deal is already in that state or unavailable.',
+            },
+          });
     } catch (error) {
       return dealError(error, response);
     }
