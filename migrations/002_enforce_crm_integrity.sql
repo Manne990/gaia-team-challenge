@@ -1,4 +1,22 @@
 -- Forward-only integrity hardening for databases that already applied 001.
+-- Refuse an upgrade that would otherwise leave a legacy invariant violation in
+-- place: triggers protect future writes but cannot repair existing rows.
+CREATE TABLE integrity_migration_check (valid INTEGER NOT NULL CHECK (valid = 1));
+INSERT INTO integrity_migration_check
+SELECT CASE WHEN EXISTS (
+  SELECT 1 FROM sessions r WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.user_id)
+  UNION ALL SELECT 1 FROM activities r WHERE r.creator_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.creator_id)
+  UNION ALL SELECT 1 FROM deal_stage_history r WHERE (r.actor_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.actor_id)) OR (r.from_stage_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pipeline_stages s WHERE s.organization_id = r.organization_id AND s.id = r.from_stage_id))
+  UNION ALL SELECT 1 FROM notifications r WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.user_id)
+  UNION ALL SELECT 1 FROM saved_views r WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.user_id)
+  UNION ALL SELECT 1 FROM imports r WHERE r.created_by_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.created_by_id)
+  UNION ALL SELECT 1 FROM merge_redirects r WHERE (r.created_by_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.created_by_id)) OR (r.resource = 'companies' AND (NOT EXISTS (SELECT 1 FROM companies c WHERE c.organization_id = r.organization_id AND c.id = r.source_id) OR NOT EXISTS (SELECT 1 FROM companies c WHERE c.organization_id = r.organization_id AND c.id = r.target_id))) OR (r.resource = 'contacts' AND (NOT EXISTS (SELECT 1 FROM contacts c WHERE c.organization_id = r.organization_id AND c.id = r.source_id) OR NOT EXISTS (SELECT 1 FROM contacts c WHERE c.organization_id = r.organization_id AND c.id = r.target_id)))
+  UNION ALL SELECT 1 FROM audit_events r WHERE r.actor_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id = r.organization_id AND m.user_id = r.actor_id)
+  UNION ALL SELECT 1 FROM deals r WHERE NOT EXISTS (SELECT 1 FROM pipeline_stages s WHERE s.organization_id = r.organization_id AND s.id = r.stage_id AND s.kind = r.status)
+  UNION ALL SELECT 1 FROM tasks r WHERE (r.status = 'completed' AND r.completed_at IS NULL) OR (r.status <> 'completed' AND r.completed_at IS NOT NULL)
+) THEN 0 ELSE 1 END;
+DROP TABLE integrity_migration_check;
+
 CREATE TRIGGER sessions_membership_update_guard BEFORE UPDATE OF organization_id, user_id ON sessions FOR EACH ROW BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.user_id) THEN RAISE(ABORT, 'session user is not an organization member') END;
 END;

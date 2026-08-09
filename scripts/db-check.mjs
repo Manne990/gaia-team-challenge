@@ -15,6 +15,19 @@ try {
   upgrade.exec(
     "CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL); INSERT INTO schema_migrations VALUES ('001_initial_schema.sql', '2026-01-15T12:00:00.000Z');",
   );
+  upgrade.exec(`
+    INSERT INTO organizations (id, name, created_at, updated_at) VALUES ('upgrade_a', 'A', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+    INSERT INTO organizations (id, name, created_at, updated_at) VALUES ('upgrade_b', 'B', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+    INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES ('upgrade_user', 'upgrade@example.test', 'hash', 'Upgrade User', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+    INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at) VALUES ('upgrade_membership', 'upgrade_b', 'upgrade_user', 'member', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+    INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES ('upgrade_bad_view', 'upgrade_a', 'upgrade_user', 'companies', 'Bad legacy view', '{}', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+  `);
+  assert.throws(
+    () => migrate(upgrade),
+    /CHECK constraint failed/,
+    'an upgrade must reject a persisted cross-tenant saved view',
+  );
+  upgrade.prepare('DELETE FROM saved_views WHERE id = ?').run('upgrade_bad_view');
   migrate(upgrade);
   assert.equal(
     upgrade
