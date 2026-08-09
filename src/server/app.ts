@@ -50,6 +50,22 @@ const companyListQuery = z.object({
   sort: z.enum(['name', 'createdAt', 'updatedAt', 'lifecycle']).default('name'),
   direction: z.enum(['asc', 'desc']).default('asc'),
 });
+const dealInput = z.object({
+  name: z.string().trim().min(1).max(240),
+  companyId: z.string().min(1),
+  ownerId: z.string().min(1).nullable().optional(),
+  stageId: z.string().min(1),
+  amountCents: z.number().int().nonnegative(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .default('USD'),
+  expectedCloseDate: z.string().date().nullable().optional(),
+  probability: z.number().int().min(0).max(100).default(0),
+  lossReason: z.string().trim().max(500).nullable().optional(),
+  contactIds: z.array(z.string().min(1)).max(50).default([]),
+});
+const dealUpdate = dealInput.extend({ version: z.number().int().positive() });
 const contactInput = z.object({
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),
@@ -1450,6 +1466,123 @@ export function createApp(config: AppConfig) {
     }
   });
 
+  const dealFields =
+    'id, company_id AS companyId, owner_id AS ownerId, stage_id AS stageId, name, amount_cents AS amountCents, currency, expected_close_date AS expectedCloseDate, probability, status, loss_reason AS lossReason, created_at AS createdAt, updated_at AS updatedAt, version';
+  const dealSession = (request: express.Request) =>
+    auth.authenticate(cookieToken(request.headers.cookie));
+  const dealError = (error: unknown, response: express.Response) => {
+    if (error instanceof AuthError)
+      return response
+        .status(error.code === 'FORBIDDEN' ? 403 : 401)
+        .json({ error: { code: error.code, message: 'You do not have permission to do that.' } });
+    if (error instanceof z.ZodError)
+      return response
+        .status(400)
+        .json({ error: { code: 'VALIDATION', message: 'Check the deal fields and try again.' } });
+    return response
+      .status(500)
+      .json({
+        error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
+      });
+  };
+  app.get('/api/deals', (request, response) => {
+    try {
+      const s = dealSession(request);
+      const page = Math.max(1, Number(request.query.page) || 1);
+      const size = Math.min(100, Math.max(1, Number(request.query.pageSize) || 25));
+      const where = ['deals.organization_id = ?', 'deals.archived_at IS NULL'];
+      const args: unknown[] = [s.organizationId];
+      for (const [key, column] of [
+        ['companyId', 'company_id'],
+        ['ownerId', 'owner_id'],
+        ['stageId', 'stage_id'],
+        ['status', 'status'],
+      ] as const)
+        if (typeof request.query[key] === 'string') {
+          where.push(`deals.${column} = ?`);
+          args.push(request.query[key]);
+        }
+      const clause = where.join(' AND ');
+      const total = database
+        .prepare(`SELECT count(*) AS total FROM deals WHERE ${clause}`)
+        .get(...args).total;
+      const items = database
+        .prepare(
+          `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE ${clause} ORDER BY deals.updated_at DESC LIMIT ? OFFSET ?`,
+        )
+        .all(...args, size, (page - 1) * size);
+      return response.json({ items, page, pageSize: size, total });
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.get('/api/pipeline/stages', (request, response) => {
+    try {
+      const s = dealSession(request);
+      return response.json(
+        database
+          .prepare(
+            'SELECT id, name, position, kind FROM pipeline_stages WHERE organization_id = ? ORDER BY position',
+          )
+          .all(s.organizationId),
+      );
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
+  app.post('/api/deals', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      const d = dealInput.parse(request.body);
+      const stage = database
+        .prepare('SELECT kind FROM pipeline_stages WHERE id = ? AND organization_id = ?')
+        .get(d.stageId, s.organizationId);
+      if (!stage || stage.kind !== 'open')
+        return response
+          .status(400)
+          .json({ error: { code: 'VALIDATION', message: 'Choose an active pipeline stage.' } });
+      const id = `deal_${randomUUID()}`;
+      const now = new Date().toISOString();
+      transaction(() => {
+        database
+          .prepare(
+            'INSERT INTO deals (id, organization_id, company_id, owner_id, stage_id, name, amount_cents, currency, expected_close_date, probability, status, loss_reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            id,
+            s.organizationId,
+            d.companyId,
+            d.ownerId || s.userId,
+            d.stageId,
+            d.name,
+            d.amountCents,
+            d.currency,
+            d.expectedCloseDate || null,
+            d.probability,
+            'open',
+            null,
+            now,
+            now,
+          );
+        for (const contactId of d.contactIds)
+          database
+            .prepare(
+              'INSERT INTO deal_contacts (deal_id, contact_id, organization_id) VALUES (?, ?, ?)',
+            )
+            .run(id, contactId, s.organizationId);
+        database
+          .prepare(
+            'INSERT INTO deal_stage_history (id, organization_id, deal_id, to_stage_id, actor_id, changed_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(`dsh_${randomUUID()}`, s.organizationId, id, d.stageId, s.userId, now);
+      });
+      return response
+        .status(201)
+        .json(database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(id));
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
   app.use('/api', (_request, response) => {
     response.status(404).json({
       error: { code: 'NOT_FOUND', message: 'That API endpoint does not exist.' },
@@ -1471,3 +1604,4 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     },
   });
 };
+
