@@ -423,6 +423,11 @@ export function createApp(config: AppConfig) {
           return response
             .status(404)
             .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+        if (
+          (action === 'archive' && company.archived_at) ||
+          (action === 'restore' && !company.archived_at)
+        )
+          return response.json(company);
         const now = new Date().toISOString();
         database.exec('BEGIN IMMEDIATE');
         try {

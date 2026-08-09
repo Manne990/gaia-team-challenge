@@ -109,7 +109,16 @@ test('actual company workspace creates, filters, updates, archives, restores, an
       page.getByRole('button', { name: 'Archive company' }).click({ force: true }),
     ]);
     expect(archiveResponse.status()).toBe(200);
-    expect((await archiveResponse.json()).archived_at).toBeTruthy();
+    const archivedCompany = await archiveResponse.json();
+    expect(archivedCompany.archived_at).toBeTruthy();
+    const repeatedArchive = await page.request.post(`${url}/api/companies/${created.id}/archive`, {
+      headers: { cookie: ownerCookie },
+    });
+    expect(repeatedArchive.status()).toBe(200);
+    await expect(repeatedArchive.json()).resolves.toMatchObject({
+      archived_at: archivedCompany.archived_at,
+      version: archivedCompany.version,
+    });
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Company change history' })).toContainText(
       'company.archived',
