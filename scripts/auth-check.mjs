@@ -43,6 +43,19 @@ try {
   );
   authError(() => auth.listMembers(auth.authenticate(member.token)), 'FORBIDDEN');
   authError(() => auth.removeMember(auth.authenticate(owner.token), 'mem_owner'), 'LAST_OWNER');
+  auth.removeMember(auth.authenticate(owner.token), 'mem_member');
+  assert.equal(
+    db.prepare("SELECT count(*) AS total FROM memberships WHERE id = 'mem_member'").get().total,
+    0,
+  );
+  assert.equal(
+    db
+      .prepare(
+        "SELECT count(*) AS total FROM tasks WHERE organization_id = 'org_northstar' AND assignee_id = 'usr_member'",
+      )
+      .get().total,
+    0,
+  );
   auth.logout(owner.token);
   authError(() => auth.authenticate(owner.token), 'UNAUTHENTICATED');
   const expiring = auth.signIn({ email: 'owner@northstar.test', password: 'OwnerPass!2026' });

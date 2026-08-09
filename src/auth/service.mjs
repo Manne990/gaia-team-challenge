@@ -189,6 +189,9 @@ export function createAuthService(
     db.exec('BEGIN IMMEDIATE');
     try {
       db.prepare(
+        'UPDATE tasks SET assignee_id = NULL, updated_at = ?, version = version + 1 WHERE organization_id = ? AND assignee_id = (SELECT user_id FROM memberships WHERE id = ?)',
+      ).run(nowIso(clock), context.organizationId, membership.id);
+      db.prepare(
         'UPDATE sessions SET revoked_at = ? WHERE user_id = (SELECT user_id FROM memberships WHERE id = ?) AND organization_id = ? AND revoked_at IS NULL',
       ).run(nowIso(clock), membership.id, context.organizationId);
       db.prepare('DELETE FROM memberships WHERE id = ?').run(membership.id);
