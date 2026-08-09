@@ -1502,7 +1502,7 @@ export function createApp(config: AppConfig) {
           .prepare('SELECT * FROM companies WHERE id = ? AND organization_id = ?')
           .get(redirect.target_id, session.organizationId);
       }
-      if (!company || company.archived_at)
+      if (!company)
         return response
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
