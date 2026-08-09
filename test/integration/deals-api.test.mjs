@@ -33,6 +33,16 @@ describe('deals API', () => {
         body: JSON.stringify({ email: 'owner@northstar.test', password: 'OwnerPass!2026' }),
       })
     ).headers.get('set-cookie');
+    const insertedStage = await fetch(`${url}/api/pipeline/stages`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Discovery', position: 1 }),
+    });
+    expect(insertedStage.status).toBe(201);
+    const stages = await (
+      await fetch(`${url}/api/pipeline/stages`, { headers: { cookie } })
+    ).json();
+    expect(stages.map((stage) => stage.position)).toEqual(stages.map((_stage, index) => index));
     const created = await fetch(`${url}/api/deals`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
