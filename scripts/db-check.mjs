@@ -36,6 +36,35 @@ try {
         '2026-01-01T00:00:00.000Z',
       ),
   );
+  db.prepare(
+    'INSERT INTO companies (id, organization_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(
+    'co_redirect_source',
+    'org_northstar',
+    'Redirect source',
+    '2026-01-15T12:00:00.000Z',
+    '2026-01-15T12:00:00.000Z',
+  );
+  db.prepare(
+    'INSERT INTO companies (id, organization_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(
+    'co_redirect_target',
+    'org_northstar',
+    'Redirect target',
+    '2026-01-15T12:00:00.000Z',
+    '2026-01-15T12:00:00.000Z',
+  );
+  db.prepare(
+    'INSERT INTO merge_redirects (id, organization_id, resource, source_id, target_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(
+    'redirect_delete_target',
+    'org_northstar',
+    'companies',
+    'co_redirect_source',
+    'co_redirect_target',
+    '2026-01-15T12:00:00.000Z',
+  );
+  assert.throws(() => db.prepare('DELETE FROM companies WHERE id = ?').run('co_redirect_target'));
   assert.throws(() =>
     db
       .prepare(
