@@ -1,12 +1,38 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openDatabase, resetAndSeed, seedDatabase } from '../src/db/database.mjs';
+import { migrate, openDatabase, resetAndSeed, seedDatabase } from '../src/db/database.mjs';
 
 const folder = mkdtempSync(join(tmpdir(), 'northstar-db-'));
 const filename = join(folder, 'crm.sqlite');
 try {
+  const upgradeFilename = join(folder, 'upgrade.sqlite');
+  const upgrade = openDatabase(upgradeFilename);
+  upgrade.exec(
+    readFileSync(new URL('../migrations/001_initial_schema.sql', import.meta.url), 'utf8'),
+  );
+  upgrade.exec(
+    "CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL); INSERT INTO schema_migrations VALUES ('001_initial_schema.sql', '2026-01-15T12:00:00.000Z');",
+  );
+  migrate(upgrade);
+  assert.equal(
+    upgrade
+      .prepare(
+        "SELECT count(*) AS total FROM sqlite_master WHERE type = 'trigger' AND name = 'pipeline_stages_deal_status_guard'",
+      )
+      .get().total,
+    1,
+    'an existing 001 database must receive forward integrity migration 002',
+  );
+  assert.deepEqual(
+    upgrade
+      .prepare('SELECT name FROM schema_migrations ORDER BY name')
+      .all()
+      .map(({ name }) => name),
+    ['001_initial_schema.sql', '002_enforce_crm_integrity.sql'],
+  );
+  upgrade.close();
   let db = resetAndSeed(filename);
   assert.equal(db.prepare('SELECT count(*) AS total FROM users').get().total, 4);
   assert.equal(
