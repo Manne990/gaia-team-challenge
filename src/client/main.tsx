@@ -1463,7 +1463,7 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
-function Notifications() {
+function Notifications({ navigate }: { navigate: (page: 'Tasks' | 'Deals') => void }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const load = async () => {
@@ -1496,8 +1496,9 @@ function Notifications() {
               <li key={item.id}>
                 <button
                   onClick={async () => {
+                    const payload = JSON.parse(item.payloadJson);
                     await fetch(`/api/notifications/${item.id}/read`, { method: 'POST' });
-                    await load();
+                    navigate(payload.recordType === 'deal' ? 'Deals' : 'Tasks');
                   }}
                 >
                   {JSON.parse(item.payloadJson).title}
@@ -1607,7 +1608,7 @@ function App() {
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
-      notificationsContent={<Notifications />}
+      notificationsContent={(navigate) => <Notifications navigate={navigate} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
