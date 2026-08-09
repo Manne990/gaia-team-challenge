@@ -278,6 +278,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   }));
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
   const [duplicateCandidates, setDuplicateCandidates] = useState<any[]>([]);
+  const [mergeFields, setMergeFields] = useState<Record<string, string>>({});
   const load = async (search = text, nextFilters = filters) => {
     setState('loading');
     try {
@@ -352,13 +353,96 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                 {candidate.sourceName} and {candidate.targetName} share {candidate.facts[0].field}:{' '}
                 {candidate.facts[0].normalized}.
               </p>
+              {[
+                ['name', 'name', candidate.sourceName, candidate.targetName],
+                [
+                  'externalReference',
+                  'external reference',
+                  candidate.sourceExternalReference,
+                  candidate.targetExternalReference,
+                ],
+                ['website', 'website', candidate.sourceWebsite, candidate.targetWebsite],
+                ['phone', 'phone', candidate.sourcePhone, candidate.targetPhone],
+                ['industry', 'industry', candidate.sourceIndustry, candidate.targetIndustry],
+                ['size', 'size', candidate.sourceSize, candidate.targetSize],
+                ['address', 'address', candidate.sourceAddress, candidate.targetAddress],
+                [
+                  'lifecycleStatus',
+                  'lifecycle status',
+                  candidate.sourceLifecycleStatus,
+                  candidate.targetLifecycleStatus,
+                ],
+                ['ownerId', 'owner ID', candidate.sourceOwnerId, candidate.targetOwnerId],
+                ['tagsJson', 'tags', candidate.sourceTagsJson, candidate.targetTagsJson],
+                [
+                  'description',
+                  'description',
+                  candidate.sourceDescription,
+                  candidate.targetDescription,
+                ],
+              ].map(([field, label, sourceValue, targetValue]) => (
+                <label key={field}>
+                  Keep {label}
+                  <select
+                    value={mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue ?? ''}
+                    onChange={(event) =>
+                      setMergeFields({
+                        ...mergeFields,
+                        [`${candidate.sourceId}:${field}`]: event.target.value,
+                      })
+                    }
+                  >
+                    <option value={targetValue ?? ''}>
+                      {candidate.targetName}: {targetValue || 'empty'}
+                    </option>
+                    <option value={sourceValue ?? ''}>
+                      {candidate.sourceName}: {sourceValue || 'empty'}
+                    </option>
+                  </select>
+                </label>
+              ))}
               <button
                 type="button"
                 onClick={async () => {
                   const response = await fetch('/api/merges', {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ resource: 'companies', ...candidate, fields: {} }),
+                    body: JSON.stringify({
+                      resource: 'companies',
+                      ...candidate,
+                      fields: Object.fromEntries(
+                        [
+                          ['name', candidate.targetName],
+                          ['externalReference', candidate.targetExternalReference],
+                          ['website', candidate.targetWebsite],
+                          ['phone', candidate.targetPhone],
+                          ['industry', candidate.targetIndustry],
+                          ['size', candidate.targetSize],
+                          ['address', candidate.targetAddress],
+                          ['lifecycleStatus', candidate.targetLifecycleStatus],
+                          ['ownerId', candidate.targetOwnerId],
+                          ['tagsJson', candidate.targetTagsJson],
+                          ['description', candidate.targetDescription],
+                        ].map(([field, targetValue]) => {
+                          const value =
+                            mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue;
+                          return [
+                            field,
+                            [
+                              'externalReference',
+                              'website',
+                              'phone',
+                              'industry',
+                              'size',
+                              'address',
+                              'ownerId',
+                            ].includes(field) && !value
+                              ? null
+                              : (value ?? ''),
+                          ];
+                        }),
+                      ),
+                    }),
                   });
                   if (response.ok) {
                     setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
@@ -380,7 +464,38 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                       targetId: candidate.sourceId,
                       sourceVersion: candidate.targetVersion,
                       targetVersion: candidate.sourceVersion,
-                      fields: {},
+                      fields: Object.fromEntries(
+                        [
+                          ['name', candidate.targetName],
+                          ['externalReference', candidate.targetExternalReference],
+                          ['website', candidate.targetWebsite],
+                          ['phone', candidate.targetPhone],
+                          ['industry', candidate.targetIndustry],
+                          ['size', candidate.targetSize],
+                          ['address', candidate.targetAddress],
+                          ['lifecycleStatus', candidate.targetLifecycleStatus],
+                          ['ownerId', candidate.targetOwnerId],
+                          ['tagsJson', candidate.targetTagsJson],
+                          ['description', candidate.targetDescription],
+                        ].map(([field, targetValue]) => {
+                          const value =
+                            mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue;
+                          return [
+                            field,
+                            [
+                              'externalReference',
+                              'website',
+                              'phone',
+                              'industry',
+                              'size',
+                              'address',
+                              'ownerId',
+                            ].includes(field) && !value
+                              ? null
+                              : (value ?? ''),
+                          ];
+                        }),
+                      ),
                     }),
                   });
                   if (response.ok) {

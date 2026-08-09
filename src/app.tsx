@@ -653,44 +653,43 @@ function ListPage({
                 {candidate.targetFirstName} {candidate.targetLastName} share{' '}
                 {candidate.facts[0].field}: {candidate.facts[0].normalized}.
               </p>
-              <label>
-                Keep phone
-                <select
-                  value={mergeFields[`${candidate.sourceId}:phone`] || candidate.targetPhone || ''}
-                  onChange={(event) =>
-                    setMergeFields({
-                      ...mergeFields,
-                      [`${candidate.sourceId}:phone`]: event.target.value,
-                    })
-                  }
-                >
-                  <option value={candidate.targetPhone || ''}>
-                    {candidate.targetFirstName}: {candidate.targetPhone || 'empty'}
-                  </option>
-                  <option value={candidate.sourcePhone || ''}>
-                    {candidate.sourceFirstName}: {candidate.sourcePhone || 'empty'}
-                  </option>
-                </select>
-              </label>
-              <label>
-                Keep status
-                <select
-                  value={mergeFields[`${candidate.sourceId}:status`] || candidate.targetStatus}
-                  onChange={(event) =>
-                    setMergeFields({
-                      ...mergeFields,
-                      [`${candidate.sourceId}:status`]: event.target.value,
-                    })
-                  }
-                >
-                  <option value={candidate.targetStatus}>
-                    {candidate.targetFirstName}: {candidate.targetStatus}
-                  </option>
-                  <option value={candidate.sourceStatus}>
-                    {candidate.sourceFirstName}: {candidate.sourceStatus}
-                  </option>
-                </select>
-              </label>
+              {[
+                ['firstName', 'first name', candidate.sourceFirstName, candidate.targetFirstName],
+                ['lastName', 'last name', candidate.sourceLastName, candidate.targetLastName],
+                ['email', 'email', candidate.sourceEmail, candidate.targetEmail],
+                ['phone', 'phone', candidate.sourcePhone, candidate.targetPhone],
+                ['jobTitle', 'job title', candidate.sourceJobTitle, candidate.targetJobTitle],
+                ['companyId', 'company ID', candidate.sourceCompanyId, candidate.targetCompanyId],
+                ['ownerId', 'owner ID', candidate.sourceOwnerId, candidate.targetOwnerId],
+                ['status', 'status', candidate.sourceStatus, candidate.targetStatus],
+                ['tagsJson', 'tags', candidate.sourceTagsJson, candidate.targetTagsJson],
+                [
+                  'communicationPreference',
+                  'preferred contact method',
+                  candidate.sourceCommunicationPreference,
+                  candidate.targetCommunicationPreference,
+                ],
+              ].map(([field, label, sourceValue, targetValue]) => (
+                <label key={field}>
+                  Keep {label}
+                  <select
+                    value={mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue ?? ''}
+                    onChange={(event) =>
+                      setMergeFields({
+                        ...mergeFields,
+                        [`${candidate.sourceId}:${field}`]: event.target.value,
+                      })
+                    }
+                  >
+                    <option value={targetValue ?? ''}>
+                      {candidate.targetFirstName}: {targetValue || 'empty'}
+                    </option>
+                    <option value={sourceValue ?? ''}>
+                      {candidate.sourceFirstName}: {sourceValue || 'empty'}
+                    </option>
+                  </select>
+                </label>
+              ))}
               <button
                 className="secondary"
                 onClick={async () => {
@@ -700,12 +699,29 @@ function ListPage({
                     body: JSON.stringify({
                       resource: 'contacts',
                       ...candidate,
-                      fields: {
-                        phone:
-                          mergeFields[`${candidate.sourceId}:phone`] || candidate.targetPhone || '',
-                        status:
-                          mergeFields[`${candidate.sourceId}:status`] || candidate.targetStatus,
-                      },
+                      fields: Object.fromEntries(
+                        [
+                          ['firstName', candidate.targetFirstName],
+                          ['lastName', candidate.targetLastName],
+                          ['email', candidate.targetEmail],
+                          ['phone', candidate.targetPhone],
+                          ['jobTitle', candidate.targetJobTitle],
+                          ['companyId', candidate.targetCompanyId],
+                          ['ownerId', candidate.targetOwnerId],
+                          ['status', candidate.targetStatus],
+                          ['tagsJson', candidate.targetTagsJson],
+                          ['communicationPreference', candidate.targetCommunicationPreference],
+                        ].map(([field, targetValue]) => {
+                          const value =
+                            mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue;
+                          return [
+                            field,
+                            ['companyId', 'ownerId'].includes(field) && !value
+                              ? null
+                              : (value ?? ''),
+                          ];
+                        }),
+                      ),
                     }),
                   });
                   if (response.ok) {
@@ -728,12 +744,29 @@ function ListPage({
                       targetId: candidate.sourceId,
                       sourceVersion: candidate.targetVersion,
                       targetVersion: candidate.sourceVersion,
-                      fields: {
-                        phone:
-                          mergeFields[`${candidate.sourceId}:phone`] || candidate.targetPhone || '',
-                        status:
-                          mergeFields[`${candidate.sourceId}:status`] || candidate.targetStatus,
-                      },
+                      fields: Object.fromEntries(
+                        [
+                          ['firstName', candidate.targetFirstName],
+                          ['lastName', candidate.targetLastName],
+                          ['email', candidate.targetEmail],
+                          ['phone', candidate.targetPhone],
+                          ['jobTitle', candidate.targetJobTitle],
+                          ['companyId', candidate.targetCompanyId],
+                          ['ownerId', candidate.targetOwnerId],
+                          ['status', candidate.targetStatus],
+                          ['tagsJson', candidate.targetTagsJson],
+                          ['communicationPreference', candidate.targetCommunicationPreference],
+                        ].map(([field, targetValue]) => {
+                          const value =
+                            mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue;
+                          return [
+                            field,
+                            ['companyId', 'ownerId'].includes(field) && !value
+                              ? null
+                              : (value ?? ''),
+                          ];
+                        }),
+                      ),
                     }),
                   });
                   if (response.ok) {

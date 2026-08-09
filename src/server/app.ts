@@ -452,8 +452,14 @@ export function createApp(config: AppConfig) {
     resource === 'contacts'
       ? database
           .prepare(
-            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion, a.first_name AS sourceFirstName, a.last_name AS sourceLastName, a.phone AS sourcePhone, b.phone AS targetPhone, a.status AS sourceStatus, b.status AS targetStatus,
-              b.first_name AS targetFirstName, b.last_name AS targetLastName, a.email AS email
+            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion,
+              a.first_name AS sourceFirstName, b.first_name AS targetFirstName, a.last_name AS sourceLastName, b.last_name AS targetLastName,
+              a.email AS sourceEmail, b.email AS targetEmail, a.phone AS sourcePhone, b.phone AS targetPhone,
+              a.job_title AS sourceJobTitle, b.job_title AS targetJobTitle, a.company_id AS sourceCompanyId, b.company_id AS targetCompanyId,
+              a.owner_id AS sourceOwnerId, b.owner_id AS targetOwnerId, a.status AS sourceStatus, b.status AS targetStatus,
+              a.tags_json AS sourceTagsJson, b.tags_json AS targetTagsJson,
+              a.communication_preference AS sourceCommunicationPreference, b.communication_preference AS targetCommunicationPreference,
+              a.email AS email
              FROM contacts a JOIN contacts b ON a.organization_id = b.organization_id
               AND a.id < b.id AND lower(a.email) = lower(b.email)
              WHERE a.organization_id = ? AND a.archived_at IS NULL AND b.archived_at IS NULL AND a.email IS NOT NULL`,
@@ -472,10 +478,15 @@ export function createApp(config: AppConfig) {
           }))
       : database
           .prepare(
-            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion, a.name AS sourceName, b.name AS targetName,
-              a.external_reference AS externalReference
+            `SELECT a.id AS sourceId, b.id AS targetId, a.version AS sourceVersion, b.version AS targetVersion,
+              a.name AS sourceName, b.name AS targetName, a.external_reference AS sourceExternalReference, b.external_reference AS targetExternalReference,
+              a.website AS sourceWebsite, b.website AS targetWebsite, a.phone AS sourcePhone, b.phone AS targetPhone,
+              a.industry AS sourceIndustry, b.industry AS targetIndustry, a.size AS sourceSize, b.size AS targetSize,
+              a.address AS sourceAddress, b.address AS targetAddress, a.lifecycle_status AS sourceLifecycleStatus, b.lifecycle_status AS targetLifecycleStatus,
+              a.owner_id AS sourceOwnerId, b.owner_id AS targetOwnerId, a.tags_json AS sourceTagsJson, b.tags_json AS targetTagsJson,
+              a.description AS sourceDescription, b.description AS targetDescription, a.external_reference AS externalReference
              FROM companies a JOIN companies b ON a.organization_id = b.organization_id
-              AND a.id < b.id AND a.external_reference = b.external_reference
+              AND a.id < b.id AND lower(a.external_reference) = lower(b.external_reference)
              WHERE a.organization_id = ? AND a.archived_at IS NULL AND b.archived_at IS NULL AND a.external_reference IS NOT NULL`,
           )
           .all(organizationId)
@@ -604,7 +615,7 @@ export function createApp(config: AppConfig) {
               'UPDATE activities SET contact_id = ? WHERE contact_id = ? AND organization_id = ?',
             )
             .run(input.targetId, input.sourceId, session.organizationId);
-          database
+          const updatedTarget = database
             .prepare(
               'UPDATE contacts SET first_name = ?, last_name = ?, email = ?, phone = ?, job_title = ?, company_id = ?, owner_id = ?, status = ?, tags_json = ?, communication_preference = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
             )
@@ -624,6 +635,7 @@ export function createApp(config: AppConfig) {
               session.organizationId,
               input.targetVersion,
             );
+          if (updatedTarget.changes !== 1) throw new Error('MERGE_CONFLICT');
         } else {
           database
             .prepare(
@@ -645,7 +657,7 @@ export function createApp(config: AppConfig) {
               'UPDATE activities SET company_id = ? WHERE company_id = ? AND organization_id = ?',
             )
             .run(input.targetId, input.sourceId, session.organizationId);
-          database
+          const updatedTarget = database
             .prepare(
               'UPDATE companies SET name = ?, external_reference = ?, website = ?, phone = ?, industry = ?, size = ?, address = ?, lifecycle_status = ?, owner_id = ?, tags_json = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
             )
@@ -666,12 +678,14 @@ export function createApp(config: AppConfig) {
               session.organizationId,
               input.targetVersion,
             );
+          if (updatedTarget.changes !== 1) throw new Error('MERGE_CONFLICT');
         }
-        database
+        const archivedSource = database
           .prepare(
             `UPDATE ${table} SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?`,
           )
           .run(now, now, input.sourceId, session.organizationId, input.sourceVersion);
+        if (archivedSource.changes !== 1) throw new Error('MERGE_CONFLICT');
         database
           .prepare(
             'INSERT INTO merge_redirects (id, organization_id, resource, source_id, target_id, created_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -706,11 +720,19 @@ export function createApp(config: AppConfig) {
         .json({ resource: input.resource, sourceId: input.sourceId, targetId: input.targetId });
     } catch (error) {
       return response
-        .status(error instanceof z.ZodError || String(error).includes('INVALID_MERGE') ? 400 : 500)
+        .status(
+          String(error).includes('MERGE_CONFLICT')
+            ? 409
+            : error instanceof z.ZodError || String(error).includes('INVALID_MERGE')
+              ? 400
+              : 500,
+        )
         .json({
           error: {
-            code: 'VALIDATION',
-            message: 'Review both records and resolve their fields before merging.',
+            code: String(error).includes('MERGE_CONFLICT') ? 'CONFLICT' : 'VALIDATION',
+            message: String(error).includes('MERGE_CONFLICT')
+              ? 'A record changed. Refresh the review before merging.'
+              : 'Review both records and resolve their fields before merging.',
           },
         });
     }
