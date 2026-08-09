@@ -309,6 +309,24 @@ END;
 CREATE TRIGGER audit_events_immutable_update BEFORE UPDATE ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit events are immutable'); END;
 CREATE TRIGGER audit_events_immutable_delete BEFORE DELETE ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit events are immutable'); END;
 
+-- Tenant assignment is immutable: records must be explicitly recreated or merged,
+-- never moved between organizations by an update.
+CREATE TRIGGER memberships_tenant_immutable BEFORE UPDATE OF organization_id, user_id ON memberships FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'membership identity is immutable'); END;
+CREATE TRIGGER sessions_tenant_immutable BEFORE UPDATE OF organization_id ON sessions FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'session organization is immutable'); END;
+CREATE TRIGGER companies_tenant_immutable BEFORE UPDATE OF organization_id ON companies FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'company organization is immutable'); END;
+CREATE TRIGGER contacts_tenant_immutable BEFORE UPDATE OF organization_id ON contacts FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'contact organization is immutable'); END;
+CREATE TRIGGER pipeline_stages_tenant_immutable BEFORE UPDATE OF organization_id ON pipeline_stages FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'stage organization is immutable'); END;
+CREATE TRIGGER deals_tenant_immutable BEFORE UPDATE OF organization_id ON deals FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'deal organization is immutable'); END;
+CREATE TRIGGER deal_contacts_tenant_immutable BEFORE UPDATE OF organization_id ON deal_contacts FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'deal contact organization is immutable'); END;
+CREATE TRIGGER tasks_tenant_immutable BEFORE UPDATE OF organization_id ON tasks FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'task organization is immutable'); END;
+CREATE TRIGGER activities_tenant_immutable BEFORE UPDATE OF organization_id ON activities FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'activity organization is immutable'); END;
+CREATE TRIGGER deal_stage_history_tenant_immutable BEFORE UPDATE OF organization_id ON deal_stage_history FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'deal history organization is immutable'); END;
+CREATE TRIGGER notifications_tenant_immutable BEFORE UPDATE OF organization_id ON notifications FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'notification organization is immutable'); END;
+CREATE TRIGGER saved_views_tenant_immutable BEFORE UPDATE OF organization_id ON saved_views FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'saved view organization is immutable'); END;
+CREATE TRIGGER imports_tenant_immutable BEFORE UPDATE OF organization_id ON imports FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'import organization is immutable'); END;
+CREATE TRIGGER merge_redirects_tenant_immutable BEFORE UPDATE OF organization_id ON merge_redirects FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'merge redirect organization is immutable'); END;
+CREATE TRIGGER audit_events_tenant_immutable BEFORE UPDATE OF organization_id ON audit_events FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'audit event organization is immutable'); END;
+
 CREATE INDEX companies_org_name_idx ON companies(organization_id, name);
 CREATE INDEX contacts_org_name_idx ON contacts(organization_id, last_name, first_name);
 CREATE INDEX tasks_org_due_idx ON tasks(organization_id, due_at, status);
