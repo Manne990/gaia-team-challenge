@@ -127,5 +127,15 @@ describe('deals API', () => {
         })
       ).status,
     ).toBe(403);
+    const outsideCookie = (
+      await fetch(`${url}/api/auth/sign-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'other-owner@outside.test', password: 'OutsidePass!2026' }),
+      })
+    ).headers.get('set-cookie');
+    expect(
+      (await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie: outsideCookie } })).status,
+    ).toBe(404);
   });
 });
