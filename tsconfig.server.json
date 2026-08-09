@@ -9,5 +9,5 @@
     "moduleResolution": "NodeNext",
     "noEmit": true
   },
-  "include": ["src/server", "src/shared/config.ts", "scripts"]
+  "include": ["src/server", "src/shared/config.ts", "src/shared/database-path.ts", "scripts"]
 }

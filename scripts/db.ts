@@ -1,13 +1,15 @@
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { loadConfig } from '../src/shared/config.js';
+import { loadRuntimeConfig } from '../src/shared/config.js';
+import { assertSafeDatabaseResetTarget } from '../src/shared/database-path.js';
 
 const action = process.argv[2];
-const config = loadConfig();
+const config = loadRuntimeConfig(process.argv.slice(3));
 
 async function reset() {
   await mkdir(path.dirname(config.databasePath), { recursive: true });
+  await assertSafeDatabaseResetTarget(config.databasePath);
   await rm(config.databasePath, { force: true });
   initialize().close();
   console.log(`Database reset at ${config.databasePath}`);
