@@ -104,6 +104,30 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     expect(
       await page.evaluate(() => fetch('/api/contacts').then((response) => response.status)),
     ).toBe(200);
+    await page.getByRole('button', { name: 'Add contact' }).click();
+    await page.getByLabel('First name').fill('Browser');
+    await page.getByLabel('Last name').fill('Flow');
+    await page
+      .getByRole('textbox', { name: 'Email', exact: true })
+      .fill('browser.flow@example.test');
+    await page.getByLabel('Job title').fill('Stakeholder');
+    await page.getByLabel('Tags (comma separated)').fill('vip, browser');
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/contacts') && response.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Save contact' }).click();
+    expect((await createResponse).status()).toBe(201);
+    await page.getByLabel('Search contacts').fill('Browser');
+    const browserContact = page.getByRole('link', { name: 'Browser Flow' });
+    await expect(browserContact).toBeVisible();
+    await browserContact.click();
+    await expect(page.getByRole('dialog', { name: 'Browser Flow' })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Phone', exact: true }).fill('+46 70 123 45 67');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Change history')).toBeVisible();
+    await page.getByRole('button', { name: 'Archive contact' }).click();
+    await expect(browserContact).toHaveCount(0);
     await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();

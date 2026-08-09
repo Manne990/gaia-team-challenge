@@ -270,39 +270,114 @@ function ListPage({
   workspace: Workspace;
   user: ShellUser;
 }) {
-  const [contactRows, setContactRows] = useState<Array<{ id: string; row: string[] }>>([]);
+  type Contact = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+    jobTitle?: string | null;
+    companyId?: string | null;
+    companyName?: string | null;
+    ownerId?: string | null;
+    status: string;
+    tagsJson?: string;
+    communicationPreference?: 'email' | 'phone' | 'none';
+    updatedAt: string;
+    archivedAt?: string | null;
+    version: number;
+    activities?: Array<{ id: string; subject: string; type: string }>;
+    deals?: Array<{ id: string; name: string; status: string }>;
+    tasks?: Array<{ id: string; title: string; status: string }>;
+    history?: Array<{ id: string; action: string; createdAt: string }>;
+  };
+  const [contactRows, setContactRows] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [contactSort, setContactSort] = useState('name');
   const [contactStatus, setContactStatus] = useState('');
+  const [contactCompany, setContactCompany] = useState('');
+  const [contactOwner, setContactOwner] = useState('');
+  const [contactTag, setContactTag] = useState('');
+  const [showContactFilters, setShowContactFilters] = useState(false);
+  const [showArchivedContacts, setShowArchivedContacts] = useState(false);
   const [contactPage, setContactPage] = useState(1);
   const [contactTotal, setContactTotal] = useState(0);
   const [showContactForm, setShowContactForm] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [contactRefresh, setContactRefresh] = useState(0);
+  const contactRequest = useRef(0);
+  const refreshContacts = () => setContactRefresh((value) => value + 1);
   useEffect(() => {
-    if (page === 'Contacts')
-      fetch(
-        `/api/contacts?query=${encodeURIComponent(contactSearch)}&sort=${contactSort}&status=${contactStatus}&page=${contactPage}`,
-      )
+    if (page === 'Contacts') {
+      const requestNumber = contactRequest.current + 1;
+      contactRequest.current = requestNumber;
+      const query = new URLSearchParams({
+        query: contactSearch,
+        sort: contactSort,
+        status: contactStatus,
+        companyId: contactCompany,
+        ownerId: contactOwner,
+        tag: contactTag,
+        page: String(contactPage),
+      });
+      if (showArchivedContacts) query.set('archived', 'true');
+      fetch(`/api/contacts?${query}`)
         .then((response) => (response.ok ? response.json() : { items: [] }))
         .then((data) => {
+          if (contactRequest.current !== requestNumber) return;
           setContactTotal(data.total || 0);
-          setContactRows(
-            data.items.map((c: any) => ({
-              id: c.id,
-              row: [
-                `${c.firstName} ${c.lastName}`,
-                c.companyId || 'Independent',
-                c.status,
-                c.ownerId || 'Unassigned',
-                new Date(c.updatedAt).toLocaleDateString(),
-              ],
-            })),
-          );
+          setContactRows(data.items || []);
         });
-  }, [page, contactSearch, contactSort, contactStatus, contactPage]);
+    }
+  }, [
+    page,
+    contactSearch,
+    contactSort,
+    contactStatus,
+    contactCompany,
+    contactOwner,
+    contactTag,
+    contactPage,
+    showArchivedContacts,
+    contactRefresh,
+  ]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
   const companies =
-    page === 'Contacts' ? contactRows.map((contact) => contact.row) : companiesFor(workspace, user);
-  const contactIdAt = (index: number) => contactRows[index]?.id;
+    page === 'Contacts'
+      ? contactRows.map((contact) => [
+          `${contact.firstName} ${contact.lastName}`,
+          contact.companyId || 'Independent',
+          contact.status,
+          contact.ownerId || 'Unassigned',
+          new Date(contact.updatedAt).toLocaleDateString(),
+        ])
+      : companiesFor(workspace, user);
+  const contactAt = (index: number) => contactRows[index];
+  const clearContactFilters = () => {
+    setContactSearch('');
+    setContactSort('name');
+    setContactStatus('');
+    setContactCompany('');
+    setContactOwner('');
+    setContactTag('');
+    setShowArchivedContacts(false);
+    setContactPage(1);
+  };
+  const contactPayload = (fields: FormData) => ({
+    firstName: String(fields.get('firstName') || ''),
+    lastName: String(fields.get('lastName') || ''),
+    email: String(fields.get('email') || ''),
+    phone: String(fields.get('phone') || ''),
+    jobTitle: String(fields.get('jobTitle') || ''),
+    companyId: String(fields.get('companyId') || '') || null,
+    ownerId: String(fields.get('ownerId') || '') || null,
+    status: String(fields.get('status') || 'active'),
+    tags: String(fields.get('tags') || '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    communicationPreference: String(fields.get('communicationPreference') || 'email'),
+  });
   return (
     <>
       <div className="page-heading">
@@ -326,20 +401,19 @@ function ListPage({
           onSubmit={async (event) => {
             event.preventDefault();
             const fields = new FormData(event.currentTarget);
-            await fetch('/api/contacts', {
+            const response = await fetch('/api/contacts', {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                firstName: fields.get('firstName'),
-                lastName: fields.get('lastName'),
-                email: fields.get('email'),
-                phone: fields.get('phone'),
-                jobTitle: fields.get('jobTitle'),
-                communicationPreference: fields.get('communicationPreference'),
-              }),
+              body: JSON.stringify(contactPayload(fields)),
             });
-            setShowContactForm(false);
-            setContactSearch('');
+            if (response.ok) {
+              const created = await response.json();
+              setContactRows((rows) => [created, ...rows.filter((row) => row.id !== created.id)]);
+              setContactTotal((total) => total + 1);
+              setShowContactForm(false);
+              setContactPage(1);
+              refreshContacts();
+            }
           }}
         >
           <h2>New contact</h2>
@@ -364,7 +438,27 @@ function ListPage({
             <input name="jobTitle" />
           </label>
           <label>
-            Contact preference
+            Company ID (optional)
+            <input name="companyId" />
+          </label>
+          <label>
+            Owner ID (optional)
+            <input name="ownerId" />
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="active">Active</option>
+              <option value="lead">Lead</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+          <label>
+            Tags (comma separated)
+            <input name="tags" />
+          </label>
+          <label>
+            Preferred contact method
             <select name="communicationPreference">
               <option value="email">Email</option>
               <option value="phone">Phone</option>
@@ -386,16 +480,19 @@ function ListPage({
               placeholder={`Search ${page.toLowerCase()}`}
               value={page === 'Contacts' ? contactSearch : undefined}
               onChange={
-                page === 'Contacts' ? (event) => setContactSearch(event.target.value) : undefined
+                page === 'Contacts'
+                  ? (event) => {
+                      setContactSearch(event.target.value);
+                      setContactPage(1);
+                    }
+                  : undefined
               }
             />
           </label>
           <button
             className="secondary"
             onClick={
-              page === 'Contacts'
-                ? () => setContactStatus(contactStatus ? '' : 'active')
-                : undefined
+              page === 'Contacts' ? () => setShowContactFilters((visible) => !visible) : undefined
             }
           >
             Filter <span aria-hidden="true">⌄</span>
@@ -404,7 +501,10 @@ function ListPage({
             className="secondary"
             onClick={
               page === 'Contacts'
-                ? () => setContactSort(contactSort === 'name' ? 'createdAt' : 'name')
+                ? () => {
+                    setContactSort(contactSort === 'name' ? 'createdAt' : 'name');
+                    setContactPage(1);
+                  }
                 : undefined
             }
           >
@@ -412,19 +512,70 @@ function ListPage({
           </button>
           <button
             className="text-button"
-            onClick={
-              page === 'Contacts'
-                ? () => {
-                    setContactSearch('');
-                    setContactSort('name');
-                    setContactPage(1);
-                  }
-                : undefined
-            }
+            onClick={page === 'Contacts' ? clearContactFilters : undefined}
           >
             Clear all
           </button>
         </div>
+        {page === 'Contacts' && showContactFilters && (
+          <div className="toolbar" aria-label="Contact filters">
+            <label>
+              Status
+              <select
+                value={contactStatus}
+                onChange={(event) => {
+                  setContactStatus(event.target.value);
+                  setContactPage(1);
+                }}
+              >
+                <option value="">Any status</option>
+                <option value="active">Active</option>
+                <option value="lead">Lead</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+            <label>
+              Company ID
+              <input
+                value={contactCompany}
+                onChange={(event) => {
+                  setContactCompany(event.target.value);
+                  setContactPage(1);
+                }}
+              />
+            </label>
+            <label>
+              Owner ID
+              <input
+                value={contactOwner}
+                onChange={(event) => {
+                  setContactOwner(event.target.value);
+                  setContactPage(1);
+                }}
+              />
+            </label>
+            <label>
+              Tag
+              <input
+                value={contactTag}
+                onChange={(event) => {
+                  setContactTag(event.target.value);
+                  setContactPage(1);
+                }}
+              />
+            </label>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                setShowArchivedContacts((archived) => !archived);
+                setContactPage(1);
+              }}
+            >
+              {showArchivedContacts ? 'Show active' : 'Show archived'}
+            </button>
+          </div>
+        )}
         <div className="table-wrap">
           <table>
             <caption className="sr-only">{page} list</caption>
@@ -450,17 +601,15 @@ function ListPage({
                   <tr key={`${company[0]}-${index}`}>
                     <td>
                       <a
-                        href={page === 'Contacts' ? `#contact-${contactIdAt(index)}` : '#company'}
+                        href={page === 'Contacts' ? `#contact-${contactAt(index)?.id}` : '#company'}
                         onClick={
                           page === 'Contacts'
                             ? async (event) => {
                                 event.preventDefault();
-                                const detail = await fetch(
-                                  `/api/contacts/${contactIdAt(index)}`,
-                                ).then((response) => response.json());
-                                window.alert(
-                                  `${detail.firstName} ${detail.lastName}\n${detail.email || 'No email'}\nActivities: ${detail.activities?.length || 0}\nTasks: ${detail.tasks?.length || 0}\nHistory: ${detail.history?.length || 0}`,
+                                const response = await fetch(
+                                  `/api/contacts/${contactAt(index)?.id}`,
                                 );
+                                if (response.ok) setSelectedContact(await response.json());
                               }
                             : undefined
                         }
@@ -478,33 +627,23 @@ function ListPage({
                     <td>{company[4]}</td>
                     <td>
                       <IconButton
-                        label={`Archive ${company[0]}`}
+                        label={`${showArchivedContacts ? 'Restore' : 'Archive'} ${company[0]}`}
                         onClick={
                           page === 'Contacts'
                             ? async () => {
-                                await fetch(`/api/contacts/${contactIdAt(index)}/archive`, {
-                                  method: 'POST',
-                                });
-                                setContactSearch('');
+                                await fetch(
+                                  `/api/contacts/${contactAt(index)?.id}/${showArchivedContacts ? 'restore' : 'archive'}`,
+                                  {
+                                    method: 'POST',
+                                  },
+                                );
+                                refreshContacts();
                               }
                             : undefined
                         }
                       >
                         ⋯
                       </IconButton>
-                      {page === 'Contacts' && (
-                        <button
-                          className="text-button"
-                          onClick={async () => {
-                            await fetch(`/api/contacts/${contactIdAt(index)}/restore`, {
-                              method: 'POST',
-                            });
-                            setContactSearch('');
-                          }}
-                        >
-                          Restore
-                        </button>
-                      )}
                     </td>
                   </tr>
                 ))
@@ -538,6 +677,119 @@ function ListPage({
           </div>
         </footer>
       </section>
+      {selectedContact && (
+        <Dialog
+          title={`${selectedContact.firstName} ${selectedContact.lastName}`}
+          onClose={() => setSelectedContact(null)}
+        >
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const response = await fetch(`/api/contacts/${selectedContact.id}`, {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  ...contactPayload(new FormData(event.currentTarget)),
+                  version: selectedContact.version,
+                }),
+              });
+              if (response.ok) {
+                setSelectedContact(await response.json());
+                refreshContacts();
+              }
+            }}
+          >
+            <p className="subtle">
+              {selectedContact.companyName || selectedContact.companyId || 'Independent contact'} ·{' '}
+              {selectedContact.ownerId || 'Unassigned owner'}
+            </p>
+            <label>
+              First name
+              <input name="firstName" required defaultValue={selectedContact.firstName} />
+            </label>
+            <label>
+              Last name
+              <input name="lastName" required defaultValue={selectedContact.lastName} />
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" defaultValue={selectedContact.email || ''} />
+            </label>
+            <label>
+              Phone
+              <input name="phone" defaultValue={selectedContact.phone || ''} />
+            </label>
+            <label>
+              Job title
+              <input name="jobTitle" defaultValue={selectedContact.jobTitle || ''} />
+            </label>
+            <label>
+              Company ID
+              <input name="companyId" defaultValue={selectedContact.companyId || ''} />
+            </label>
+            <label>
+              Owner ID
+              <input name="ownerId" defaultValue={selectedContact.ownerId || ''} />
+            </label>
+            <label>
+              Status
+              <select name="status" defaultValue={selectedContact.status}>
+                <option value="active">Active</option>
+                <option value="lead">Lead</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+            <label>
+              Tags (comma separated)
+              <input
+                name="tags"
+                defaultValue={JSON.parse(selectedContact.tagsJson || '[]').join(', ')}
+              />
+            </label>
+            <label>
+              Preferred contact method
+              <select
+                name="communicationPreference"
+                defaultValue={selectedContact.communicationPreference || 'email'}
+              >
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            <button className="primary">Save changes</button>
+          </form>
+          <section className="panel">
+            <h3>Related work</h3>
+            <p>
+              {selectedContact.activities?.length || 0} activities ·{' '}
+              {selectedContact.deals?.length || 0} deals · {selectedContact.tasks?.length || 0}{' '}
+              tasks
+            </p>
+            <h3>Change history</h3>
+            <ul>
+              {(selectedContact.history || []).map((entry) => (
+                <li key={entry.id}>
+                  {entry.action} · {new Date(entry.createdAt).toLocaleString()}
+                </li>
+              ))}
+            </ul>
+            <button
+              className="secondary"
+              onClick={async () => {
+                await fetch(
+                  `/api/contacts/${selectedContact.id}/${selectedContact.archivedAt ? 'restore' : 'archive'}`,
+                  { method: 'POST' },
+                );
+                setSelectedContact(null);
+                refreshContacts();
+              }}
+            >
+              {selectedContact.archivedAt ? 'Restore contact' : 'Archive contact'}
+            </button>
+          </section>
+        </Dialog>
+      )}
     </>
   );
 }
