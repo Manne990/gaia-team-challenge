@@ -948,7 +948,7 @@ export function App({
   dealsContent?: ReactNode;
   importsContent?: ReactNode;
   tasksContent?: ReactNode;
-  globalSearchContent?: ReactNode;
+  globalSearchContent?: ReactNode | ((navigate: (page: Page) => void) => ReactNode);
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -1050,7 +1050,9 @@ export function App({
           >
             ☰
           </button>
-          {globalSearchContent || (
+          {(typeof globalSearchContent === 'function'
+            ? globalSearchContent(navigate)
+            : globalSearchContent) || (
             <label className="global-search">
               <span aria-hidden="true">⌕</span>
               <input aria-label="Search CRM" placeholder="Search companies, contacts, deals…" />

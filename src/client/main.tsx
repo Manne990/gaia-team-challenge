@@ -45,15 +45,123 @@ type CompanyDetail = Company & {
 
 type SearchItem = { id: string; label: string; context: string | null };
 type SearchGroups = Record<'companies' | 'contacts' | 'deals' | 'tasks', SearchItem[]>;
+type SavedView = { id: string; name: string; resource: string; filters: Record<string, unknown> };
 
-function GlobalSearch() {
+function SavedViews({
+  resource,
+  filters,
+  onChoose,
+}: {
+  resource: 'companies' | 'contacts' | 'deals' | 'tasks';
+  filters: Record<string, unknown>;
+  onChoose: (filters: Record<string, unknown>) => void;
+}) {
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const load = () =>
+    fetch(`/api/saved-views?${new URLSearchParams({ resource })}`)
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((body) => setViews(body.items || []));
+  useEffect(() => {
+    void load();
+  }, [resource]);
+  const save = async () => {
+    if (!name.trim()) return setMessage('Name this view before saving.');
+    const response = await fetch('/api/saved-views', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, name, filters }),
+    });
+    if (!response.ok) return setMessage('This view could not be saved.');
+    setName('');
+    setMessage('Saved view created.');
+    await load();
+  };
+  const update = async (view: SavedView, nextName = view.name) => {
+    const response = await fetch(`/api/saved-views/${view.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, name: nextName, filters }),
+    });
+    if (!response.ok) return setMessage('This view could not be updated.');
+    setMessage('Saved view updated.');
+    await load();
+  };
+  return (
+    <div aria-label={`Manage saved views for ${resource}`}>
+      <h3>Saved views</h3>
+      <label>
+        New saved view name
+        <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} />
+      </label>
+      <button type="button" onClick={() => void save()}>
+        Save current view
+      </button>
+      <ul>
+        {views.map((view) => (
+          <li key={view.id}>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  onChoose(view.filters);
+                  setMessage(`Applied ${view.name}.`);
+                } catch {
+                  setMessage('This saved view is no longer valid.');
+                }
+              }}
+            >
+              {view.name}
+            </button>
+            <button
+              type="button"
+              aria-label={`Rename ${view.name}`}
+              onClick={() => {
+                const nextName = window.prompt('Saved view name', view.name);
+                if (nextName?.trim()) void update(view, nextName.trim());
+              }}
+            >
+              Rename
+            </button>
+            <button type="button" onClick={() => void update(view)}>
+              Update
+            </button>
+            <button
+              type="button"
+              aria-label={`Delete ${view.name}`}
+              onClick={async () => {
+                const response = await fetch(`/api/saved-views/${view.id}`, { method: 'DELETE' });
+                if (!response.ok) return setMessage('This view could not be deleted.');
+                setMessage('Saved view deleted.');
+                await load();
+              }}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+      {message && <p role="status">{message}</p>}
+    </div>
+  );
+}
+
+function GlobalSearch({
+  onNavigate,
+}: {
+  onNavigate: (page: 'Companies' | 'Contacts' | 'Deals' | 'Tasks') => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [groups, setGroups] = useState<SearchGroups | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   useEffect(() => {
     const focus = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        (event.key.toLowerCase() === 'k' || event.code === 'KeyK')
+      ) {
         event.preventDefault();
         input.current?.focus();
       }
@@ -122,8 +230,22 @@ function GlobalSearch() {
                 <ul>
                   {groups[resource].map((item) => (
                     <li key={item.id}>
-                      <span>{item.label}</span>
-                      {item.context && <small> — {item.context}</small>}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const page = (resource.charAt(0).toUpperCase() + resource.slice(1)) as
+                            'Companies' | 'Contacts' | 'Deals' | 'Tasks';
+                          window.history.replaceState(
+                            null,
+                            '',
+                            `${window.location.pathname}?record=${encodeURIComponent(item.id)}`,
+                          );
+                          onNavigate(page);
+                        }}
+                      >
+                        {item.label}
+                        {item.context && <small> — {item.context}</small>}
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -185,7 +307,13 @@ function Companies({ canWrite }: { canWrite: boolean }) {
     }
   };
   useEffect(() => {
+    const record = new URLSearchParams(window.location.search).get('record');
     void load('');
+    if (record)
+      fetch(`/api/companies/${encodeURIComponent(record)}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((company) => company && setDetail(company))
+        .catch(() => undefined);
   }, []);
   const exportQuery = new URLSearchParams();
   if (text) exportQuery.set('text', text);
@@ -318,6 +446,27 @@ function Companies({ canWrite }: { canWrite: boolean }) {
           Clear company filters
         </button>
       </form>
+      <SavedViews
+        resource="companies"
+        filters={{ text, ...filters }}
+        onChoose={(view) => {
+          const next = {
+            lifecycle: typeof view.lifecycle === 'string' ? view.lifecycle : '',
+            ownerId: typeof view.ownerId === 'string' ? view.ownerId : '',
+            industry: typeof view.industry === 'string' ? view.industry : '',
+            size: typeof view.size === 'string' ? view.size : '',
+            tag: typeof view.tag === 'string' ? view.tag : '',
+            sort: typeof view.sort === 'string' ? view.sort : 'name',
+            direction: view.direction === 'desc' ? 'desc' : 'asc',
+            includeArchived: view.includeArchived === true,
+            page: 1,
+          };
+          const savedText = typeof view.text === 'string' ? view.text : '';
+          setText(savedText);
+          setFilters(next);
+          void load(savedText, next);
+        }}
+      />
       <a href={companyExportHref} download>
         Export filtered companies
       </a>
@@ -1088,15 +1237,16 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
   const [due, setDue] = useState('');
   const [mine, setMine] = useState(false);
   const [relation, setRelation] = useState('');
-  const load = async (nextDue = due) => {
+  const load = async (nextDue = due, nextMine = mine, nextRelation = relation) => {
     const query = new URLSearchParams({ sort: 'dueAt' });
     if (nextDue) query.set('due', nextDue);
-    if (mine) query.set('assigneeId', 'me');
-    if (relation) {
-      const [kind, id] = relation.split(':');
+    if (nextMine) query.set('assigneeId', 'me');
+    if (nextRelation) {
+      const [kind, id] = nextRelation.split(':');
       query.set('relation', kind);
       query.set('relationId', id);
     }
+    window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
     const response = await fetch(`/api/tasks?${query}`);
     if (response.ok) setItems((await response.json()).items);
   };
@@ -1180,6 +1330,19 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
         </label>
         <button>Apply view</button>
       </form>
+      <SavedViews
+        resource="tasks"
+        filters={{ due, mine, relation }}
+        onChoose={(view) => {
+          const nextDue = typeof view.due === 'string' ? view.due : '';
+          const nextMine = view.mine === true;
+          const nextRelation = typeof view.relation === 'string' ? view.relation : '';
+          setDue(nextDue);
+          setMine(nextMine);
+          setRelation(nextRelation);
+          void load(nextDue, nextMine, nextRelation);
+        }}
+      />
       {canWrite && (
         <form
           aria-label="Create task"
@@ -1280,11 +1443,12 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   const [stageFilter, setStageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [includeArchived, setIncludeArchived] = useState(false);
-  const load = (stage = stageFilter, status = statusFilter) => {
+  const load = (stage = stageFilter, status = statusFilter, archived = includeArchived) => {
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
     if (status) query.set('status', status);
-    if (includeArchived) query.set('includeArchived', 'true');
+    if (archived) query.set('includeArchived', 'true');
+    window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
     return Promise.all([
       fetch(`/api/deals?${query}`).then((r) => r.json()),
       fetch('/api/pipeline/stages').then((r) => r.json()),
@@ -1435,6 +1599,19 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
         </label>
         <button>Apply filters</button>
       </form>
+      <SavedViews
+        resource="deals"
+        filters={{ stageId: stageFilter, status: statusFilter, includeArchived }}
+        onChoose={(view) => {
+          const stage = typeof view.stageId === 'string' ? view.stageId : '';
+          const status = typeof view.status === 'string' ? view.status : '';
+          const archived = view.includeArchived === true;
+          setStageFilter(stage);
+          setStatusFilter(status);
+          setIncludeArchived(archived);
+          void load(stage, status, archived);
+        }}
+      />
       <p>{total} active deals</p>
       <div className="pipeline" aria-label="Pipeline view">
         {stages.map((stage) => (
@@ -1673,7 +1850,7 @@ function App() {
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
-      globalSearchContent={<GlobalSearch />}
+      globalSearchContent={(navigate) => <GlobalSearch onNavigate={navigate} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
