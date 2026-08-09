@@ -273,11 +273,16 @@ function ListPage({
   const [contactRows, setContactRows] = useState<Array<string[]>>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [contactSort, setContactSort] = useState('name');
+  const [contactPage, setContactPage] = useState(1);
+  const [contactTotal, setContactTotal] = useState(0);
   useEffect(() => {
     if (page === 'Contacts')
-      fetch(`/api/contacts?query=${encodeURIComponent(contactSearch)}&sort=${contactSort}`)
+      fetch(
+        `/api/contacts?query=${encodeURIComponent(contactSearch)}&sort=${contactSort}&page=${contactPage}`,
+      )
         .then((response) => (response.ok ? response.json() : { items: [] }))
-        .then((data) =>
+        .then((data) => {
+          setContactTotal(data.total || 0);
           setContactRows(
             data.items.map((c: any) => [
               `${c.firstName} ${c.lastName}`,
@@ -286,9 +291,9 @@ function ListPage({
               c.ownerId || 'Unassigned',
               new Date(c.updatedAt).toLocaleDateString(),
             ]),
-          ),
-        );
-  }, [page, contactSearch, contactSort]);
+          );
+        });
+  }, [page, contactSearch, contactSort, contactPage]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
   const companies = page === 'Contacts' ? contactRows : companiesFor(workspace, user);
   return (
@@ -358,6 +363,7 @@ function ListPage({
                 ? () => {
                     setContactSearch('');
                     setContactSort('name');
+                    setContactPage(1);
                   }
                 : undefined
             }
@@ -409,12 +415,28 @@ function ListPage({
           </table>
         </div>
         <footer className="pagination">
-          <span>Showing 1–4 of 126</span>
+          <span>
+            {page === 'Contacts'
+              ? `Showing ${contactRows.length ? (contactPage - 1) * 25 + 1 : 0}–${(contactPage - 1) * 25 + contactRows.length} of ${contactTotal}`
+              : 'Showing 1–4 of 126'}
+          </span>
           <div>
-            <button className="secondary" disabled>
+            <button
+              className="secondary"
+              disabled={page === 'Contacts' ? contactPage === 1 : true}
+              onClick={
+                page === 'Contacts' ? () => setContactPage(Math.max(1, contactPage - 1)) : undefined
+              }
+            >
               Previous
             </button>
-            <button className="secondary">Next</button>
+            <button
+              className="secondary"
+              disabled={page === 'Contacts' && contactPage * 25 >= contactTotal}
+              onClick={page === 'Contacts' ? () => setContactPage(contactPage + 1) : undefined}
+            >
+              Next
+            </button>
           </div>
         </footer>
       </section>
