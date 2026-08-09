@@ -259,22 +259,23 @@ function GlobalSearch({
 }
 
 function Companies({ canWrite }: { canWrite: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [total, setTotal] = useState(0);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
-  const [text, setText] = useState('');
-  const [filters, setFilters] = useState({
-    lifecycle: '',
-    ownerId: '',
-    industry: '',
-    size: '',
-    tag: '',
-    sort: 'name',
-    direction: 'asc',
-    includeArchived: false,
-    page: 1,
-  });
+  const [text, setText] = useState(() => initialQuery.get('text') || '');
+  const [filters, setFilters] = useState(() => ({
+    lifecycle: initialQuery.get('lifecycle') || '',
+    ownerId: initialQuery.get('ownerId') || '',
+    industry: initialQuery.get('industry') || '',
+    size: initialQuery.get('size') || '',
+    tag: initialQuery.get('tag') || '',
+    sort: initialQuery.get('sort') || 'name',
+    direction: initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
+    includeArchived: initialQuery.get('includeArchived') === 'true',
+    page: Math.max(1, Number(initialQuery.get('page')) || 1),
+  }));
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
   const load = async (search = text, nextFilters = filters) => {
     setState('loading');
@@ -308,7 +309,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   };
   useEffect(() => {
     const record = new URLSearchParams(window.location.search).get('record');
-    void load('');
+    void load();
     if (record)
       fetch(`/api/companies/${encodeURIComponent(record)}`)
         .then((response) => (response.ok ? response.json() : null))
