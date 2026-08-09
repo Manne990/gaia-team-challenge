@@ -269,6 +269,9 @@ END;
 CREATE TRIGGER deals_stage_status_update_guard BEFORE UPDATE OF organization_id, stage_id, status ON deals FOR EACH ROW BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM pipeline_stages WHERE organization_id = NEW.organization_id AND id = NEW.stage_id AND kind = NEW.status) THEN RAISE(ABORT, 'deal status must match pipeline stage kind') END;
 END;
+CREATE TRIGGER pipeline_stages_deal_status_guard BEFORE UPDATE OF kind ON pipeline_stages FOR EACH ROW BEGIN
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM deals WHERE organization_id = OLD.organization_id AND stage_id = OLD.id AND status <> NEW.kind) THEN RAISE(ABORT, 'stage kind must match deals already in stage') END;
+END;
 CREATE TRIGGER tasks_assignee_guard BEFORE INSERT ON tasks FOR EACH ROW WHEN NEW.assignee_id IS NOT NULL BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.assignee_id) THEN RAISE(ABORT, 'task assignee is not an organization member') END;
 END;

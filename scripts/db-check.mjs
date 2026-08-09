@@ -122,6 +122,9 @@ try {
       .run('stage_lost', 'open', 'deal_acme'),
   );
   assert.throws(() =>
+    db.prepare('UPDATE pipeline_stages SET kind = ? WHERE id = ?').run('won', 'stage_qualified'),
+  );
+  assert.throws(() =>
     db
       .prepare(
         'INSERT INTO tasks (id, organization_id, title, status, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
