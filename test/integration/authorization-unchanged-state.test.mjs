@@ -1,30 +1,51 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { readFile, writeFile } from "node:fs/promises";
-import { createTemporaryEnvironment } from "../support/temporary-environment.mjs";
-import { expectForeignWriteToBeRejected } from "../support/authorization-assertions.mjs";
+import { afterEach, describe, expect, it } from 'vitest';
+import { createRequire } from 'node:module';
+import { createTemporaryEnvironment } from '../support/temporary-environment.mjs';
+import { createApp } from '../../src/server/app.ts';
 
-describe("tenant-boundary mutation contract", () => {
+const require = createRequire(import.meta.url);
+const { openDatabase, seedDatabase } = require('../../src/db/database.mjs');
+
+describe('tenant-boundary mutation contract', () => {
   let environment;
-  afterEach(async () => environment?.cleanup());
+  let server;
+  afterEach(async () => {
+    await new Promise((resolve) => server?.close(resolve));
+    await environment?.cleanup();
+  });
 
-  it("rejects a guessed foreign identifier without changing its persisted representation", async () => {
+  it('rejects foreign reads and writes through the product without altering persisted state', async () => {
     environment = await createTemporaryEnvironment();
-    const foreignCompany = { id: "cmp_outside_acme", organizationId: "org_outside_demo", name: "Acme Holdings" };
-    await writeFile(environment.databasePath, JSON.stringify({ companies: [foreignCompany] }));
-    const readForeignState = async () => {
-      const database = JSON.parse(await readFile(environment.databasePath, "utf8"));
-      return database.companies.find((company) => company.id === foreignCompany.id);
-    };
-    await expectForeignWriteToBeRejected({
-      readForeignState,
-      attempt: async () => {
-        const target = await readForeignState();
-        if (target.organizationId !== "org_northstar_demo") return { status: 404 };
-        target.name = "Mutated";
-        await writeFile(environment.databasePath, JSON.stringify({ companies: [target] }));
-        return { status: 200 };
-      },
+    const database = openDatabase(environment.databasePath);
+    seedDatabase(database);
+    const before = database
+      .prepare('SELECT id, name, updated_at FROM companies WHERE id = ?')
+      .get('co_outside');
+    server = createApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: environment.databasePath,
+      environment: 'test',
+    }).listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    const url = `http://127.0.0.1:${server.address().port}`;
+    const signIn = await fetch(`${url}/api/auth/sign-in`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@northstar.test', password: 'OwnerPass!2026' }),
     });
-    expect(environment.databasePath).toContain("northstar-crm-test-");
+    const cookie = signIn.headers.get('set-cookie');
+    expect(signIn.status).toBe(200);
+    expect((await fetch(`${url}/api/companies/co_outside`, { headers: { cookie } })).status).toBe(
+      404,
+    );
+    expect(
+      (await fetch(`${url}/api/companies/co_outside`, { method: 'PUT', headers: { cookie } }))
+        .status,
+    ).toBe(404);
+    expect(
+      database.prepare('SELECT id, name, updated_at FROM companies WHERE id = ?').get('co_outside'),
+    ).toEqual(before);
+    database.close();
   });
 });
