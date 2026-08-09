@@ -51,6 +51,22 @@ try {
   assert.equal(
     db
       .prepare(
+        "SELECT count(*) AS total FROM contacts WHERE organization_id = 'org_northstar' AND owner_id = 'usr_member'",
+      )
+      .get().total,
+    0,
+  );
+  assert.equal(
+    db
+      .prepare(
+        "SELECT count(*) AS total FROM activities WHERE organization_id = 'org_northstar' AND creator_id = 'usr_member'",
+      )
+      .get().total,
+    0,
+  );
+  assert.equal(
+    db
+      .prepare(
         "SELECT count(*) AS total FROM tasks WHERE organization_id = 'org_northstar' AND assignee_id = 'usr_member'",
       )
       .get().total,

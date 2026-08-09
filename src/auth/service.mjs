@@ -188,9 +188,17 @@ export function createAuthService(
       throw new AuthError('LAST_OWNER', 'An organization must keep at least one owner.');
     db.exec('BEGIN IMMEDIATE');
     try {
+      for (const table of ['companies', 'contacts', 'deals']) {
+        db.prepare(
+          `UPDATE ${table} SET owner_id = NULL, updated_at = ?, version = version + 1 WHERE organization_id = ? AND owner_id = (SELECT user_id FROM memberships WHERE id = ?)`,
+        ).run(nowIso(clock), context.organizationId, membership.id);
+      }
       db.prepare(
         'UPDATE tasks SET assignee_id = NULL, updated_at = ?, version = version + 1 WHERE organization_id = ? AND assignee_id = (SELECT user_id FROM memberships WHERE id = ?)',
       ).run(nowIso(clock), context.organizationId, membership.id);
+      db.prepare(
+        'UPDATE activities SET creator_id = NULL WHERE organization_id = ? AND creator_id = (SELECT user_id FROM memberships WHERE id = ?)',
+      ).run(context.organizationId, membership.id);
       db.prepare(
         'UPDATE sessions SET revoked_at = ? WHERE user_id = (SELECT user_id FROM memberships WHERE id = ?) AND organization_id = ? AND revoked_at IS NULL',
       ).run(nowIso(clock), membership.id, context.organizationId);
