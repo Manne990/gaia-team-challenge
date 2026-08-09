@@ -129,6 +129,10 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     const filters = page.getByRole('form', { name: 'Company filters' });
     await filters.getByLabel('Include archived companies').check();
     await filters.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page.getByRole('link', { name: 'Export filtered companies' })).toHaveAttribute(
+      'href',
+      '/api/exports/companies.csv?includeArchived=true',
+    );
     await page.getByRole('button', { name: 'Browser Test Company Updated', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Company change history' })).toContainText(

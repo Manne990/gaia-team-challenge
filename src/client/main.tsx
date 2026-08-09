@@ -93,6 +93,18 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   useEffect(() => {
     void load('');
   }, []);
+  const exportQuery = new URLSearchParams();
+  if (text) exportQuery.set('text', text);
+  for (const [key, value] of Object.entries({
+    lifecycle: filters.lifecycle,
+    ownerId: filters.ownerId,
+    industry: filters.industry,
+    size: filters.size,
+    tag: filters.tag,
+  }))
+    if (value) exportQuery.set(key, value);
+  if (filters.includeArchived) exportQuery.set('includeArchived', 'true');
+  const companyExportHref = `/api/exports/companies.csv${exportQuery.size ? `?${exportQuery}` : ''}`;
   return (
     <section aria-labelledby="companies-heading">
       <h2 id="companies-heading">Companies</h2>
@@ -191,6 +203,9 @@ function Companies({ canWrite }: { canWrite: boolean }) {
         </label>
         <button>Apply filters</button>
       </form>
+      <a href={companyExportHref} download>
+        Export filtered companies
+      </a>
       {canWrite && (
         <form
           aria-label="Create company"
@@ -911,9 +926,11 @@ function Imports({ canWrite }: { canWrite: boolean }) {
         ))}
       </fieldset>
       {canWrite && <button onClick={() => void createPreview()}>Preview import</button>}
-      <a href={`/api/exports/${resource}.csv`} download>
-        Export filtered {resource}
-      </a>
+      {resource === 'contacts' && (
+        <a href="/api/exports/contacts.csv" download>
+          Export contacts
+        </a>
+      )}
       {message && <p role="status">{message}</p>}
       {preview && (
         <>
