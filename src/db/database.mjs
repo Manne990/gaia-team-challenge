@@ -1,8 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
-import { createHash, scryptSync } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hashPassword } from "../auth/service.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 export const defaultDatabasePath = process.env.NORTHSTAR_DB_PATH || join(root, "data", "northstar.sqlite");
@@ -40,10 +40,6 @@ export function resetDatabase(filename = defaultDatabasePath) {
   return db;
 }
 
-const passwordHash = (password) => {
-  const salt = createHash("sha256").update(`northstar:${password}`).digest("hex").slice(0, 32);
-  return `scrypt$${salt}$${scryptSync(password, salt, 64).toString("hex")}`;
-};
 const insert = (db, table, row) => {
   const columns = Object.keys(row);
   db.prepare(`INSERT OR IGNORE INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).run(...columns.map((column) => row[column]));
@@ -58,7 +54,7 @@ export function seedDatabase(db) {
     ]) insert(db, "organizations", { ...organization, created_at: seedTime, updated_at: seedTime });
     for (const user of [
       ["usr_owner", "owner@northstar.test", "OwnerPass!2026", "Northstar Owner"], ["usr_member", "member@northstar.test", "MemberPass!2026", "Northstar Member"], ["usr_viewer", "viewer@northstar.test", "ViewerPass!2026", "Northstar Viewer"], ["usr_outside", "other-owner@outside.test", "OutsidePass!2026", "Outside Owner"],
-    ]) insert(db, "users", { id: user[0], email: user[1], password_hash: passwordHash(user[2]), display_name: user[3], created_at: seedTime, updated_at: seedTime });
+    ]) insert(db, "users", { id: user[0], email: user[1], password_hash: hashPassword(user[2]), display_name: user[3], created_at: seedTime, updated_at: seedTime });
     for (const membership of [["mem_owner", "org_northstar", "usr_owner", "owner"], ["mem_member", "org_northstar", "usr_member", "member"], ["mem_viewer", "org_northstar", "usr_viewer", "viewer"], ["mem_outside", "org_outside", "usr_outside", "owner"]]) insert(db, "memberships", { id: membership[0], organization_id: membership[1], user_id: membership[2], role: membership[3], created_at: seedTime, updated_at: seedTime });
     const stages = [["stage_qualified", "Qualified", 0, "open"], ["stage_proposal", "Proposal", 1, "open"], ["stage_negotiation", "Negotiation", 2, "open"], ["stage_won", "Won", 3, "won"], ["stage_lost", "Lost", 4, "lost"]];
     for (const stage of stages) insert(db, "pipeline_stages", { id: stage[0], organization_id: "org_northstar", name: stage[1], position: stage[2], kind: stage[3], created_at: seedTime });
