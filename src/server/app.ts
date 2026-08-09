@@ -617,6 +617,20 @@ export function createApp(config: AppConfig) {
   app.delete('/api/administration/members/:id', (request, response) => {
     try {
       const session = administrationSession(request);
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.userId,
+          'membership.revoked',
+          'membership',
+          request.params.id,
+          '{}',
+          new Date().toISOString(),
+        );
       auth.removeMember(session, request.params.id);
       return response.status(204).end();
     } catch (error) {
