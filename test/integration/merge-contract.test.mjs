@@ -187,6 +187,9 @@ describe('explicit contact merge', () => {
     expect(survivorBody.tasks).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'task_merge' })]),
     );
+    expect(survivorBody.activities).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'act_merge', occurredAt: now })]),
+    );
     const chainedCandidate = (
       await (await fetch(`${url}/api/duplicates/contacts`, { headers: { cookie } })).json()
     ).items.find((item) => item.sourceId === 'ct_ada' && item.targetId === 'ct_third');
