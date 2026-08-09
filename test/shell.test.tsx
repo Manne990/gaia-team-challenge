@@ -13,7 +13,7 @@ describe('CRM application shell', () => {
     expect(screen.getByRole('table', { name: 'Companies list' })).toBeInTheDocument();
   });
 
-  it('renders deliberate loading, error, not-found, conflict, and forbidden states', async () => {
+  it('renders deliberate loading, error, not-found, and conflict states', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Activities' }));
@@ -27,6 +27,12 @@ describe('CRM application shell', () => {
     await user.click(screen.getByRole('button', { name: 'Audit' }));
     expect(screen.getByRole('heading', { name: 'No audit event found' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Administration' })).toBeInTheDocument();
+  });
+
+  it('hides owner-only navigation for an authenticated viewer role', () => {
+    render(<App role="viewer" />);
+    expect(screen.queryByRole('button', { name: 'Administration' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Companies' })).toBeInTheDocument();
   });
 
   it('restores focus to the account trigger after the dialog closes', async () => {

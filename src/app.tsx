@@ -394,10 +394,9 @@ function Placeholder({ page, role }: { page: Page; role: Role }) {
   );
 }
 
-export function App() {
+export function App({ role = 'owner' }: { role?: Role }) {
   const [page, setPage] = useState<Page>('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
-  const role: Role = 'owner';
   const [dialog, setDialog] = useState(false);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [notice, setNotice] = useState('Updates are saved automatically.');
