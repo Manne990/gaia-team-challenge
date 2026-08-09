@@ -17,6 +17,11 @@ describe('notifications API', () => {
     environment = await createTemporaryEnvironment();
     const db = openDatabase(environment.databasePath);
     seedDatabase(db);
+    db.prepare('UPDATE tasks SET assignee_id = ?, due_at = ? WHERE id = ?').run(
+      'usr_owner',
+      new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(),
+      'task_today',
+    );
     db.close();
     server = createApp({
       host: '127.0.0.1',
@@ -41,10 +46,26 @@ describe('notifications API', () => {
     expect(first.status).toBe(200);
     const items = (await first.json()).items;
     expect(items.length).toBeGreaterThan(0);
+    expect(items.some((item) => JSON.parse(item.payloadJson).recordId === 'task_today')).toBe(
+      false,
+    );
+    const boundary = openDatabase(environment.databasePath);
+    boundary
+      .prepare('UPDATE tasks SET due_at = ? WHERE id = ?')
+      .run(new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(), 'task_today');
+    boundary.close();
+    const withinWindow = await fetch(`${url}/api/notifications?unread=true`, {
+      headers: { cookie: owner },
+    });
+    expect(
+      (await withinWindow.json()).items.some(
+        (item) => JSON.parse(item.payloadJson).recordId === 'task_today',
+      ),
+    ).toBe(true);
     const again = await fetch(`${url}/api/notifications?unread=true`, {
       headers: { cookie: owner },
     });
-    expect((await again.json()).items).toHaveLength(items.length);
+    expect((await again.json()).items).toHaveLength(items.length + 1);
     expect(
       (
         await fetch(`${url}/api/notifications/${items[0].id}/read`, {
