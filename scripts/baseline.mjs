@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { openDatabase, resetDatabase, seedDatabase, defaultDatabasePath } from "../src/db/database.mjs";
 
 const command = process.argv[2];
 const productContract = new URL("../docs/product-contract.md", import.meta.url);
@@ -8,7 +9,21 @@ if (!readFileSync(productContract, "utf8").includes("Northstar CRM V1")) {
   throw new Error("The frozen product contract is missing");
 }
 
-if (["db-reset", "db-seed", "ci", "build"].includes(command)) {
+if (command === "db-reset") {
+  resetDatabase(defaultDatabasePath).close();
+  console.log("database reset: PASS");
+  process.exit(0);
+}
+
+if (command === "db-seed") {
+  const db = openDatabase(defaultDatabasePath);
+  seedDatabase(db);
+  db.close();
+  console.log("database seed: PASS");
+  process.exit(0);
+}
+
+if (["ci", "build"].includes(command)) {
   console.log(`baseline ${command}: PASS (product implementation still required)`);
   process.exit(0);
 }
