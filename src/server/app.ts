@@ -129,6 +129,30 @@ const importPreviewInput = z.object({
   csv: z.string().max(1_000_000),
   mapping: z.record(z.string(), z.string()).optional(),
 });
+const taskInput = z.object({
+  title: z.string().trim().min(1).max(240),
+  description: z.string().max(5000).optional().default(''),
+  assigneeId: z.string().trim().min(1).max(100).nullable().optional(),
+  dueAt: z.string().datetime({ offset: true }).nullable().optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+  status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional().default('open'),
+  companyId: z.string().trim().min(1).max(100).nullable().optional(),
+  contactId: z.string().trim().min(1).max(100).nullable().optional(),
+  dealId: z.string().trim().min(1).max(100).nullable().optional(),
+});
+const taskUpdateInput = taskInput.extend({ version: z.coerce.number().int().positive() });
+const taskListQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  assigneeId: z.string().trim().optional(),
+  status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
+  relation: z.enum(['company', 'contact', 'deal']).optional(),
+  relationId: z.string().trim().optional(),
+  due: z.enum(['overdue', 'today', 'upcoming', 'completed']).optional(),
+  includeArchived: z.coerce.boolean().default(false),
+  sort: z.enum(['dueAt', 'createdAt', 'updatedAt', 'priority']).default('dueAt'),
+  direction: z.enum(['asc', 'desc']).default('asc'),
+});
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
@@ -672,6 +696,284 @@ export function createApp(config: AppConfig) {
             .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
     } catch (e) {
       return sendContactError(e, response);
+    }
+  });
+
+  const taskSession = (request: express.Request) =>
+    auth.authenticate(cookieToken(request.headers.cookie));
+  const sendTaskError = (error: unknown, response: express.Response) => {
+    if (error instanceof AuthError)
+      return response.status(error.code === 'FORBIDDEN' ? 403 : 401).json({
+        error: {
+          code: error.code,
+          message:
+            error.code === 'FORBIDDEN'
+              ? 'You do not have permission to do that.'
+              : 'Please sign in to continue.',
+        },
+      });
+    if (error instanceof z.ZodError)
+      return response
+        .status(400)
+        .json({ error: { code: 'VALIDATION', message: 'Check the task fields and try again.' } });
+    if (String(error).includes('INVALID_TASK_REFERENCE'))
+      return response.status(400).json({
+        error: {
+          code: 'VALIDATION',
+          message: 'Task relationships and assignee must belong to this organization.',
+        },
+      });
+    return response.status(500).json({
+      error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
+    });
+  };
+  const validateTaskReferences = (organizationId: string, input: z.infer<typeof taskInput>) => {
+    for (const [table, id] of [
+      ['memberships', input.assigneeId],
+      ['companies', input.companyId],
+      ['contacts', input.contactId],
+      ['deals', input.dealId],
+    ] as const) {
+      if (!id) continue;
+      const field = table === 'memberships' ? 'user_id' : 'id';
+      if (
+        !database
+          .prepare(`SELECT 1 FROM ${table} WHERE organization_id = ? AND ${field} = ?`)
+          .get(organizationId, id)
+      )
+        throw new Error('INVALID_TASK_REFERENCE');
+    }
+  };
+  const auditTask = (
+    organizationId: string,
+    actorId: string,
+    action: string,
+    id: string,
+    summary: unknown,
+  ) =>
+    database
+      .prepare(
+        'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        `aud_${randomUUID()}`,
+        organizationId,
+        actorId,
+        action,
+        'task',
+        id,
+        JSON.stringify(summary),
+        new Date().toISOString(),
+      );
+  app.get('/api/tasks', (request, response) => {
+    try {
+      const s = taskSession(request);
+      const query = taskListQuery.parse(request.query);
+      const where = ['organization_id = ?'];
+      const args: unknown[] = [s.organizationId];
+      if (!query.includeArchived) where.push('archived_at IS NULL');
+      if (query.assigneeId === 'me') {
+        where.push('assignee_id = ?');
+        args.push(s.userId);
+      } else if (query.assigneeId) {
+        where.push('assignee_id = ?');
+        args.push(query.assigneeId);
+      }
+      if (query.status) {
+        where.push('status = ?');
+        args.push(query.status);
+      }
+      if (query.relation && query.relationId) {
+        where.push(`${query.relation}_id = ?`);
+        args.push(query.relationId);
+      }
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      const tomorrow = new Date(`${today}T00:00:00.000Z`);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      if (query.due === 'completed') where.push("status = 'completed'");
+      if (query.due === 'overdue') {
+        where.push("status NOT IN ('completed', 'cancelled') AND due_at < ?");
+        args.push(now.toISOString());
+      }
+      if (query.due === 'today') {
+        where.push("status NOT IN ('completed', 'cancelled') AND due_at >= ? AND due_at < ?");
+        args.push(`${today}T00:00:00.000Z`, tomorrow.toISOString());
+      }
+      if (query.due === 'upcoming') {
+        where.push("status NOT IN ('completed', 'cancelled') AND due_at >= ?");
+        args.push(tomorrow.toISOString());
+      }
+      const order = {
+        dueAt: 'due_at',
+        createdAt: 'created_at',
+        updatedAt: 'updated_at',
+        priority: "CASE priority WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END",
+      }[query.sort];
+      const clause = where.join(' AND ');
+      const total = database
+        .prepare(`SELECT count(*) AS total FROM tasks WHERE ${clause}`)
+        .get(...args).total;
+      return response.json({
+        items: database
+          .prepare(
+            `SELECT * FROM tasks WHERE ${clause} ORDER BY ${order} ${query.direction.toUpperCase()}, id ASC LIMIT ? OFFSET ?`,
+          )
+          .all(...args, query.pageSize, (query.page - 1) * query.pageSize),
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+        timezone: 'UTC',
+      });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.post('/api/tasks', (request, response) => {
+    try {
+      const s = auth.requireRole(taskSession(request), ['owner', 'member']);
+      const input = taskInput.parse(request.body);
+      validateTaskReferences(s.organizationId, input);
+      const id = `task_${randomUUID()}`;
+      const now = new Date().toISOString();
+      const completedAt = input.status === 'completed' ? now : null;
+      transaction(() => {
+        database
+          .prepare(
+            'INSERT INTO tasks (id, organization_id, title, description, assignee_id, due_at, priority, status, company_id, contact_id, deal_id, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            id,
+            s.organizationId,
+            input.title,
+            input.description,
+            input.assigneeId || null,
+            input.dueAt || null,
+            input.priority,
+            input.status,
+            input.companyId || null,
+            input.contactId || null,
+            input.dealId || null,
+            completedAt,
+            now,
+            now,
+          );
+        auditTask(s.organizationId, s.userId, 'task.created', id, { title: input.title });
+      });
+      return response
+        .status(201)
+        .json(database.prepare('SELECT * FROM tasks WHERE id = ?').get(id));
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.get('/api/tasks/:id', (request, response) => {
+    try {
+      const s = taskSession(request);
+      const task = database
+        .prepare('SELECT * FROM tasks WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, s.organizationId);
+      return task
+        ? response.json({
+            ...task,
+            history: database
+              .prepare(
+                "SELECT * FROM audit_events WHERE organization_id = ? AND entity_type = 'task' AND entity_id = ? ORDER BY created_at DESC",
+              )
+              .all(s.organizationId, task.id),
+          })
+        : response
+            .status(404)
+            .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.put('/api/tasks/:id', (request, response) => {
+    try {
+      const s = auth.requireRole(taskSession(request), ['owner', 'member']);
+      const input = taskUpdateInput.parse(request.body);
+      const existing = database
+        .prepare('SELECT * FROM tasks WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, s.organizationId);
+      if (!existing)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+      if (existing.version !== input.version)
+        return response.status(409).json({
+          error: { code: 'CONFLICT', message: 'This task changed. Refresh it before saving.' },
+        });
+      validateTaskReferences(s.organizationId, input);
+      const now = new Date().toISOString();
+      const completedAt = input.status === 'completed' ? existing.completed_at || now : null;
+      transaction(() => {
+        database
+          .prepare(
+            'UPDATE tasks SET title=?, description=?, assignee_id=?, due_at=?, priority=?, status=?, company_id=?, contact_id=?, deal_id=?, completed_at=?, updated_at=?, version=version+1 WHERE id=? AND organization_id=? AND version=?',
+          )
+          .run(
+            input.title,
+            input.description,
+            input.assigneeId || null,
+            input.dueAt || null,
+            input.priority,
+            input.status,
+            input.companyId || null,
+            input.contactId || null,
+            input.dealId || null,
+            completedAt,
+            now,
+            existing.id,
+            s.organizationId,
+            input.version,
+          );
+        auditTask(s.organizationId, s.userId, 'task.updated', existing.id, {
+          status: input.status,
+        });
+      });
+      return response.json(database.prepare('SELECT * FROM tasks WHERE id = ?').get(existing.id));
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
+  app.post('/api/tasks/:id/:action', (request, response) => {
+    try {
+      const s = auth.requireRole(taskSession(request), ['owner', 'member']);
+      const action = request.params.action;
+      if (!['archive', 'restore', 'complete', 'reopen'].includes(action))
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'That action does not exist.' } });
+      const task = database
+        .prepare('SELECT * FROM tasks WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, s.organizationId);
+      if (!task)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+      const now = new Date().toISOString();
+      const nextStatus =
+        action === 'complete' ? 'completed' : action === 'reopen' ? 'open' : task.status;
+      const archived = action === 'archive' ? now : action === 'restore' ? null : task.archived_at;
+      transaction(() => {
+        database
+          .prepare(
+            'UPDATE tasks SET status=?, completed_at=?, archived_at=?, updated_at=?, version=version+1 WHERE id=? AND organization_id=?',
+          )
+          .run(
+            nextStatus,
+            nextStatus === 'completed' ? task.completed_at || now : null,
+            archived,
+            now,
+            task.id,
+            s.organizationId,
+          );
+        auditTask(s.organizationId, s.userId, `task.${action}d`, task.id, {});
+      });
+      return response.json(database.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id));
+    } catch (error) {
+      return sendTaskError(error, response);
     }
   });
 
