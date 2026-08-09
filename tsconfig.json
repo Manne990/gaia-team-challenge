@@ -17,10 +17,8 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "src/client",
-    "src/shared",
+    "src",
     "vite.config.ts",
-    "vitest.config.ts",
     "scripts/**/*.mjs",
     "test/**/*.mjs"
   ]

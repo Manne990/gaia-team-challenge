@@ -4,9 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Source-identical baseline for the SOL versus Gaia CRM challenge",
-  "engines": {
-    "node": ">=22"
-  },
+  "engines": { "node": ">=22" },
   "scripts": {
     "db:reset": "tsx scripts/db.ts reset",
     "db:seed": "tsx scripts/db.ts seed",
