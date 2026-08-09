@@ -3,16 +3,27 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 type Screen = 'loading' | 'ready' | 'unavailable' | 'unexpected';
+type Session = { user: { displayName: string; email: string }; role: string };
 
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
+  const [session, setSession] = useState<Session | null>(null);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let active = true;
-    fetch('/api/health')
+    fetch('/api/auth/session')
       .then((response) => {
+        if (response.status === 401) return null;
         if (!response.ok) throw new Error('Service unavailable');
-        if (active) setScreen('ready');
+        return response.json();
+      })
+      .then((current) => {
+        if (active) {
+          setSession(current);
+          setScreen('ready');
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -37,11 +48,54 @@ function App() {
       </main>
     );
   }
+  if (!session)
+    return (
+      <main>
+        <p className="eyebrow">Northstar CRM</p>
+        <h1>Sign in</h1>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setSubmitting(true);
+            setError('');
+            const form = new FormData(event.currentTarget);
+            const response = await fetch('/api/auth/sign-in', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
+            });
+            setSubmitting(false);
+            if (!response.ok) return setError('Email or password is incorrect.');
+            setSession(await response.json());
+          }}
+        >
+          <label>
+            Email
+            <input name="email" type="email" autoComplete="email" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autoComplete="current-password" required />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <button disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in'}</button>
+        </form>
+      </main>
+    );
   return (
     <main>
       <p className="eyebrow">Northstar CRM</p>
-      <h1>Your customer operations, in one place.</h1>
-      <p>The CRM foundation is online. Sign-in and operational workflows are being added next.</p>
+      <h1>Welcome, {session.user.displayName}</h1>
+      <p>You are signed in as a {session.role}.</p>
+      <button
+        type="button"
+        onClick={async () => {
+          await fetch('/api/auth/logout', { method: 'POST' });
+          setSession(null);
+        }}
+      >
+        Sign out
+      </button>
     </main>
   );
 }

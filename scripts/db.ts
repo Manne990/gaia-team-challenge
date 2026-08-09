@@ -1,44 +1,28 @@
-import { mkdir, rm } from 'node:fs/promises';
-import path from 'node:path';
-import Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import { loadRuntimeConfig } from '../src/shared/config.js';
 import { assertSafeDatabaseResetTarget } from '../src/shared/database-path.js';
+
+const require = createRequire(import.meta.url);
+const { resetDatabase, openDatabase, seedDatabase } = require('../src/db/database.mjs') as {
+  resetDatabase(path: string): { close(): void };
+  openDatabase(path: string): { close(): void };
+  seedDatabase(database: unknown): void;
+};
 
 const action = process.argv[2];
 const config = loadRuntimeConfig(process.argv.slice(3));
 
 async function reset() {
-  await mkdir(path.dirname(config.databasePath), { recursive: true });
   await assertSafeDatabaseResetTarget(config.databasePath);
-  await rm(config.databasePath, { force: true });
-  initialize().close();
+  resetDatabase(config.databasePath).close();
   console.log(`Database reset at ${config.databasePath}`);
 }
 
 async function seed() {
-  await mkdir(path.dirname(config.databasePath), { recursive: true });
-  const database = initialize();
-  database
-    .prepare(
-      "INSERT INTO system_metadata (key, value) VALUES ('seed_version', 'foundation') ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-    )
-    .run();
+  const database = openDatabase(config.databasePath);
+  seedDatabase(database);
   database.close();
-  console.log(
-    `Database initialized at ${config.databasePath}; domain seed data will be supplied by migrations.`,
-  );
-}
-
-function initialize() {
-  const database = new Database(config.databasePath);
-  database.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS system_metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-  return database;
+  console.log(`Database seeded at ${config.databasePath}.`);
 }
 
 if (action === 'reset') await reset();
