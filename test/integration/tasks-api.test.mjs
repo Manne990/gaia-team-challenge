@@ -62,6 +62,33 @@ describe('tasks API', () => {
       headers: { cookie: owner },
     });
     expect((await listed.json()).items.map((item) => item.id)).toContain(task.id);
+    const now = new Date();
+    const tomorrow = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+    );
+    const boundaryTasks = [
+      ['Boundary overdue', new Date(now.getTime() - 60_000).toISOString()],
+      ['Boundary today', new Date(now.getTime() + 60_000).toISOString()],
+      ['Boundary upcoming', tomorrow.toISOString()],
+    ];
+    for (const [title, dueAt] of boundaryTasks) {
+      expect(
+        (
+          await fetch(`${url}/api/tasks`, {
+            method: 'POST',
+            headers: { cookie: owner, 'content-type': 'application/json' },
+            body: JSON.stringify({ title, dueAt }),
+          })
+        ).status,
+      ).toBe(201);
+    }
+    const dueView = async (due) =>
+      (
+        await (await fetch(`${url}/api/tasks?due=${due}`, { headers: { cookie: owner } })).json()
+      ).items.map((item) => item.title);
+    expect(await dueView('overdue')).toContain('Boundary overdue');
+    expect(await dueView('today')).toContain('Boundary today');
+    expect(await dueView('upcoming')).toContain('Boundary upcoming');
     const completed = await fetch(`${url}/api/tasks/${task.id}/complete`, {
       method: 'POST',
       headers: { cookie: owner },
