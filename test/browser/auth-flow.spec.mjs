@@ -158,6 +158,14 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(403);
+    await expect(
+      page.request
+        .post(`${url}/api/contacts`, {
+          headers: { cookie: cookieHeader, 'content-type': 'application/json' },
+          data: { firstName: 'Blocked', lastName: 'Contact' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(403);
     await signOut(page);
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
@@ -210,6 +218,17 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await navigateTo(page, 'Companies');
     await expect(page.getByText('Acme Nordic AB', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Northstar Logistics', { exact: true })).toHaveCount(0);
+    await expect(
+      page.request
+        .get(`${url}/api/contacts/ct_ada`, {
+          headers: {
+            cookie: (await page.context().cookies(url))
+              .map((cookie) => `${cookie.name}=${cookie.value}`)
+              .join('; '),
+          },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(404);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
