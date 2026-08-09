@@ -63,6 +63,7 @@ export function createAuthService(
       expiresAt,
       user: { id: user.id, email: user.email, displayName: user.display_name },
       organizationId: membership.organization_id,
+      organization: { id: membership.organization_id, name: membership.organization_name },
       role: membership.role,
     };
   }
@@ -83,7 +84,9 @@ export function createAuthService(
       throw invalidCredentials();
     const memberships = db
       .prepare(
-        'SELECT organization_id, role FROM memberships WHERE user_id = ? ORDER BY organization_id',
+        `SELECT memberships.organization_id, memberships.role, organizations.name AS organization_name
+         FROM memberships JOIN organizations ON organizations.id = memberships.organization_id
+         WHERE memberships.user_id = ? ORDER BY memberships.organization_id`,
       )
       .all(user.id);
     const membership = organizationId
@@ -98,9 +101,10 @@ export function createAuthService(
     const session = db
       .prepare(
         `SELECT sessions.id, sessions.user_id, sessions.organization_id, sessions.expires_at, sessions.revoked_at,
-      users.email, users.display_name, memberships.role
+      users.email, users.display_name, memberships.role, organizations.name AS organization_name
       FROM sessions JOIN users ON users.id = sessions.user_id
       JOIN memberships ON memberships.user_id = sessions.user_id AND memberships.organization_id = sessions.organization_id
+      JOIN organizations ON organizations.id = sessions.organization_id
       WHERE sessions.token_hash = ?`,
       )
       .get(tokenHash(token));
@@ -111,6 +115,7 @@ export function createAuthService(
       sessionId: session.id,
       userId: session.user_id,
       organizationId: session.organization_id,
+      organization: { id: session.organization_id, name: session.organization_name },
       role: session.role,
       user: { id: session.user_id, email: session.email, displayName: session.display_name },
     };
