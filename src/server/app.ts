@@ -45,6 +45,27 @@ export function createApp(config: AppConfig) {
   const database = openDatabase(config.databasePath);
   migrate(database);
   const auth = createAuthService(database);
+  const auditContact = (
+    organizationId: string,
+    actorId: string,
+    action: string,
+    contactId: string,
+    summary: unknown,
+  ) =>
+    database
+      .prepare(
+        'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        `aud_${randomUUID()}`,
+        organizationId,
+        actorId,
+        action,
+        'contact',
+        contactId,
+        JSON.stringify(summary),
+        new Date().toISOString(),
+      );
   const sessionCookie = (token: string, expiresAt: string) =>
     `northstar_session=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}${config.environment === 'production' ? '; Secure' : ''}`;
 
@@ -219,6 +240,10 @@ export function createApp(config: AppConfig) {
           now,
           now,
         );
+      auditContact(s.organizationId, s.userId, 'created', id, {
+        email,
+        companyId: c.companyId || null,
+      });
       return response.status(201).json({
         ...database.prepare(`SELECT ${contactFields} FROM contacts WHERE id = ?`).get(id),
         duplicateWarning: duplicate || null,
@@ -298,6 +323,9 @@ export function createApp(config: AppConfig) {
             message: 'This contact changed or is unavailable. Refresh and try again.',
           },
         });
+      auditContact(s.organizationId, s.userId, 'updated', request.params.id, {
+        version: c.version || null,
+      });
       return response.json(
         database
           .prepare(`SELECT ${contactFields} FROM contacts WHERE id = ?`)
@@ -320,6 +348,14 @@ export function createApp(config: AppConfig) {
           'UPDATE contacts SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ?',
         )
         .run(archived, new Date().toISOString(), request.params.id, s.organizationId);
+      if (result.changes)
+        auditContact(
+          s.organizationId,
+          s.userId,
+          archived ? 'archived' : 'restored',
+          request.params.id,
+          {},
+        );
       return result.changes
         ? response.status(204).end()
         : response

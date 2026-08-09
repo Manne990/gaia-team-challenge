@@ -65,9 +65,9 @@ describe('contacts API', () => {
         })
       ).status,
     ).toBe(200);
-    expect(
-      (await fetch(`${url}/api/contacts/${contact.id}`, { headers: { cookie: owner } })).status,
-    ).toBe(200);
+    const detail = await fetch(`${url}/api/contacts/${contact.id}`, { headers: { cookie: owner } });
+    expect(detail.status).toBe(200);
+    expect((await detail.json()).history).toHaveLength(1);
     expect(
       (
         await fetch(`${url}/api/contacts/${contact.id}/archive`, {

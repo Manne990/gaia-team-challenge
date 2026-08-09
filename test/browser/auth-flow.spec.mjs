@@ -101,6 +101,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await navigateTo(page, 'Contacts');
     await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Contacts list' })).toBeVisible();
+    expect(
+      await page.evaluate(() => fetch('/api/contacts').then((response) => response.status)),
+    ).toBe(200);
     await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();
