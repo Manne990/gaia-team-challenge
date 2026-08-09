@@ -1463,7 +1463,11 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
-function Notifications({ navigate }: { navigate: (page: 'Tasks' | 'Deals') => void }) {
+function Notifications({
+  navigate,
+}: {
+  navigate: (page: 'Tasks' | 'Deals', recordId?: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(true);
   const [items, setItems] = useState<any[]>([]);
@@ -1510,7 +1514,7 @@ function Notifications({ navigate }: { navigate: (page: 'Tasks' | 'Deals') => vo
                   onClick={async () => {
                     const payload = JSON.parse(item.payloadJson);
                     await fetch(`/api/notifications/${item.id}/read`, { method: 'POST' });
-                    navigate(payload.recordType === 'deal' ? 'Deals' : 'Tasks');
+                    navigate(payload.recordType === 'deal' ? 'Deals' : 'Tasks', payload.recordId);
                   }}
                 >
                   {JSON.parse(item.payloadJson).title}
