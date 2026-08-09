@@ -5,8 +5,8 @@ import type { AppConfig } from '../shared/config.js';
 
 const require = createRequire(import.meta.url);
 const { openDatabase, migrate } = require('../db/database.mjs') as {
-  openDatabase(path: string): unknown;
-  migrate(database: unknown): void;
+  openDatabase(path: string): any;
+  migrate(database: any): void;
 };
 const { createAuthService, AuthError } = require('../auth/service.mjs') as {
   createAuthService(database: unknown): any;
@@ -77,6 +77,46 @@ export function createApp(config: AppConfig) {
       'northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
     );
     return response.status(204).end();
+  });
+
+  app.get('/api/companies/:id', (request, response) => {
+    try {
+      const session = auth.authenticate(cookieToken(request.headers.cookie));
+      const company = database
+        .prepare('SELECT id, name FROM companies WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, session.organizationId);
+      if (!company)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+      return response.json(company);
+    } catch {
+      return response
+        .status(401)
+        .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
+    }
+  });
+  app.put('/api/companies/:id', (request, response) => {
+    try {
+      const session = auth.requireRole(auth.authenticate(cookieToken(request.headers.cookie)), [
+        'owner',
+        'member',
+      ]);
+      const company = database
+        .prepare('SELECT id FROM companies WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, session.organizationId);
+      if (!company)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
+      return response.status(409).json({
+        error: { code: 'NOT_IMPLEMENTED', message: 'Company editing is not available yet.' },
+      });
+    } catch {
+      return response
+        .status(401)
+        .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
+    }
   });
 
   app.use('/api', (_request, response) => {

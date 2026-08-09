@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { openDatabase } from '../../src/db/database.mjs';
 
 const freePort = () =>
   new Promise((resolve, reject) => {
@@ -60,7 +61,19 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
   const url = `http://127.0.0.1:${port}`;
   try {
     await waitForHealth(url);
-    await page.goto(url);
+    let releaseSession;
+    const sessionGate = new Promise((resolve) => {
+      releaseSession = resolve;
+    });
+    await page.route('**/api/auth/session', async (route) => {
+      await sessionGate;
+      await route.continue();
+    });
+    const navigation = page.goto(url);
+    await expect(page.locator('main')).toHaveAttribute('aria-busy', 'true');
+    releaseSession();
+    await navigation;
+    await page.unroute('**/api/auth/session');
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('wrong password');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
@@ -68,7 +81,16 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: /Welcome, Northstar Owner/ })).toBeVisible();
+    const database = openDatabase(databasePath);
+    database.prepare("UPDATE sessions SET expires_at = '2020-01-01T00:00:00.000Z'").run();
+    database.close();
     await page.reload();
+    await expect(page.getByRole('alert')).toHaveText(
+      'Your session has expired. Please sign in again.',
+    );
+    await page.getByLabel('Email').fill('owner@northstar.test');
+    await page.getByLabel('Password').fill('OwnerPass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: /Welcome, Northstar Owner/ })).toBeVisible();
     await page.getByRole('button', { name: 'Sign out' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
