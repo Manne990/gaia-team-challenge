@@ -1467,7 +1467,7 @@ export function createApp(config: AppConfig) {
   });
 
   const dealFields =
-    'id, company_id AS companyId, owner_id AS ownerId, stage_id AS stageId, name, amount_cents AS amountCents, currency, expected_close_date AS expectedCloseDate, probability, status, loss_reason AS lossReason, created_at AS createdAt, updated_at AS updatedAt, version';
+    'deals.id, deals.company_id AS companyId, deals.owner_id AS ownerId, deals.stage_id AS stageId, deals.name, deals.amount_cents AS amountCents, deals.currency, deals.expected_close_date AS expectedCloseDate, deals.probability, deals.status, deals.loss_reason AS lossReason, deals.created_at AS createdAt, deals.updated_at AS updatedAt, deals.version';
   const dealSession = (request: express.Request) =>
     auth.authenticate(cookieToken(request.headers.cookie));
   const dealError = (error: unknown, response: express.Response) => {
@@ -1685,14 +1685,12 @@ export function createApp(config: AppConfig) {
         ? response.json(
             database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
           )
-        : response
-            .status(409)
-            .json({
-              error: {
-                code: 'CONFLICT',
-                message: 'The deal changed, stage is invalid, or a loss reason is required.',
-              },
-            });
+        : response.status(409).json({
+            error: {
+              code: 'CONFLICT',
+              message: 'The deal changed, stage is invalid, or a loss reason is required.',
+            },
+          });
     } catch (error) {
       return dealError(error, response);
     }
