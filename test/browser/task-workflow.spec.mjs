@@ -85,7 +85,7 @@ test('actual task workspace creates, completes, reopens, archives, and keeps vie
     await expect(taskRow).toContainText('open');
     await taskRow.getByRole('button', { name: 'Archive task' }).click();
     await expect(page.getByText('Task archived.')).toBeVisible();
-    await page.getByRole('button', { name: 'Open account menu' }).click();
+    await page.getByRole('button', { name: /Open account menu/ }).click();
     await page.getByRole('button', { name: 'Sign out' }).click();
     await page.getByRole('button', { name: 'Confirm sign out' }).click();
     await page.getByLabel('Email').fill('viewer@northstar.test');

@@ -1027,7 +1027,7 @@ export function App({
         <div className="sidebar-bottom">
           <button
             className="profile"
-            aria-label="Open account menu"
+            aria-label={`${user.displayName} ${role} — Open account menu`}
             onClick={(event) => openDialog(event.currentTarget)}
           >
             <span className="avatar">LB</span>
