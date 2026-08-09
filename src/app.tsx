@@ -1233,6 +1233,7 @@ export function App({
   user,
   workspace,
   companiesContent,
+  dashboardContent,
   activitiesContent,
   dealsContent,
   importsContent,
@@ -1245,6 +1246,7 @@ export function App({
   user: ShellUser;
   workspace: Workspace;
   companiesContent?: ReactNode;
+  dashboardContent?: ReactNode | ((navigate: (page: Page) => void) => ReactNode);
   activitiesContent?: ReactNode;
   dealsContent?: ReactNode;
   importsContent?: ReactNode;
@@ -1274,7 +1276,13 @@ export function App({
   };
   const visible = navigation.filter((item) => !item.ownerOnly || role === 'owner');
   const content =
-    page === 'Dashboard' ? (
+    page === 'Dashboard' && dashboardContent ? (
+      typeof dashboardContent === 'function' ? (
+        dashboardContent(navigate)
+      ) : (
+        dashboardContent
+      )
+    ) : page === 'Dashboard' ? (
       <Dashboard user={user} workspace={workspace} />
     ) : page === 'Companies' && companiesContent ? (
       companiesContent

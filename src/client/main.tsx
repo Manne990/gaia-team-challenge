@@ -2168,6 +2168,121 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
+function LiveDashboard({
+  navigate,
+}: {
+  navigate: (page: 'Activities' | 'Deals' | 'Tasks' | 'Companies') => void;
+}) {
+  const [data, setData] = useState<any>();
+  const [error, setError] = useState('');
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then(setData)
+      .catch(() => setError('Dashboard metrics could not be loaded.'));
+  }, []);
+  const open = (page: 'Activities' | 'Deals' | 'Tasks' | 'Companies', query = '') => {
+    window.history.replaceState(null, '', `${window.location.pathname}${query}`);
+    navigate(page);
+  };
+  const money = (items: any[]) =>
+    items.length
+      ? items
+          .map((item) => `${item.currency} ${(item.amountCents / 100).toLocaleString()}`)
+          .join(' · ')
+      : '—';
+  if (error)
+    return (
+      <section className="state-panel state-error" role="alert">
+        {error}
+      </section>
+    );
+  if (!data)
+    return (
+      <section className="state-panel state-loading" aria-live="polite">
+        Loading dashboard metrics…
+      </section>
+    );
+  return (
+    <section aria-labelledby="dashboard-heading">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Evidence-derived · {data.semantics.timezone}</p>
+          <h1 id="dashboard-heading">Dashboard</h1>
+          <p className="subtle">Live organization metrics, refreshed when this dashboard opens.</p>
+        </div>
+      </div>
+      <section className="metrics" aria-label="Dashboard metrics">
+        <button className="metric" onClick={() => open('Deals', '?status=open')}>
+          <p>Open pipeline value</p>
+          <strong>{money(data.pipeline)}</strong>
+          <small>Open, unarchived deals</small>
+        </button>
+        <button className="metric" onClick={() => open('Deals', '?status=open')}>
+          <p>Deals closing soon</p>
+          <strong>{data.closingSoon}</strong>
+          <small>Next {data.semantics.closingSoonDays} UTC days</small>
+        </button>
+        <button className="metric" onClick={() => open('Tasks', '?due=overdue')}>
+          <p>Overdue tasks</p>
+          <strong>{data.tasks.overdue}</strong>
+          <small className="alert">Open tasks before now</small>
+        </button>
+        <button className="metric" onClick={() => open('Tasks', '?due=upcoming')}>
+          <p>Upcoming tasks</p>
+          <strong>{data.tasks.upcoming}</strong>
+          <small>Next {data.semantics.upcomingTaskDays} UTC days</small>
+        </button>
+      </section>
+      <section className="content-grid">
+        <article className="panel">
+          <h2>Pipeline by stage</h2>
+          <ul>
+            {data.stages.map((stage: any) => (
+              <li key={stage.id}>
+                <button
+                  className="link-button"
+                  onClick={() => open('Deals', `?stageId=${encodeURIComponent(stage.id)}`)}
+                >
+                  {stage.name}: {stage.count}
+                </button>
+              </li>
+            ))}
+            {!data.stages.length && <li>No pipeline data.</li>}
+          </ul>
+        </article>
+        <article className="panel">
+          <h2>Stale accounts</h2>
+          <button className="link-button" onClick={() => open('Companies')}>
+            {data.staleAccounts} without activity in {data.semantics.staleAccountDays} UTC days
+          </button>
+        </article>
+      </section>
+      <section className="panel">
+        <h2>Recent activity</h2>
+        <ul>
+          {data.recentActivity.map((activity: any) => (
+            <li key={activity.id}>
+              <button
+                className="link-button"
+                onClick={() =>
+                  open(
+                    'Activities',
+                    `?relatedRecordId=${encodeURIComponent(activity.companyId || activity.dealId || '')}`,
+                  )
+                }
+              >
+                {activity.subject} · {new Date(activity.occurredAt).toLocaleString()}
+              </button>
+            </li>
+          ))}
+          {!data.recentActivity.length && <li>No recent activity.</li>}
+        </ul>
+      </section>
+    </section>
+  );
+}
+
 function Notifications({
   navigate,
 }: {
@@ -2322,6 +2437,7 @@ function App() {
       role={session.role}
       user={session.user}
       workspace={session.organization}
+      dashboardContent={(navigate) => <LiveDashboard navigate={navigate} />}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
       importsContent={<Imports canWrite={session.role !== 'viewer'} />}
