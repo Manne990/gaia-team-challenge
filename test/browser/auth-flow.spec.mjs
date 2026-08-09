@@ -94,6 +94,22 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByRole('heading', { name: /Welcome, Northstar Owner/ })).toBeVisible();
     await page.getByRole('button', { name: 'Sign out' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await page.getByLabel('Email').fill('viewer@northstar.test');
+    await page.getByLabel('Password').fill('ViewerPass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).press('Enter');
+    await expect(page.getByRole('heading', { name: /Welcome, Northstar Viewer/ })).toBeVisible();
+    const cookieHeader = (await page.context().cookies(url))
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+    await expect(
+      page.request
+        .put(`${url}/api/companies/co_acme`, {
+          method: 'PUT',
+          headers: { cookie: cookieHeader, 'content-type': 'application/json' },
+          data: { name: 'Blocked' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(403);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
