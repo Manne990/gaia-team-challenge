@@ -192,6 +192,23 @@ test('task and deal saved views restore pagination, and a selected task respects
     ).toBeVisible();
     await dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true }).click();
     await expect(page).toHaveURL(/page=2&sort=name&direction=asc/);
+    expect(
+      await page.evaluate(async () =>
+        fetch('/api/saved-views', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            resource: 'deals',
+            name: 'Stale deal status',
+            filters: { status: 'obsolete' },
+          }),
+        }).then((response) => response.status),
+      ),
+    ).toBe(201);
+    await navigateTo(page, 'Dashboard');
+    await navigateTo(page, 'Deals');
+    await dealSaved.getByRole('button', { name: 'Stale deal status', exact: true }).click();
+    await expect(dealSaved.getByRole('status')).toHaveText('This saved view is no longer valid.');
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

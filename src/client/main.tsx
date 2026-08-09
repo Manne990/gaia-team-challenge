@@ -1781,6 +1781,11 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
         }}
         onChoose={(view) => {
           const stage = typeof view.stageId === 'string' ? view.stageId : '';
+          if (
+            view.status !== undefined &&
+            !['', 'open', 'won', 'lost'].includes(String(view.status))
+          )
+            throw new Error('Invalid saved deal status');
           const status = typeof view.status === 'string' ? view.status : '';
           const archived = view.includeArchived === true;
           setStageFilter(stage);
