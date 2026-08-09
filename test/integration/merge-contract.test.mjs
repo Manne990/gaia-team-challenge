@@ -81,14 +81,13 @@ describe('explicit contact merge', () => {
         expect.objectContaining({ sourceId: 'ct_ada', targetId: 'ct_duplicate' }),
       ]),
     );
-    expect(suggestionItems).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ sourceId: 'ct_ada', targetId: 'ct_grace' }),
-        expect.objectContaining({ sourceId: 'ct_grace', targetId: 'ct_duplicate' }),
-        expect.objectContaining({ sourceId: 'ct_katherine' }),
-        expect.objectContaining({ targetId: 'ct_katherine' }),
-      ]),
-    );
+    expect(
+      suggestionItems.some(
+        (item) =>
+          ['ct_grace', 'ct_katherine'].includes(item.sourceId) ||
+          ['ct_grace', 'ct_katherine'].includes(item.targetId),
+      ),
+    ).toBe(false);
     const staleVersion = await fetch(`${url}/api/merges`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
