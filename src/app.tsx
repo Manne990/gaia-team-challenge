@@ -270,7 +270,7 @@ function ListPage({
   workspace: Workspace;
   user: ShellUser;
 }) {
-  const [contactRows, setContactRows] = useState<Array<string[]>>([]);
+  const [contactRows, setContactRows] = useState<Array<{ id: string; row: string[] }>>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [contactSort, setContactSort] = useState('name');
   const [contactStatus, setContactStatus] = useState('');
@@ -285,18 +285,23 @@ function ListPage({
         .then((data) => {
           setContactTotal(data.total || 0);
           setContactRows(
-            data.items.map((c: any) => [
-              `${c.firstName} ${c.lastName}`,
-              c.companyId || 'Independent',
-              c.status,
-              c.ownerId || 'Unassigned',
-              new Date(c.updatedAt).toLocaleDateString(),
-            ]),
+            data.items.map((c: any) => ({
+              id: c.id,
+              row: [
+                `${c.firstName} ${c.lastName}`,
+                c.companyId || 'Independent',
+                c.status,
+                c.ownerId || 'Unassigned',
+                new Date(c.updatedAt).toLocaleDateString(),
+              ],
+            })),
           );
         });
   }, [page, contactSearch, contactSort, contactStatus, contactPage]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
-  const companies = page === 'Contacts' ? contactRows : companiesFor(workspace, user);
+  const companies =
+    page === 'Contacts' ? contactRows.map((contact) => contact.row) : companiesFor(workspace, user);
+  const contactIdAt = (index: number) => contactRows[index]?.id;
   return (
     <>
       <div className="page-heading">
@@ -403,7 +408,9 @@ function ListPage({
                 companies.map((company, index) => (
                   <tr key={`${company[0]}-${index}`}>
                     <td>
-                      <a href="#company">{company[0]}</a>
+                      <a href={page === 'Contacts' ? `#contact-${contactIdAt(index)}` : '#company'}>
+                        {company[0]}
+                      </a>
                     </td>
                     <td>{company[1]}</td>
                     <td>
@@ -414,7 +421,21 @@ function ListPage({
                     <td>{company[3]}</td>
                     <td>{company[4]}</td>
                     <td>
-                      <IconButton label={`Actions for ${company[0]}`}>⋯</IconButton>
+                      <IconButton
+                        label={`Archive ${company[0]}`}
+                        onClick={
+                          page === 'Contacts'
+                            ? async () => {
+                                await fetch(`/api/contacts/${contactIdAt(index)}/archive`, {
+                                  method: 'POST',
+                                });
+                                setContactSearch('');
+                              }
+                            : undefined
+                        }
+                      >
+                        ⋯
+                      </IconButton>
                     </td>
                   </tr>
                 ))
