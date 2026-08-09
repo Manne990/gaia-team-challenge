@@ -126,6 +126,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByRole('textbox', { name: 'Phone', exact: true }).fill('+46 70 123 45 67');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('Change history')).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: 'Browser Flow' }).getByRole('listitem'),
+    ).toHaveCount(2);
     await page.getByRole('button', { name: 'Archive contact' }).click();
     await expect(browserContact).toHaveCount(0);
     await page.getByRole('button', { name: 'Filter' }).click();

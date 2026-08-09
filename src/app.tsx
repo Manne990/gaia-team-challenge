@@ -713,7 +713,8 @@ function ListPage({
                   }),
                 });
                 if (response.ok) {
-                  setSelectedContact(await response.json());
+                  const detail = await fetch(`/api/contacts/${selectedContact.id}`);
+                  if (detail.ok) setSelectedContact(await detail.json());
                   refreshContacts();
                 }
               }}
