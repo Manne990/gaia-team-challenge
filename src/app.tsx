@@ -85,7 +85,28 @@ function ListPage({ page }: { page: Page }) {
   </>;
 }
 
-function Placeholder({ page, role }: { page: Page; role: Role }) { const forbidden = page === "Administration" && role !== "owner"; return <><div className="page-heading"><div><p className="eyebrow">Workspace</p><h1>{page}</h1></div></div><section className="state-panel">{forbidden ? <><span className="state-icon">⊘</span><h2>Owner access required</h2><p>Only organization owners can manage members and settings.</p><button className="secondary">Return to dashboard</button></> : <><span className="state-icon">◌</span><h2>{page} is ready for your data</h2><p>This operational view will show records and filters as soon as they are available.</p><button className="primary">Create first record</button></>}</section></>; }
+type OperationalState = "empty" | "loading" | "error" | "not-found" | "conflict" | "forbidden";
+
+const stateCopy: Record<OperationalState, { icon: string; title: string; body: string; action: string }> = {
+  empty: { icon: "◌", title: "Ready for your data", body: "This operational view will show records and filters as soon as they are available.", action: "Create first record" },
+  loading: { icon: "◌", title: "Loading activity", body: "We are retrieving the latest organization activity.", action: "Refresh" },
+  error: { icon: "!", title: "Couldn’t load deals", body: "Your data is safe. Check your connection and try again.", action: "Try again" },
+  "not-found": { icon: "⌕", title: "No audit event found", body: "It may have been removed from the current filter or you may not have access.", action: "Clear filters" },
+  conflict: { icon: "↺", title: "This task changed elsewhere", body: "Review the latest version before saving so nobody’s updates are lost.", action: "Review latest" },
+  forbidden: { icon: "⊘", title: "Owner access required", body: "Only organization owners can manage members and settings.", action: "Return to dashboard" },
+};
+
+function OperationalStatePanel({ state, page }: { state: OperationalState; page: Page }) {
+  const copy = stateCopy[state];
+  return <section className={`state-panel state-${state}`} aria-live={state === "loading" ? "polite" : undefined}>
+    <span className="state-icon" aria-hidden="true">{copy.icon}</span><h2>{state === "empty" ? `${page} ${copy.title.toLowerCase()}` : copy.title}</h2><p>{copy.body}</p><button className={state === "error" ? "secondary" : "primary"}>{copy.action}</button>
+  </section>;
+}
+
+function Placeholder({ page, role }: { page: Page; role: Role }) {
+  const state: OperationalState = page === "Administration" && role !== "owner" ? "forbidden" : page === "Activities" ? "loading" : page === "Deals" ? "error" : page === "Tasks" ? "conflict" : page === "Audit" ? "not-found" : "empty";
+  return <><div className="page-heading"><div><p className="eyebrow">Workspace</p><h1>{page}</h1></div></div><OperationalStatePanel state={state} page={page} /></>;
+}
 
 export function App() {
   const [page, setPage] = useState<Page>("Dashboard"); const [mobileOpen, setMobileOpen] = useState(false); const [role, setRole] = useState<Role>("owner"); const [dialog, setDialog] = useState(false); const [notice, setNotice] = useState("Updates are saved automatically.");
