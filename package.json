@@ -1,6 +1,11 @@
 {
-  "name": "northstar-crm-challenge", "version": "0.0.0", "private": true, "type": "module",
-  "engines": { "node": ">=22" },
+  "name": "northstar-crm-challenge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "db:reset": "tsx scripts/db.ts reset",
     "db:seed": "tsx scripts/db.ts seed",
