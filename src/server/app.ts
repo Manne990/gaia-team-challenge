@@ -14,9 +14,10 @@ const { openDatabase, migrate } = require('../db/database.mjs') as {
   openDatabase(path: string): any;
   migrate(database: any): void;
 };
-const { createAuthService, AuthError } = require('../auth/service.mjs') as {
+const { createAuthService, AuthError, hashPassword } = require('../auth/service.mjs') as {
   createAuthService(database: unknown): any;
   AuthError: new (...args: any[]) => Error & { code: string };
+  hashPassword(password: string): string;
 };
 const credentials = z.object({
   email: z.string().email(),
@@ -30,6 +31,12 @@ const auditQuery = z.object({
   entityType: z.string().trim().max(80).optional(),
 });
 const memberRoleInput = z.object({ role: z.enum(['owner', 'member', 'viewer']) });
+const memberCreateInput = z.object({
+  email: z.string().trim().email().max(320),
+  displayName: z.string().trim().min(1).max(160),
+  password: z.string().min(8).max(200),
+  role: z.enum(['owner', 'member', 'viewer']).default('member'),
+});
 const companyInput = z.object({
   name: z.string().trim().min(1).max(200),
   externalReference: z.string().trim().max(100).optional(),
@@ -586,6 +593,58 @@ export function createApp(config: AppConfig) {
   app.get('/api/administration/members', (request, response) => {
     try {
       return response.json({ items: auth.listMembers(administrationSession(request)) });
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.post('/api/administration/members', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const input = memberCreateInput.parse(request.body);
+      const now = new Date().toISOString();
+      const membership = transaction(() => {
+        let user = database.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
+        if (!user) {
+          user = { id: `usr_${randomUUID()}` };
+          database
+            .prepare(
+              'INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            )
+            .run(user.id, input.email, hashPassword(input.password), input.displayName, now, now);
+        }
+        if (
+          database
+            .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+            .get(session.organizationId, user.id)
+        )
+          throw new AuthError('CONFLICT', 'This user already belongs to the organization.');
+        const id = `mem_${randomUUID()}`;
+        database
+          .prepare(
+            'INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(id, session.organizationId, user.id, input.role, now, now);
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            session.organizationId,
+            session.userId,
+            'membership.created',
+            'membership',
+            id,
+            JSON.stringify({ role: input.role, email: input.email }),
+            now,
+          );
+        return database
+          .prepare(
+            'SELECT memberships.id, memberships.user_id AS userId, memberships.role, users.email, users.display_name AS displayName FROM memberships JOIN users ON users.id = memberships.user_id WHERE memberships.id = ?',
+          )
+          .get(id);
+      });
+      return response.status(201).json(membership);
     } catch (error) {
       return administrationError(error, response);
     }
