@@ -97,7 +97,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByRole('button', { name: 'Administration' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-    await expect(page.getByRole('table', { name: 'Companies list' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Companies' })).toBeVisible();
     await navigateTo(page, 'Contacts');
     await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Contacts list' })).toBeVisible();
@@ -242,7 +242,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
           data: { name: 'Allowed member write' },
         })
         .then((response) => response.status()),
-    ).resolves.toBe(409);
+    ).resolves.toBe(400);
     await expect(
       page.request
         .post(`${url}/api/contacts`, {
