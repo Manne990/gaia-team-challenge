@@ -2419,6 +2419,91 @@ function Notifications({
   );
 }
 
+function Audit() {
+  const [items, setItems] = useState<any[]>([]);
+  useEffect(() => {
+    void fetch('/api/audit-events')
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((body) => setItems(body.items));
+  }, []);
+  return (
+    <section aria-labelledby="audit-heading">
+      <h2 id="audit-heading">Audit log</h2>
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>
+            {item.createdAt} · {item.action} · {item.entityType}
+          </li>
+        ))}
+      </ul>
+      {!items.length && <p>No audit events are available.</p>}
+    </section>
+  );
+}
+
+function Administration() {
+  const [members, setMembers] = useState<any[]>([]);
+  const load = () =>
+    fetch('/api/administration/members')
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((body) => setMembers(body.items));
+  useEffect(() => {
+    void load();
+  }, []);
+  return (
+    <section aria-labelledby="administration-heading">
+      <h2 id="administration-heading">Administration</h2>
+      <form
+        aria-label="Add member"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          const response = await fetch('/api/administration/members', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              email: form.get('email'),
+              displayName: form.get('displayName'),
+              password: form.get('password'),
+              role: form.get('role'),
+            }),
+          });
+          if (response.ok) {
+            event.currentTarget.reset();
+            void load();
+          }
+        }}
+      >
+        <label>
+          Email <input name="email" type="email" required />
+        </label>
+        <label>
+          Name <input name="displayName" required />
+        </label>
+        <label>
+          Password <input name="password" type="password" minLength={8} required />
+        </label>
+        <label>
+          Role{' '}
+          <select name="role">
+            <option value="member">Member</option>
+            <option value="viewer">Viewer</option>
+            <option value="owner">Owner</option>
+          </select>
+        </label>
+        <button>Add member</button>
+      </form>
+      <ul>
+        {members.map((member) => (
+          <li key={member.id}>
+            {member.displayName} · {member.email} · {member.role}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -2515,6 +2600,8 @@ function App() {
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
       tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
+      auditContent={<Audit />}
+      administrationContent={session.role === 'owner' ? <Administration /> : undefined}
       globalSearchContent={(navigate) => <GlobalSearch onNavigate={navigate} />}
       notificationsContent={(navigate) => (
         <Notifications
