@@ -968,7 +968,7 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   );
 }
 
-function Deals({ canWrite }: { canWrite: boolean }) {
+function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
   const [deals, setDeals] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [stages, setStages] = useState<any[]>([]);
@@ -1013,6 +1013,10 @@ function Deals({ canWrite }: { canWrite: boolean }) {
                 amountCents: Number(form.get('amountCents')),
                 currency: form.get('currency'),
                 probability: Number(form.get('probability')),
+                contactIds: String(form.get('contactIds') || '')
+                  .split(',')
+                  .map((id) => id.trim())
+                  .filter(Boolean),
               }),
             });
             if (!response.ok) return setError('Deal could not be created.');
@@ -1053,7 +1057,41 @@ function Deals({ canWrite }: { canWrite: boolean }) {
             Probability
             <input name="probability" type="number" min="0" max="100" defaultValue="0" required />
           </label>
+          <label>
+            Contact IDs (comma-separated)
+            <input name="contactIds" />
+          </label>
           <button>Create deal</button>
+        </form>
+      )}
+      {canConfigure && (
+        <form
+          aria-label="Add pipeline stage"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const response = await fetch('/api/pipeline/stages', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                name: form.get('name'),
+                position: Number(form.get('position')),
+              }),
+            });
+            if (!response.ok) return setError('Pipeline stage could not be created.');
+            event.currentTarget.reset();
+            void load();
+          }}
+        >
+          <h3>Add pipeline stage</h3>
+          <label>
+            Name <input name="name" required />
+          </label>
+          <label>
+            Position{' '}
+            <input name="position" type="number" min="0" defaultValue={stages.length} required />
+          </label>
+          <button>Add stage</button>
         </form>
       )}
       <form
@@ -1286,7 +1324,9 @@ function App() {
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
       importsContent={<Imports canWrite={session.role !== 'viewer'} />}
-      dealsContent={<Deals canWrite={session.role !== 'viewer'} />}
+      dealsContent={
+        <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
+      }
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
