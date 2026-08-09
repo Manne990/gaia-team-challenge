@@ -77,3 +77,104 @@ test('global search is keyboard reachable and saved company views are actionable
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('task and deal saved views restore pagination, and a selected task respects later filters', async ({
+  page,
+}) => {
+  const directory = mkdtempSync(join(tmpdir(), 'northstar-search-view-state-'));
+  const databasePath = join(directory, 'crm.sqlite');
+  const port = await freePort();
+  const environment = { ...process.env, CRM_DB_PATH: databasePath, NODE_ENV: 'test' };
+  expect(spawnSync('npx', ['tsx', 'scripts/db.ts', 'reset'], { env: environment }).status).toBe(0);
+  expect(spawnSync('npx', ['tsx', 'scripts/db.ts', 'seed'], { env: environment }).status).toBe(0);
+  const child = spawn(
+    'npx',
+    [
+      'tsx',
+      'src/server/index.ts',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--db-path',
+      databasePath,
+    ],
+    { env: environment, stdio: 'ignore' },
+  );
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    await ready(url);
+    await page.goto(url);
+    await page.getByLabel('Email').fill('owner@northstar.test');
+    await page.getByLabel('Password').fill('OwnerPass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    expect(
+      await page.evaluate(async () =>
+        fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ title: 'Deep link task', priority: 'medium' }),
+        }).then((response) => response.status),
+      ),
+    ).toBe(201);
+    await page.getByLabel('Search CRM').fill('Deep link task');
+    await page.getByRole('button', { name: /Deep link task/ }).click();
+    const taskViews = page.getByRole('form', { name: 'Task views' });
+    await expect(page.getByRole('list', { name: 'Task results' })).toContainText('Deep link task');
+    await taskViews.getByLabel('Due state').selectOption('completed');
+    await taskViews.getByRole('button', { name: 'Apply view' }).click();
+    await expect(page.getByRole('list', { name: 'Task results' })).not.toContainText('Deep link task');
+
+    expect(
+      await page.evaluate(async () =>
+        fetch('/api/saved-views', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+          resource: 'tasks',
+          name: 'Task ordered page',
+          filters: { due: '', mine: false, relation: '', page: 2, sort: 'createdAt', direction: 'desc' },
+          }),
+        }).then((response) => response.status),
+      ),
+    ).toBe(201);
+    await page.getByRole('button', { name: 'Dashboard' }).click();
+    await page.getByRole('button', { name: 'Tasks' }).click();
+    const taskSaved = page.locator('[aria-label="Manage saved views for tasks"]');
+    await expect(taskSaved.getByRole('button', { name: 'Task ordered page', exact: true })).toBeVisible();
+    await taskSaved.getByRole('button', { name: 'Task ordered page', exact: true }).click();
+    await expect(page).toHaveURL(/sort=createdAt&direction=desc&page=2/);
+
+    await page.getByRole('button', { name: 'Deals', exact: true }).click();
+    expect(
+      await page.evaluate(async () =>
+        fetch('/api/saved-views', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+          resource: 'deals',
+          name: 'Deal ordered page',
+          filters: {
+            stageId: '',
+            status: '',
+            includeArchived: false,
+            page: 2,
+            sort: 'name',
+            direction: 'asc',
+          },
+          }),
+        }).then((response) => response.status),
+      ),
+    ).toBe(201);
+    await page.getByRole('button', { name: 'Dashboard' }).click();
+    await page.getByRole('button', { name: 'Deals', exact: true }).click();
+    const dealSaved = page.locator('[aria-label="Manage saved views for deals"]');
+    await expect(dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true })).toBeVisible();
+    await dealSaved.getByRole('button', { name: 'Deal ordered page', exact: true }).click();
+    await expect(page).toHaveURL(/page=2&sort=name&direction=asc/);
+  } finally {
+    child.kill();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
