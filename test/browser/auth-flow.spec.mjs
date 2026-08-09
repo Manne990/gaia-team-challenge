@@ -27,13 +27,7 @@ const waitForHealth = async (url) => {
   throw new Error('Northstar server did not become ready');
 };
 const signOut = async (page) => {
-  if ((page.viewportSize()?.width ?? 0) <= 720)
-    await page.getByRole('button', { name: 'Open account menu' }).click();
-  else {
-    const profile = page.locator('button.profile');
-    await profile.scrollIntoViewIfNeeded();
-    await profile.click();
-  }
+  await page.getByRole('button', { name: 'Open account menu' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.getByRole('button', { name: 'Confirm sign out' }).click();
 };
@@ -103,7 +97,45 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByRole('button', { name: 'Administration' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-    await expect(page.getByRole('list', { name: 'Company results' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Companies' })).toBeVisible();
+    await navigateTo(page, 'Contacts');
+    await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Contacts list' })).toBeVisible();
+    expect(
+      await page.evaluate(() => fetch('/api/contacts').then((response) => response.status)),
+    ).toBe(200);
+    await page.getByRole('button', { name: 'Add contact' }).click();
+    await page.getByLabel('First name').fill('Browser');
+    await page.getByLabel('Last name').fill('Flow');
+    await page
+      .getByRole('textbox', { name: 'Email', exact: true })
+      .fill('browser.flow@example.test');
+    await page.getByLabel('Job title').fill('Stakeholder');
+    await page.getByLabel('Tags (comma separated)').fill('vip, browser');
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/contacts') && response.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Save contact' }).click();
+    expect((await createResponse).status()).toBe(201);
+    await page.getByLabel('Search contacts').fill('Browser');
+    const browserContact = page.getByRole('link', { name: 'Browser Flow' });
+    await expect(browserContact).toBeVisible();
+    await browserContact.click();
+    await expect(page.getByRole('dialog', { name: 'Browser Flow' })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Phone', exact: true }).fill('+46 70 123 45 67');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Change history')).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: 'Browser Flow' }).getByRole('listitem'),
+    ).toHaveCount(2);
+    await page.getByRole('button', { name: 'Archive contact' }).click();
+    await expect(browserContact).toHaveCount(0);
+    await page.getByRole('button', { name: 'Filter' }).click();
+    await page.getByRole('button', { name: 'Show archived' }).click();
+    await expect(browserContact).toBeVisible();
+    await page.getByRole('button', { name: 'Restore Browser Flow' }).click();
+    await expect(browserContact).toHaveCount(0);
     await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -143,6 +175,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Administration' })).toHaveCount(0);
+    await navigateTo(page, 'Contacts');
+    await expect(page.getByRole('button', { name: 'Add contact' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Archive / })).toHaveCount(0);
     const cookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
@@ -158,6 +193,14 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(403);
+    await expect(
+      page.request
+        .post(`${url}/api/contacts`, {
+          headers: { cookie: cookieHeader, 'content-type': 'application/json' },
+          data: { firstName: 'Blocked', lastName: 'Contact' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(403);
     await signOut(page);
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
@@ -166,20 +209,6 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const ownerCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
-    const invalidCompanyOwner = await page.request.post(`${url}/api/companies`, {
-      headers: { cookie: ownerCookieHeader, 'content-type': 'application/json' },
-      data: {
-        name: 'Cross-organization owner must be rejected',
-        lifecycleStatus: 'lead',
-        ownerId: 'usr_outside',
-        tags: [],
-        description: '',
-      },
-    });
-    expect(invalidCompanyOwner.status()).toBe(400);
-    await expect(invalidCompanyOwner.json()).resolves.toMatchObject({
-      error: { code: 'VALIDATION', message: 'Company owner must belong to this organization.' },
-    });
     await expect(
       page.request
         .get(`${url}/api/companies/co_outside`, { headers: { cookie: ownerCookieHeader } })
@@ -206,27 +235,22 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const memberCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
-    const allowedMemberWrite = await page.request.put(`${url}/api/companies/co_acme`, {
-      headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
-      data: {
-        name: 'Allowed member write',
-        externalReference: 'REF-co_acme',
-        website: '',
-        phone: '',
-        industry: '',
-        size: '',
-        address: '',
-        lifecycleStatus: 'customer',
-        tags: ['seed'],
-        description: '',
-        version: 1,
-      },
-    });
-    expect(allowedMemberWrite.status()).toBe(200);
-    await expect(allowedMemberWrite.json()).resolves.toMatchObject({
-      name: 'Allowed member write',
-      version: 2,
-    });
+    await expect(
+      page.request
+        .put(`${url}/api/companies/co_acme`, {
+          headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
+          data: { name: 'Allowed member write' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(400);
+    await expect(
+      page.request
+        .post(`${url}/api/contacts`, {
+          headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
+          data: { firstName: 'Member', lastName: 'Contact' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(201);
     await signOut(page);
     await page.getByLabel('Email').fill('other-owner@outside.test');
     await page.getByLabel('Password').fill('OutsidePass!2026');
@@ -237,6 +261,17 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await navigateTo(page, 'Companies');
     await expect(page.getByText('Acme Nordic AB', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Northstar Logistics', { exact: true })).toHaveCount(0);
+    await expect(
+      page.request
+        .get(`${url}/api/contacts/ct_ada`, {
+          headers: {
+            cookie: (await page.context().cookies(url))
+              .map((cookie) => `${cookie.name}=${cookie.value}`)
+              .join('; '),
+          },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(404);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

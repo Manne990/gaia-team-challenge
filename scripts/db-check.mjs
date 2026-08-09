@@ -43,7 +43,12 @@ try {
       .prepare('SELECT name FROM schema_migrations ORDER BY name')
       .all()
       .map(({ name }) => name),
-    ['001_initial_schema.sql', '002_enforce_crm_integrity.sql', '003_company_archiving.sql'],
+    [
+      '001_initial_schema.sql',
+      '002_enforce_crm_integrity.sql',
+      '003_company_archiving.sql',
+      '003_contact_archival.sql',
+    ],
   );
   upgrade.close();
   let db = resetAndSeed(filename);

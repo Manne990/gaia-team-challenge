@@ -265,13 +265,123 @@ function ListPage({
   page,
   workspace,
   user,
+  role,
 }: {
   page: Page;
   workspace: Workspace;
   user: ShellUser;
+  role: Role;
 }) {
+  const canEdit = role !== 'viewer';
+  type Contact = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+    jobTitle?: string | null;
+    companyId?: string | null;
+    companyName?: string | null;
+    ownerId?: string | null;
+    status: string;
+    tagsJson?: string;
+    communicationPreference?: 'email' | 'phone' | 'none';
+    updatedAt: string;
+    archivedAt?: string | null;
+    version: number;
+    activities?: Array<{ id: string; subject: string; type: string }>;
+    deals?: Array<{ id: string; name: string; status: string }>;
+    tasks?: Array<{ id: string; title: string; status: string }>;
+    history?: Array<{ id: string; action: string; createdAt: string }>;
+  };
+  const [contactRows, setContactRows] = useState<Contact[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [contactSort, setContactSort] = useState('name');
+  const [contactStatus, setContactStatus] = useState('');
+  const [contactCompany, setContactCompany] = useState('');
+  const [contactOwner, setContactOwner] = useState('');
+  const [contactTag, setContactTag] = useState('');
+  const [showContactFilters, setShowContactFilters] = useState(false);
+  const [showArchivedContacts, setShowArchivedContacts] = useState(false);
+  const [contactPage, setContactPage] = useState(1);
+  const [contactTotal, setContactTotal] = useState(0);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [contactNotice, setContactNotice] = useState('');
+  const [contactRefresh, setContactRefresh] = useState(0);
+  const contactRequest = useRef(0);
+  const refreshContacts = () => setContactRefresh((value) => value + 1);
+  useEffect(() => {
+    if (page === 'Contacts') {
+      const requestNumber = contactRequest.current + 1;
+      contactRequest.current = requestNumber;
+      const query = new URLSearchParams({
+        query: contactSearch,
+        sort: contactSort,
+        status: contactStatus,
+        companyId: contactCompany,
+        ownerId: contactOwner,
+        tag: contactTag,
+        page: String(contactPage),
+      });
+      if (showArchivedContacts) query.set('archived', 'true');
+      fetch(`/api/contacts?${query}`)
+        .then((response) => (response.ok ? response.json() : { items: [] }))
+        .then((data) => {
+          if (contactRequest.current !== requestNumber) return;
+          setContactTotal(data.total || 0);
+          setContactRows(data.items || []);
+        });
+    }
+  }, [
+    page,
+    contactSearch,
+    contactSort,
+    contactStatus,
+    contactCompany,
+    contactOwner,
+    contactTag,
+    contactPage,
+    showArchivedContacts,
+    contactRefresh,
+  ]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
-  const companies = companiesFor(workspace, user);
+  const companies =
+    page === 'Contacts'
+      ? contactRows.map((contact) => [
+          `${contact.firstName} ${contact.lastName}`,
+          contact.companyId || 'Independent',
+          contact.status,
+          contact.ownerId || 'Unassigned',
+          new Date(contact.updatedAt).toLocaleDateString(),
+        ])
+      : companiesFor(workspace, user);
+  const contactAt = (index: number) => contactRows[index];
+  const clearContactFilters = () => {
+    setContactSearch('');
+    setContactSort('name');
+    setContactStatus('');
+    setContactCompany('');
+    setContactOwner('');
+    setContactTag('');
+    setShowArchivedContacts(false);
+    setContactPage(1);
+  };
+  const contactPayload = (fields: FormData) => ({
+    firstName: String(fields.get('firstName') || ''),
+    lastName: String(fields.get('lastName') || ''),
+    email: String(fields.get('email') || ''),
+    phone: String(fields.get('phone') || ''),
+    jobTitle: String(fields.get('jobTitle') || ''),
+    companyId: String(fields.get('companyId') || '') || null,
+    ownerId: String(fields.get('ownerId') || '') || null,
+    status: String(fields.get('status') || 'active'),
+    tags: String(fields.get('tags') || '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    communicationPreference: String(fields.get('communicationPreference') || 'email'),
+  });
   return (
     <>
       <div className="page-heading">
@@ -282,8 +392,101 @@ function ListPage({
             Manage {workspace.name}’s {page.toLowerCase()}.
           </p>
         </div>
-        <button className="primary">+ Add {singular}</button>
+        {(page !== 'Contacts' || canEdit) && (
+          <button
+            className="primary"
+            onClick={page === 'Contacts' ? () => setShowContactForm(true) : undefined}
+          >
+            + Add {singular}
+          </button>
+        )}
       </div>
+      {page === 'Contacts' && canEdit && showContactForm && (
+        <form
+          className="panel"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const fields = new FormData(event.currentTarget);
+            const response = await fetch('/api/contacts', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(contactPayload(fields)),
+            });
+            if (response.ok) {
+              const created = await response.json();
+              setContactRows((rows) => [created, ...rows.filter((row) => row.id !== created.id)]);
+              setContactTotal((total) => total + 1);
+              setShowContactForm(false);
+              setContactPage(1);
+              setContactNotice(
+                created.duplicateWarning
+                  ? `Possible duplicate: ${created.duplicateWarning.firstName} ${created.duplicateWarning.lastName} already uses this email. No records were merged.`
+                  : '',
+              );
+              refreshContacts();
+            }
+          }}
+        >
+          <h2>New contact</h2>
+          <label>
+            First name
+            <input name="firstName" required />
+          </label>
+          <label>
+            Last name
+            <input name="lastName" required />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" />
+          </label>
+          <label>
+            Phone
+            <input name="phone" />
+          </label>
+          <label>
+            Job title
+            <input name="jobTitle" />
+          </label>
+          <label>
+            Company ID (optional)
+            <input name="companyId" />
+          </label>
+          <label>
+            Owner ID (optional)
+            <input name="ownerId" />
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="active">Active</option>
+              <option value="lead">Lead</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+          <label>
+            Tags (comma separated)
+            <input name="tags" />
+          </label>
+          <label>
+            Preferred contact method
+            <select name="communicationPreference">
+              <option value="email">Email</option>
+              <option value="phone">Phone</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <button className="primary">Save contact</button>
+          <button type="button" className="secondary" onClick={() => setShowContactForm(false)}>
+            Cancel
+          </button>
+        </form>
+      )}
+      {page === 'Contacts' && contactNotice && (
+        <p className="panel" role="status">
+          {contactNotice}
+        </p>
+      )}
       <section className="panel table-panel">
         <div className="toolbar">
           <label className="search">
@@ -291,23 +494,111 @@ function ListPage({
             <input
               aria-label={`Search ${page.toLowerCase()}`}
               placeholder={`Search ${page.toLowerCase()}`}
+              value={page === 'Contacts' ? contactSearch : undefined}
+              onChange={
+                page === 'Contacts'
+                  ? (event) => {
+                      setContactSearch(event.target.value);
+                      setContactPage(1);
+                    }
+                  : undefined
+              }
             />
           </label>
-          <button className="secondary">
+          <button
+            className="secondary"
+            onClick={
+              page === 'Contacts' ? () => setShowContactFilters((visible) => !visible) : undefined
+            }
+          >
             Filter <span aria-hidden="true">⌄</span>
           </button>
-          <button className="secondary">
+          <button
+            className="secondary"
+            onClick={
+              page === 'Contacts'
+                ? () => {
+                    setContactSort(contactSort === 'name' ? 'createdAt' : 'name');
+                    setContactPage(1);
+                  }
+                : undefined
+            }
+          >
             Sort <span aria-hidden="true">⌄</span>
           </button>
-          <button className="text-button">Clear all</button>
+          <button
+            className="text-button"
+            onClick={page === 'Contacts' ? clearContactFilters : undefined}
+          >
+            Clear all
+          </button>
         </div>
+        {page === 'Contacts' && showContactFilters && (
+          <div className="toolbar" aria-label="Contact filters">
+            <label>
+              Status
+              <select
+                value={contactStatus}
+                onChange={(event) => {
+                  setContactStatus(event.target.value);
+                  setContactPage(1);
+                }}
+              >
+                <option value="">Any status</option>
+                <option value="active">Active</option>
+                <option value="lead">Lead</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+            <label>
+              Company ID
+              <input
+                value={contactCompany}
+                onChange={(event) => {
+                  setContactCompany(event.target.value);
+                  setContactPage(1);
+                }}
+              />
+            </label>
+            <label>
+              Owner ID
+              <input
+                value={contactOwner}
+                onChange={(event) => {
+                  setContactOwner(event.target.value);
+                  setContactPage(1);
+                }}
+              />
+            </label>
+            <label>
+              Tag
+              <input
+                value={contactTag}
+                onChange={(event) => {
+                  setContactTag(event.target.value);
+                  setContactPage(1);
+                }}
+              />
+            </label>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                setShowArchivedContacts((archived) => !archived);
+                setContactPage(1);
+              }}
+            >
+              {showArchivedContacts ? 'Show active' : 'Show archived'}
+            </button>
+          </div>
+        )}
         <div className="table-wrap">
           <table>
             <caption className="sr-only">{page} list</caption>
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Industry</th>
+                <th>{page === 'Contacts' ? 'Company' : 'Industry'}</th>
                 <th>Status</th>
                 <th>Owner</th>
                 <th>Last activity</th>
@@ -317,37 +608,217 @@ function ListPage({
               </tr>
             </thead>
             <tbody>
-              {companies.map((company, index) => (
-                <tr key={`${company[0]}-${index}`}>
-                  <td>
-                    <a href="#company">{company[0]}</a>
-                  </td>
-                  <td>{company[1]}</td>
-                  <td>
-                    <Status tone={company[2] === 'Customer' ? 'good' : 'neutral'}>
-                      {company[2]}
-                    </Status>
-                  </td>
-                  <td>{company[3]}</td>
-                  <td>{company[4]}</td>
-                  <td>
-                    <IconButton label={`Actions for ${company[0]}`}>⋯</IconButton>
-                  </td>
+              {companies.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>No {page.toLowerCase()} match the current filters.</td>
                 </tr>
-              ))}
+              ) : (
+                companies.map((company, index) => (
+                  <tr key={`${company[0]}-${index}`}>
+                    <td>
+                      <a
+                        href={page === 'Contacts' ? `#contact-${contactAt(index)?.id}` : '#company'}
+                        onClick={
+                          page === 'Contacts'
+                            ? async (event) => {
+                                event.preventDefault();
+                                const response = await fetch(
+                                  `/api/contacts/${contactAt(index)?.id}`,
+                                );
+                                if (response.ok) setSelectedContact(await response.json());
+                              }
+                            : undefined
+                        }
+                      >
+                        {company[0]}
+                      </a>
+                    </td>
+                    <td>{company[1]}</td>
+                    <td>
+                      <Status tone={company[2] === 'Customer' ? 'good' : 'neutral'}>
+                        {company[2]}
+                      </Status>
+                    </td>
+                    <td>{company[3]}</td>
+                    <td>{company[4]}</td>
+                    <td>
+                      {canEdit && (
+                        <IconButton
+                          label={`${showArchivedContacts ? 'Restore' : 'Archive'} ${company[0]}`}
+                          onClick={
+                            page === 'Contacts'
+                              ? async () => {
+                                  await fetch(
+                                    `/api/contacts/${contactAt(index)?.id}/${showArchivedContacts ? 'restore' : 'archive'}`,
+                                    {
+                                      method: 'POST',
+                                    },
+                                  );
+                                  refreshContacts();
+                                }
+                              : undefined
+                          }
+                        >
+                          ⋯
+                        </IconButton>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
         <footer className="pagination">
-          <span>Showing 1–4 of 126</span>
+          <span>
+            {page === 'Contacts'
+              ? `Showing ${contactRows.length ? (contactPage - 1) * 25 + 1 : 0}–${(contactPage - 1) * 25 + contactRows.length} of ${contactTotal}`
+              : 'Showing 1–4 of 126'}
+          </span>
           <div>
-            <button className="secondary" disabled>
+            <button
+              className="secondary"
+              disabled={page === 'Contacts' ? contactPage === 1 : true}
+              onClick={
+                page === 'Contacts' ? () => setContactPage(Math.max(1, contactPage - 1)) : undefined
+              }
+            >
               Previous
             </button>
-            <button className="secondary">Next</button>
+            <button
+              className="secondary"
+              disabled={page === 'Contacts' && contactPage * 25 >= contactTotal}
+              onClick={page === 'Contacts' ? () => setContactPage(contactPage + 1) : undefined}
+            >
+              Next
+            </button>
           </div>
         </footer>
       </section>
+      {selectedContact && (
+        <Dialog
+          title={`${selectedContact.firstName} ${selectedContact.lastName}`}
+          onClose={() => setSelectedContact(null)}
+        >
+          {canEdit && (
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const response = await fetch(`/api/contacts/${selectedContact.id}`, {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    ...contactPayload(new FormData(event.currentTarget)),
+                    version: selectedContact.version,
+                  }),
+                });
+                if (response.ok) {
+                  const saved = await response.json();
+                  setContactNotice(
+                    saved.duplicateWarning
+                      ? `Possible duplicate: ${saved.duplicateWarning.firstName} ${saved.duplicateWarning.lastName} already uses this email. No records were merged.`
+                      : '',
+                  );
+                  const detail = await fetch(`/api/contacts/${selectedContact.id}`);
+                  if (detail.ok) setSelectedContact(await detail.json());
+                  refreshContacts();
+                }
+              }}
+            >
+              <p className="subtle">
+                {selectedContact.companyName || selectedContact.companyId || 'Independent contact'}{' '}
+                · {selectedContact.ownerId || 'Unassigned owner'}
+              </p>
+              <label>
+                First name
+                <input name="firstName" required defaultValue={selectedContact.firstName} />
+              </label>
+              <label>
+                Last name
+                <input name="lastName" required defaultValue={selectedContact.lastName} />
+              </label>
+              <label>
+                Email
+                <input name="email" type="email" defaultValue={selectedContact.email || ''} />
+              </label>
+              <label>
+                Phone
+                <input name="phone" defaultValue={selectedContact.phone || ''} />
+              </label>
+              <label>
+                Job title
+                <input name="jobTitle" defaultValue={selectedContact.jobTitle || ''} />
+              </label>
+              <label>
+                Company ID
+                <input name="companyId" defaultValue={selectedContact.companyId || ''} />
+              </label>
+              <label>
+                Owner ID
+                <input name="ownerId" defaultValue={selectedContact.ownerId || ''} />
+              </label>
+              <label>
+                Status
+                <select name="status" defaultValue={selectedContact.status}>
+                  <option value="active">Active</option>
+                  <option value="lead">Lead</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+              <label>
+                Tags (comma separated)
+                <input
+                  name="tags"
+                  defaultValue={JSON.parse(selectedContact.tagsJson || '[]').join(', ')}
+                />
+              </label>
+              <label>
+                Preferred contact method
+                <select
+                  name="communicationPreference"
+                  defaultValue={selectedContact.communicationPreference || 'email'}
+                >
+                  <option value="email">Email</option>
+                  <option value="phone">Phone</option>
+                  <option value="none">None</option>
+                </select>
+              </label>
+              <button className="primary">Save changes</button>
+            </form>
+          )}
+          <section className="panel">
+            <h3>Related work</h3>
+            <p>
+              {selectedContact.activities?.length || 0} activities ·{' '}
+              {selectedContact.deals?.length || 0} deals · {selectedContact.tasks?.length || 0}{' '}
+              tasks
+            </p>
+            <h3>Change history</h3>
+            <ul>
+              {(selectedContact.history || []).map((entry) => (
+                <li key={entry.id}>
+                  {entry.action} · {new Date(entry.createdAt).toLocaleString()}
+                </li>
+              ))}
+            </ul>
+            {canEdit && (
+              <button
+                className="secondary"
+                onClick={async () => {
+                  await fetch(
+                    `/api/contacts/${selectedContact.id}/${selectedContact.archivedAt ? 'restore' : 'archive'}`,
+                    { method: 'POST' },
+                  );
+                  setSelectedContact(null);
+                  refreshContacts();
+                }}
+              >
+                {selectedContact.archivedAt ? 'Restore contact' : 'Archive contact'}
+              </button>
+            )}
+          </section>
+        </Dialog>
+      )}
     </>
   );
 }
@@ -478,7 +949,7 @@ export function App({
     ) : page === 'Companies' && companiesContent ? (
       companiesContent
     ) : page === 'Companies' || page === 'Contacts' ? (
-      <ListPage page={page} workspace={workspace} user={user} />
+      <ListPage page={page} workspace={workspace} user={user} role={role} />
     ) : (
       <Placeholder page={page} role={role} />
     );
