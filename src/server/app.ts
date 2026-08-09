@@ -23,6 +23,13 @@ const credentials = z.object({
   password: z.string().min(1),
   organizationId: z.string().optional(),
 });
+const auditQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  action: z.string().trim().max(120).optional(),
+  entityType: z.string().trim().max(80).optional(),
+});
+const memberRoleInput = z.object({ role: z.enum(['owner', 'member', 'viewer']) });
 const companyInput = z.object({
   name: z.string().trim().min(1).max(200),
   externalReference: z.string().trim().max(100).optional(),
@@ -557,6 +564,92 @@ export function createApp(config: AppConfig) {
       'northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
     );
     return response.status(204).end();
+  });
+
+  const administrationSession = (request: express.Request) =>
+    auth.requireRole(auth.authenticate(cookieToken(request.headers.cookie)), ['owner']);
+  const administrationError = (error: unknown, response: express.Response) => {
+    if (error instanceof AuthError)
+      return response
+        .status(error.code === 'NOT_FOUND' ? 404 : error.code === 'FORBIDDEN' ? 403 : 400)
+        .json({
+          error: { code: error.code, message: error.message },
+        });
+    if (error instanceof z.ZodError)
+      return response
+        .status(400)
+        .json({ error: { code: 'VALIDATION', message: 'Check the request fields.' } });
+    return response
+      .status(500)
+      .json({ error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong.' } });
+  };
+  app.get('/api/administration/members', (request, response) => {
+    try {
+      return response.json({ items: auth.listMembers(administrationSession(request)) });
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.patch('/api/administration/members/:id', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const input = memberRoleInput.parse(request.body);
+      auth.updateMemberRole(session, request.params.id, input.role);
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.userId,
+          'membership.role_updated',
+          'membership',
+          request.params.id,
+          JSON.stringify({ role: input.role }),
+          new Date().toISOString(),
+        );
+      return response.status(204).end();
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.delete('/api/administration/members/:id', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      auth.removeMember(session, request.params.id);
+      return response.status(204).end();
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.get('/api/audit-events', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const query = auditQuery.parse(request.query);
+      const where = ['organization_id = ?'];
+      const args: unknown[] = [session.organizationId];
+      if (query.action) {
+        where.push('action = ?');
+        args.push(query.action);
+      }
+      if (query.entityType) {
+        where.push('entity_type = ?');
+        args.push(query.entityType);
+      }
+      const clause = where.join(' AND ');
+      const total = database
+        .prepare(`SELECT count(*) AS total FROM audit_events WHERE ${clause}`)
+        .get(...args).total;
+      const items = database
+        .prepare(
+          `SELECT id, actor_id AS actorId, action, entity_type AS entityType, entity_id AS entityId, summary_json AS summaryJson, created_at AS createdAt FROM audit_events WHERE ${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+        )
+        .all(...args, query.pageSize, (query.page - 1) * query.pageSize);
+      return response.json({ items, total, page: query.page, pageSize: query.pageSize });
+    } catch (error) {
+      return administrationError(error, response);
+    }
   });
 
   app.get('/api/duplicates/:resource', (request, response) => {
