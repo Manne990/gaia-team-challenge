@@ -736,6 +736,26 @@ export function createApp(config: AppConfig) {
   app.delete('/api/administration/members/:id', (request, response) => {
     try {
       const session = administrationSession(request);
+      const member = database
+        .prepare('SELECT role FROM memberships WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, session.organizationId);
+      if (!member)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This member was not found.' } });
+      if (
+        member.role === 'owner' &&
+        database
+          .prepare(
+            "SELECT count(*) AS total FROM memberships WHERE organization_id = ? AND role = 'owner'",
+          )
+          .get(session.organizationId).total <= 1
+      )
+        return response
+          .status(400)
+          .json({
+            error: { code: 'LAST_OWNER', message: 'An organization must keep at least one owner.' },
+          });
       database
         .prepare(
           'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -776,7 +796,7 @@ export function createApp(config: AppConfig) {
         .get(...args).total;
       const items = database
         .prepare(
-          `SELECT id, actor_id AS actorId, action, entity_type AS entityType, entity_id AS entityId, summary_json AS summaryJson, created_at AS createdAt FROM audit_events WHERE ${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+          `SELECT id, actor_id AS actorId, action, entity_type AS entityType, entity_id AS entityId, correlation_id AS correlationId, summary_json AS summaryJson, created_at AS createdAt FROM audit_events WHERE ${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
         )
         .all(...args, query.pageSize, (query.page - 1) * query.pageSize);
       return response.json({ items, total, page: query.page, pageSize: query.pageSize });
