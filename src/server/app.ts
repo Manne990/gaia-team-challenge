@@ -37,6 +37,10 @@ const memberCreateInput = z.object({
   password: z.string().min(8).max(200),
   role: z.enum(['owner', 'member', 'viewer']).default('member'),
 });
+const organizationSettingsInput = z.object({
+  name: z.string().trim().min(1).max(160),
+  version: z.coerce.number().int().positive(),
+});
 const companyInput = z.object({
   name: z.string().trim().min(1).max(200),
   externalReference: z.string().trim().max(100).optional(),
@@ -593,6 +597,64 @@ export function createApp(config: AppConfig) {
   app.get('/api/administration/members', (request, response) => {
     try {
       return response.json({ items: auth.listMembers(administrationSession(request)) });
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.get('/api/administration/organization', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      return response.json(
+        database
+          .prepare(
+            'SELECT id, name, version, updated_at AS updatedAt FROM organizations WHERE id = ?',
+          )
+          .get(session.organizationId),
+      );
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.patch('/api/administration/organization', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const input = organizationSettingsInput.parse(request.body);
+      const now = new Date().toISOString();
+      const result = database
+        .prepare(
+          'UPDATE organizations SET name = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ?',
+        )
+        .run(input.name, now, session.organizationId, input.version);
+      if (!result.changes)
+        return response
+          .status(409)
+          .json({
+            error: {
+              code: 'CONFLICT',
+              message: 'Organization settings changed. Refresh and try again.',
+            },
+          });
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.userId,
+          'organization.updated',
+          'organization',
+          session.organizationId,
+          JSON.stringify({ name: input.name }),
+          now,
+        );
+      return response.json(
+        database
+          .prepare(
+            'SELECT id, name, version, updated_at AS updatedAt FROM organizations WHERE id = ?',
+          )
+          .get(session.organizationId),
+      );
     } catch (error) {
       return administrationError(error, response);
     }
