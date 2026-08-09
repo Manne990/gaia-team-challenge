@@ -212,6 +212,21 @@ describe('explicit contact merge', () => {
       }),
     });
     expect(foreign.status).toBe(400);
+    const foreignOwner = await fetch(`${url}/api/merges`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        resource: 'companies',
+        sourceId: 'co_acme_duplicate',
+        targetId: 'co_acme',
+        sourceVersion,
+        targetVersion,
+        fields: { ownerId: 'usr_outside' },
+      }),
+    });
+    expect(foreignOwner.status).toBe(400);
+    const unchanged = await fetch(`${url}/api/companies/co_acme`, { headers: { cookie } });
+    expect((await unchanged.json()).owner_id).toBe('usr_owner');
     const merge = await fetch(`${url}/api/merges`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },

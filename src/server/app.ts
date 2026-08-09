@@ -594,6 +594,7 @@ export function createApp(config: AppConfig) {
             message: 'A record changed. Refresh the review before merging.',
           },
         });
+      assertContactOwner(session.organizationId, input.fields.ownerId ?? target.owner_id);
       const now = new Date().toISOString();
       transaction(() => {
         if (input.resource === 'contacts') {
@@ -723,7 +724,9 @@ export function createApp(config: AppConfig) {
         .status(
           String(error).includes('MERGE_CONFLICT')
             ? 409
-            : error instanceof z.ZodError || String(error).includes('INVALID_MERGE')
+            : error instanceof z.ZodError ||
+                String(error).includes('INVALID_MERGE') ||
+                String(error).includes('INVALID_CONTACT_OWNER')
               ? 400
               : 500,
         )
