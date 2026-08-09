@@ -255,7 +255,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Email').fill('other-owner@outside.test');
     await page.getByLabel('Password').fill('OutsidePass!2026');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Good morning, Outside' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.getByText('Outside Demo', { exact: true })).toBeVisible();
     await expect(page.getByText('Northstar Demo', { exact: true })).toHaveCount(0);
     await navigateTo(page, 'Companies');
