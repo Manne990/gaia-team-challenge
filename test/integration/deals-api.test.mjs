@@ -106,5 +106,26 @@ describe('deals API', () => {
       (await fetch(`${url}/api/deals/${deal.id}/restore`, { method: 'POST', headers: { cookie } }))
         .status,
     ).toBe(204);
+    const viewerCookie = (
+      await fetch(`${url}/api/auth/sign-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'viewer@northstar.test', password: 'ViewerPass!2026' }),
+      })
+    ).headers.get('set-cookie');
+    expect(
+      (
+        await fetch(`${url}/api/deals`, {
+          method: 'POST',
+          headers: { cookie: viewerCookie, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Blocked',
+            companyId: 'co_acme',
+            stageId: 'stage_proposal',
+            amountCents: 1,
+          }),
+        })
+      ).status,
+    ).toBe(403);
   });
 });
