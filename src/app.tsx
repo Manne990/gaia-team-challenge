@@ -289,7 +289,13 @@ function ListPage({
     updatedAt: string;
     archivedAt?: string | null;
     version: number;
-    activities?: Array<{ id: string; subject: string; type: string }>;
+    activities?: Array<{
+      id: string;
+      subject: string;
+      type: string;
+      occurredAt: string;
+      creatorName: string;
+    }>;
     deals?: Array<{ id: string; name: string; status: string }>;
     tasks?: Array<{ id: string; title: string; status: string }>;
     history?: Array<{ id: string; action: string; createdAt: string }>;
@@ -793,6 +799,18 @@ function ListPage({
               {selectedContact.deals?.length || 0} deals · {selectedContact.tasks?.length || 0}{' '}
               tasks
             </p>
+            <h3>Activity timeline</h3>
+            <ul aria-label="Contact activity timeline">
+              {(selectedContact.activities || []).map((activity) => (
+                <li key={activity.id}>
+                  {activity.subject} · {activity.type} · {activity.creatorName} ·{' '}
+                  {new Date(activity.occurredAt).toLocaleString()}
+                </li>
+              ))}
+              {!selectedContact.activities?.length && (
+                <li>No activity recorded for this contact.</li>
+              )}
+            </ul>
             <h3>Change history</h3>
             <ul>
               {(selectedContact.history || []).map((entry) => (

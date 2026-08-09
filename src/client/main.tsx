@@ -28,7 +28,16 @@ type CompanyDetail = Company & {
   phone: string | null;
   address: string | null;
   contacts: { id: string; first_name: string; last_name: string }[];
-  activities: { id: string; subject: string }[];
+  activities: {
+    id: string;
+    subject: string;
+    type: string;
+    occurredAt: string;
+    creatorName: string;
+    companyLabel: string | null;
+    contactLabel: string | null;
+    dealLabel: string | null;
+  }[];
   deals: { id: string; name: string }[];
   tasks: { id: string; title: string }[];
   history: { id: string; action: string; created_at: string; summary_json: string }[];
@@ -343,9 +352,6 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                     Contact: {record.first_name} {record.last_name}
                   </li>
                 ))}
-                {detail.activities.map((record) => (
-                  <li key={record.id}>Activity: {record.subject}</li>
-                ))}
                 {detail.deals.map((record) => (
                   <li key={record.id}>Deal: {record.name}</li>
                 ))}
@@ -356,6 +362,16 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                   !detail.activities.length &&
                   !detail.deals.length &&
                   !detail.tasks.length && <li>No related records.</li>}
+              </ul>
+              <h4>Activity timeline</h4>
+              <ul aria-label="Company activity timeline">
+                {detail.activities.map((record) => (
+                  <li key={record.id}>
+                    {record.subject} · {record.type} · {record.creatorName} ·{' '}
+                    {new Date(record.occurredAt).toLocaleString()}
+                  </li>
+                ))}
+                {!detail.activities.length && <li>No activity recorded for this company.</li>}
               </ul>
               <h4>Change history</h4>
               <ul aria-label="Company change history">
@@ -519,21 +535,38 @@ function Activities({ canWrite }: { canWrite: boolean }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
+  const [snapshotCreatedAt, setSnapshotCreatedAt] = useState('');
+  const [cursors, setCursors] = useState<Array<{ occurredAt: string; id: string } | null>>([null]);
   const [total, setTotal] = useState(0);
   const [notice, setNotice] = useState('');
-  const load = async (nextPage = page) => {
+  const load = async (
+    nextPage = page,
+    cursor = cursors[nextPage - 1],
+    snapshot = snapshotCreatedAt,
+  ) => {
     const query = new URLSearchParams({ page: String(nextPage) });
     if (type) query.set('type', type);
     if (authorId) query.set('authorId', authorId);
     if (relatedRecordId) query.set('relatedRecordId', relatedRecordId);
     if (from) query.set('from', new Date(from).toISOString());
     if (to) query.set('to', new Date(to).toISOString());
+    if (snapshot) query.set('snapshotCreatedAt', snapshot);
+    if (cursor) {
+      query.set('cursorOccurredAt', cursor.occurredAt);
+      query.set('cursorId', cursor.id);
+    }
     const response = await fetch(`/api/activities?${query}`);
     if (!response.ok) return setNotice('Activities could not be loaded. Try again.');
     const body = await response.json();
     setItems(body.items);
     setTotal(body.total);
     setPage(nextPage);
+    setSnapshotCreatedAt(body.snapshotCreatedAt);
+    setCursors((current) => {
+      const next = [...current];
+      next[nextPage] = body.nextCursor;
+      return next;
+    });
   };
   useEffect(() => {
     void load(1);
@@ -562,7 +595,9 @@ function Activities({ canWrite }: { canWrite: boolean }) {
         aria-label="Activity filters"
         onSubmit={(event) => {
           event.preventDefault();
-          void load(1);
+          setSnapshotCreatedAt('');
+          setCursors([null]);
+          void load(1, null, '');
         }}
       >
         <label>
@@ -631,7 +666,9 @@ function Activities({ canWrite }: { canWrite: boolean }) {
             }
             formElement.reset();
             setNotice('Activity recorded.');
-            await load(1);
+            setSnapshotCreatedAt('');
+            setCursors([null]);
+            await load(1, null, '');
           }}
         >
           <h3>Log activity</h3>
@@ -720,14 +757,11 @@ function Activities({ canWrite }: { canWrite: boolean }) {
         {!items.length && <li>No activities match these filters.</li>}
       </ul>
       <nav aria-label="Activity pagination">
-        <button disabled={page === 1} onClick={() => void load(page - 1)}>
+        <button disabled={page === 1} onClick={() => void load(page - 1, cursors[page - 2])}>
           Previous activities
         </button>
         <span>Page {page}</span>
-        <button
-          disabled={items.length === 0 || page * 25 >= total}
-          onClick={() => void load(page + 1)}
-        >
+        <button disabled={!cursors[page]} onClick={() => void load(page + 1, cursors[page])}>
           Next activities
         </button>
       </nav>
@@ -763,7 +797,7 @@ function Activities({ canWrite }: { canWrite: boolean }) {
                 }
                 setSelected(await response.json());
                 setNotice('Activity updated.');
-                await load(page);
+                await load(page, cursors[page - 1]);
               }}
             >
               <h4>Edit activity notes</h4>

@@ -26,7 +26,7 @@ describe('activities API', () => {
       environment: 'test',
     }).listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
-    const url = `http://127.0.0.1:${server.address().port}`;
+    let url = `http://127.0.0.1:${server.address().port}`;
     const signIn = async (email, password) =>
       (
         await fetch(`${url}/api/auth/sign-in`, {
@@ -59,12 +59,37 @@ describe('activities API', () => {
     expect(activity.companyLabel).toBe('Acme Industries');
     expect(activity.contactLabel).toBe('Ada Lovelace');
     expect(activity.followUpTaskId).toMatch(/^task_/);
+    const companyDetail = await fetch(`${url}/api/companies/co_acme`, {
+      headers: { cookie: member },
+    });
+    const contactDetail = await fetch(`${url}/api/contacts/ct_ada`, {
+      headers: { cookie: member },
+    });
+    expect(
+      (await companyDetail.json()).activities.filter((item) => item.id === activity.id),
+    ).toHaveLength(1);
+    expect(
+      (await contactDetail.json()).activities.filter((item) => item.id === activity.id),
+    ).toHaveLength(1);
+
+    await new Promise((resolve) => server.close(resolve));
+    server = createApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: environment.databasePath,
+      environment: 'test',
+    }).listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    url = `http://127.0.0.1:${server.address().port}`;
+    expect(
+      (await fetch(`${url}/api/activities/${activity.id}`, { headers: { cookie: member } })).status,
+    ).toBe(200);
 
     const filtered = await fetch(
       `${url}/api/activities?type=call&authorId=usr_member&relatedRecordId=ct_ada`,
       { headers: { cookie: member } },
     );
-    expect(filtered.status).toBe(200);
+    expect(filtered.status, await filtered.clone().text()).toBe(200);
     expect((await filtered.json()).items.map((item) => item.id)).toContain(activity.id);
 
     const updated = await fetch(`${url}/api/activities/${activity.id}`, {
@@ -83,17 +108,42 @@ describe('activities API', () => {
     expect(current.occurredAt).toBe(activity.occurredAt);
     expect(current.companyLabel).toBe('Acme Industries');
 
-    const stale = await fetch(`${url}/api/activities/${activity.id}`, {
-      method: 'PATCH',
+    const concurrent = await Promise.all(
+      ['Concurrent one', 'Concurrent two'].map((subject) =>
+        fetch(`${url}/api/activities/${activity.id}`, {
+          method: 'PATCH',
+          headers: { cookie: member, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            body: '',
+            participantNames: [],
+            version: current.version,
+          }),
+        }),
+      ),
+    );
+    expect(concurrent.map((response) => response.status).sort()).toEqual([200, 409]);
+
+    const firstPage = await fetch(`${url}/api/activities?pageSize=1`, {
+      headers: { cookie: member },
+    });
+    const firstPageBody = await firstPage.json();
+    await fetch(`${url}/api/activities`, {
+      method: 'POST',
       headers: { cookie: member, 'content-type': 'application/json' },
       body: JSON.stringify({
-        subject: 'Stale edit',
-        body: '',
-        participantNames: [],
-        version: activity.version,
+        type: 'note',
+        subject: 'Inserted after snapshot',
+        occurredAt: '2026-08-10T10:00:00.000Z',
       }),
     });
-    expect(stale.status).toBe(409);
+    const secondPage = await fetch(
+      `${url}/api/activities?pageSize=1&snapshotCreatedAt=${encodeURIComponent(firstPageBody.snapshotCreatedAt)}&cursorOccurredAt=${encodeURIComponent(firstPageBody.nextCursor.occurredAt)}&cursorId=${encodeURIComponent(firstPageBody.nextCursor.id)}`,
+      { headers: { cookie: member } },
+    );
+    expect((await secondPage.json()).items.map((item) => item.id)).not.toContain(
+      firstPageBody.items[0].id,
+    );
 
     const invalidFollowUp = await fetch(`${url}/api/activities`, {
       method: 'POST',
@@ -114,6 +164,30 @@ describe('activities API', () => {
         .get().total,
     ).toBe(0);
     reader.close();
+
+    const failingWriter = openDatabase(environment.databasePath);
+    failingWriter.exec(
+      "CREATE TRIGGER force_activity_failure BEFORE INSERT ON activities WHEN NEW.subject = 'Force rollback' BEGIN SELECT RAISE(ABORT, 'forced activity failure'); END;",
+    );
+    failingWriter.close();
+    const rollback = await fetch(`${url}/api/activities`, {
+      method: 'POST',
+      headers: { cookie: member, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'note',
+        subject: 'Force rollback',
+        occurredAt: '2026-08-09T12:00:00.000Z',
+        followUp: { title: 'Task must roll back' },
+      }),
+    });
+    expect(rollback.status).toBe(500);
+    const rollbackReader = openDatabase(environment.databasePath);
+    expect(
+      rollbackReader
+        .prepare("SELECT count(*) AS total FROM tasks WHERE title = 'Task must roll back'")
+        .get().total,
+    ).toBe(0);
+    rollbackReader.close();
 
     const viewer = await signIn('viewer@northstar.test', 'ViewerPass!2026');
     expect(

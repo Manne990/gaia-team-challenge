@@ -86,15 +86,21 @@ const activityUpdateInput = z.object({
   participantNames: z.array(z.string().trim().min(1).max(160)).max(50),
   version: z.coerce.number().int().positive(),
 });
-const activityListQuery = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(25),
-  type: z.enum(activityTypes).optional(),
-  authorId: z.string().trim().min(1).max(100).optional(),
-  relatedRecordId: z.string().trim().min(1).max(100).optional(),
-  from: z.string().datetime({ offset: true }).optional(),
-  to: z.string().datetime({ offset: true }).optional(),
-});
+const activityListQuery = z
+  .object({
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    type: z.enum(activityTypes).optional(),
+    authorId: z.string().trim().min(1).max(100).optional(),
+    relatedRecordId: z.string().trim().min(1).max(100).optional(),
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+    cursorOccurredAt: z.string().datetime({ offset: true }).optional(),
+    cursorId: z.string().trim().min(1).max(100).optional(),
+    snapshotCreatedAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .refine((query) => Boolean(query.cursorOccurredAt) === Boolean(query.cursorId), {
+    message: 'A timeline cursor needs both its occurrence time and identifier.',
+  });
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
@@ -430,7 +436,7 @@ export function createApp(config: AppConfig) {
             ...c,
             activities: database
               .prepare(
-                'SELECT id, type, subject, occurred_at AS occurredAt FROM activities WHERE organization_id = ? AND contact_id = ? ORDER BY occurred_at DESC',
+                `SELECT ${activityFields} FROM activities WHERE organization_id = ? AND contact_id = ? ORDER BY occurred_at DESC, id DESC`,
               )
               .all(s.organizationId, c.id),
             deals: database
@@ -717,7 +723,7 @@ export function createApp(config: AppConfig) {
           .all(session.organizationId, company.id),
         activities: database
           .prepare(
-            'SELECT * FROM activities WHERE organization_id = ? AND company_id = ? ORDER BY occurred_at DESC, id DESC',
+            `SELECT ${activityFields} FROM activities WHERE organization_id = ? AND company_id = ? ORDER BY occurred_at DESC, id DESC`,
           )
           .all(session.organizationId, company.id),
         deals: database
@@ -953,16 +959,33 @@ export function createApp(config: AppConfig) {
         where.push('occurred_at <= ?');
         args.push(query.to);
       }
+      const snapshotCreatedAt = query.snapshotCreatedAt || new Date().toISOString();
+      where.push('created_at <= ?');
+      args.push(snapshotCreatedAt);
+      if (query.cursorOccurredAt && query.cursorId) {
+        where.push('(occurred_at < ? OR (occurred_at = ? AND id < ?))');
+        args.push(query.cursorOccurredAt, query.cursorOccurredAt, query.cursorId);
+      }
       const clause = where.join(' AND ');
       const total = database
         .prepare(`SELECT count(*) AS total FROM activities WHERE ${clause}`)
         .get(...args).total;
       const items = database
         .prepare(
-          `SELECT ${activityFields} FROM activities WHERE ${clause} ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?`,
+          `SELECT ${activityFields} FROM activities WHERE ${clause} ORDER BY occurred_at DESC, id DESC LIMIT ?`,
         )
-        .all(...args, query.pageSize, (query.page - 1) * query.pageSize);
-      return response.json({ items, page: query.page, pageSize: query.pageSize, total });
+        .all(...args, query.pageSize);
+      const last = items.at(-1);
+      return response.json({
+        items,
+        pageSize: query.pageSize,
+        total,
+        snapshotCreatedAt,
+        nextCursor:
+          items.length === query.pageSize && last
+            ? { occurredAt: last.occurredAt, id: last.id }
+            : null,
+      });
     } catch (error) {
       return sendActivityError(error, response);
     }
