@@ -90,7 +90,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect.');
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     expect(
       await page.locator('html').evaluate((element) => element.scrollWidth === element.clientWidth),
     ).toBe(true);
@@ -167,13 +167,13 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await signOut(page);
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await page.getByLabel('Email').fill('viewer@northstar.test');
     await page.getByLabel('Password').fill('ViewerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Administration' })).toHaveCount(0);
     await navigateTo(page, 'Contacts');
     await expect(page.getByRole('button', { name: 'Add contact' })).toHaveCount(0);
@@ -205,7 +205,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     const ownerCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
@@ -231,7 +231,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Email').fill('member@northstar.test');
     await page.getByLabel('Password').fill('MemberPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     const memberCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');

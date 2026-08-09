@@ -63,7 +63,7 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
     const create = page.getByRole('form', { name: 'Create company' });
@@ -114,7 +114,7 @@ test('actual company workspace creates, filters, updates, archives, restores, an
       version: 3,
     });
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await navigateTo(page, 'Companies');
     const filters = page.getByRole('form', { name: 'Company filters' });
     await filters.getByLabel('Include archived companies').check();
