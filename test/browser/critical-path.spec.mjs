@@ -34,7 +34,7 @@ test('browser test exercises the root CRM application and its health boundary ac
       .toBe(200);
     await page.goto(url);
     await expect(
-      page.getByRole('heading', { name: 'Your customer operations, in one place.' }),
+      page.getByRole('heading', { name: /sign in/i }),
     ).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   } finally {
