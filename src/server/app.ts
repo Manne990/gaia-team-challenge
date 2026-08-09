@@ -399,11 +399,9 @@ export function createApp(config: AppConfig) {
         .prepare('SELECT 1 FROM contacts WHERE id = ? AND organization_id = ?')
         .get(request.params.id, s.organizationId);
       return exists
-        ? response
-            .status(409)
-            .json({
-              error: { code: 'CONFLICT', message: 'This contact is already in that state.' },
-            })
+        ? response.status(409).json({
+            error: { code: 'CONFLICT', message: 'This contact is already in that state.' },
+          })
         : response
             .status(404)
             .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
