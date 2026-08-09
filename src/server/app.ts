@@ -1069,6 +1069,70 @@ export function createApp(config: AppConfig) {
       error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
     });
   };
+  app.get('/api/dashboard', (request, response) => {
+    try {
+      const s = taskSession(request);
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const soon = new Date(now);
+      soon.setUTCDate(soon.getUTCDate() + 30);
+      const stale = new Date(now);
+      stale.setUTCDate(stale.getUTCDate() - 30);
+      const open = "status = 'open' AND archived_at IS NULL";
+      const pipeline = database
+        .prepare(
+          `SELECT currency, count(*) AS count, coalesce(sum(amount_cents), 0) AS amountCents FROM deals WHERE organization_id = ? AND ${open} GROUP BY currency ORDER BY currency`,
+        )
+        .all(s.organizationId);
+      const stages = database
+        .prepare(
+          `SELECT pipeline_stages.id, pipeline_stages.name, pipeline_stages.kind, count(deals.id) AS count FROM pipeline_stages LEFT JOIN deals ON deals.stage_id = pipeline_stages.id AND deals.organization_id = pipeline_stages.organization_id AND deals.archived_at IS NULL WHERE pipeline_stages.organization_id = ? GROUP BY pipeline_stages.id ORDER BY pipeline_stages.position`,
+        )
+        .all(s.organizationId);
+      const taskWhere =
+        "organization_id = ? AND archived_at IS NULL AND status NOT IN ('completed', 'cancelled') AND due_at IS NOT NULL";
+      const overdue = database
+        .prepare(`SELECT count(*) AS count FROM tasks WHERE ${taskWhere} AND due_at < ?`)
+        .get(s.organizationId, nowIso).count;
+      const upcoming = database
+        .prepare(
+          `SELECT count(*) AS count FROM tasks WHERE ${taskWhere} AND due_at >= ? AND due_at < ?`,
+        )
+        .get(s.organizationId, nowIso, soon.toISOString()).count;
+      const closingSoon = database
+        .prepare(
+          `SELECT count(*) AS count FROM deals WHERE organization_id = ? AND ${open} AND expected_close_date >= ? AND expected_close_date <= ?`,
+        )
+        .get(s.organizationId, nowIso.slice(0, 10), soon.toISOString().slice(0, 10)).count;
+      const staleAccounts = database
+        .prepare(
+          `SELECT count(*) AS count FROM companies WHERE organization_id = ? AND archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM activities WHERE activities.organization_id = companies.organization_id AND activities.company_id = companies.id AND activities.occurred_at >= ?)`,
+        )
+        .get(s.organizationId, stale.toISOString()).count;
+      const recentActivity = database
+        .prepare(
+          `SELECT id, subject, type, occurred_at AS occurredAt, company_id AS companyId, deal_id AS dealId FROM activities WHERE organization_id = ? ORDER BY occurred_at DESC, id DESC LIMIT 5`,
+        )
+        .all(s.organizationId);
+      return response.json({
+        generatedAt: nowIso,
+        semantics: {
+          closingSoonDays: 30,
+          staleAccountDays: 30,
+          upcomingTaskDays: 30,
+          timezone: 'UTC',
+        },
+        pipeline,
+        stages,
+        tasks: { overdue, upcoming },
+        closingSoon,
+        staleAccounts,
+        recentActivity,
+      });
+    } catch (error) {
+      return sendTaskError(error, response);
+    }
+  });
   const validateTaskReferences = (organizationId: string, input: z.infer<typeof taskInput>) => {
     for (const [table, id] of [
       ['memberships', input.assigneeId],
