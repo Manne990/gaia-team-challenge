@@ -270,17 +270,37 @@ function ListPage({
   workspace: Workspace;
   user: ShellUser;
 }) {
+  const [contactRows, setContactRows] = useState<Array<string[]>>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  useEffect(() => {
+    if (page === 'Contacts')
+      fetch(`/api/contacts?query=${encodeURIComponent(contactSearch)}`)
+        .then((response) => (response.ok ? response.json() : { items: [] }))
+        .then((data) =>
+          setContactRows(
+            data.items.map((c: any) => [
+              `${c.firstName} ${c.lastName}`,
+              c.companyId || 'Independent',
+              c.status,
+              c.ownerId || 'Unassigned',
+              new Date(c.updatedAt).toLocaleDateString(),
+            ]),
+          ),
+        );
+  }, [page, contactSearch]);
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
   const companies =
-    page === 'Contacts'
-      ? workspace.id === 'org_northstar'
-        ? [
-            ['Ada Lovelace', 'Acme Industries', 'Active', 'Northstar Member', 'Today'],
-            ['Grace Hopper', 'Aurora Labs', 'Lead', 'Northstar Member', 'Yesterday'],
-            ['Katherine Johnson', 'Birch & Co', 'Active', 'Northstar Owner', 'Aug 4'],
-          ]
-        : [[workspace.name + ' contact', 'Independent', 'Active', user.displayName, 'Today']]
-      : companiesFor(workspace, user);
+    page === 'Contacts' && contactRows.length
+      ? contactRows
+      : page === 'Contacts'
+        ? workspace.id === 'org_northstar'
+          ? [
+              ['Ada Lovelace', 'Acme Industries', 'Active', 'Northstar Member', 'Today'],
+              ['Grace Hopper', 'Aurora Labs', 'Lead', 'Northstar Member', 'Yesterday'],
+              ['Katherine Johnson', 'Birch & Co', 'Active', 'Northstar Owner', 'Aug 4'],
+            ]
+          : [[workspace.name + ' contact', 'Independent', 'Active', user.displayName, 'Today']]
+        : companiesFor(workspace, user);
   return (
     <>
       <div className="page-heading">
@@ -291,7 +311,29 @@ function ListPage({
             Manage {workspace.name}’s {page.toLowerCase()}.
           </p>
         </div>
-        <button className="primary">+ Add {singular}</button>
+        <button
+          className="primary"
+          onClick={
+            page === 'Contacts'
+              ? async () => {
+                  const value = window.prompt('Contact name');
+                  const parts = value?.trim().split(/\s+/) || [];
+                  if (parts.length < 2) return;
+                  await fetch('/api/contacts', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      firstName: parts[0],
+                      lastName: parts.slice(1).join(' '),
+                    }),
+                  });
+                  setContactSearch('');
+                }
+              : undefined
+          }
+        >
+          + Add {singular}
+        </button>
       </div>
       <section className="panel table-panel">
         <div className="toolbar">
@@ -300,6 +342,10 @@ function ListPage({
             <input
               aria-label={`Search ${page.toLowerCase()}`}
               placeholder={`Search ${page.toLowerCase()}`}
+              value={page === 'Contacts' ? contactSearch : undefined}
+              onChange={
+                page === 'Contacts' ? (event) => setContactSearch(event.target.value) : undefined
+              }
             />
           </label>
           <button className="secondary">
