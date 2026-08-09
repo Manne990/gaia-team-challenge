@@ -1,7 +1,7 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  testDir: "./test/browser",
+  testDir: './test/browser',
   fullyParallel: true,
   forbidOnly: true,
   forbidEmpty: true,
