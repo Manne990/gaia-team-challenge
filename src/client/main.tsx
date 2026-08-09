@@ -1112,6 +1112,7 @@ function Deals({ canWrite }: { canWrite: boolean }) {
             <th>Stage</th>
             <th>Amount</th>
             <th>Probability</th>
+            {canWrite && <th>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -1123,6 +1124,54 @@ function Deals({ canWrite }: { canWrite: boolean }) {
                 {deal.currency} {(deal.amountCents / 100).toLocaleString()}
               </td>
               <td>{deal.probability}%</td>
+              {canWrite && (
+                <td>
+                  <form
+                    aria-label={`Update ${deal.name}`}
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const form = new FormData(event.currentTarget);
+                      const action = String(form.get('action'));
+                      const response =
+                        action === 'archive'
+                          ? await fetch(`/api/deals/${deal.id}/archive`, { method: 'POST' })
+                          : await fetch(`/api/deals/${deal.id}/transition`, {
+                              method: 'POST',
+                              headers: { 'content-type': 'application/json' },
+                              body: JSON.stringify({
+                                stageId: form.get('stageId'),
+                                version: deal.version,
+                                lossReason: form.get('lossReason') || undefined,
+                              }),
+                            });
+                      if (!response.ok)
+                        return setError('Deal could not be updated. Refresh and try again.');
+                      void load();
+                    }}
+                  >
+                    <label>
+                      Move to
+                      <select name="stageId" defaultValue={deal.stageId}>
+                        {stages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Loss reason
+                      <input name="lossReason" />
+                    </label>
+                    <button name="action" value="transition">
+                      Move
+                    </button>
+                    <button name="action" value="archive">
+                      Archive
+                    </button>
+                  </form>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
