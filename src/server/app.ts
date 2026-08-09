@@ -1541,14 +1541,14 @@ export function createApp(config: AppConfig) {
         const now = new Date().toISOString();
         database
           .prepare(
-            'UPDATE pipeline_stages SET position = position + 1000 WHERE organization_id = ? AND kind = ? AND position >= ?',
+            'UPDATE pipeline_stages SET position = position + 1000 WHERE organization_id = ? AND position >= ?',
           )
-          .run(s.organizationId, 'open', input.position);
+          .run(s.organizationId, input.position);
         database
           .prepare(
-            'UPDATE pipeline_stages SET position = position - 999 WHERE organization_id = ? AND kind = ? AND position >= ?',
+            'UPDATE pipeline_stages SET position = position - 999 WHERE organization_id = ? AND position >= ?',
           )
-          .run(s.organizationId, 'open', input.position + 1000);
+          .run(s.organizationId, input.position + 1000);
         const id = `stage_${randomUUID()}`;
         database
           .prepare(
