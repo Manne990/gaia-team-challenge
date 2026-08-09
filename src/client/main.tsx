@@ -19,6 +19,7 @@ type Company = {
   size: string | null;
   tags_json: string;
   archived_at: string | null;
+  owner_id: string | null;
 };
 type CompanyDetail = Company & {
   version: number;
@@ -30,20 +31,50 @@ type CompanyDetail = Company & {
   activities: { id: string; subject: string }[];
   deals: { id: string; name: string }[];
   tasks: { id: string; title: string }[];
+  history: { id: string; action: string; created_at: string; summary_json: string }[];
 };
 
 function Companies({ canWrite }: { canWrite: boolean }) {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [total, setTotal] = useState(0);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
   const [text, setText] = useState('');
+  const [filters, setFilters] = useState({
+    lifecycle: '',
+    ownerId: '',
+    industry: '',
+    size: '',
+    tag: '',
+    sort: 'name',
+    direction: 'asc',
+    includeArchived: false,
+    page: 1,
+  });
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
-  const load = async (search = text) => {
+  const load = async (search = text, nextFilters = filters) => {
     setState('loading');
     try {
-      const response = await fetch(`/api/companies?text=${encodeURIComponent(search)}`);
+      const query = new URLSearchParams({
+        text: search,
+        page: String(nextFilters.page),
+        sort: nextFilters.sort,
+        direction: nextFilters.direction,
+      });
+      for (const [key, value] of Object.entries({
+        lifecycle: nextFilters.lifecycle,
+        ownerId: nextFilters.ownerId,
+        industry: nextFilters.industry,
+        size: nextFilters.size,
+        tag: nextFilters.tag,
+      }))
+        if (value) query.set(key, value);
+      if (nextFilters.includeArchived) query.set('includeArchived', 'true');
+      const response = await fetch(`/api/companies?${query}`);
       if (!response.ok) throw new Error('Unable to load companies.');
-      setCompanies((await response.json()).items);
+      const body = await response.json();
+      setCompanies(body.items);
+      setTotal(body.total);
       setState('ready');
     } catch {
       setError('Companies could not be loaded. Try again.');
@@ -68,6 +99,88 @@ function Companies({ canWrite }: { canWrite: boolean }) {
           <input value={text} onChange={(event) => setText(event.target.value)} />
         </label>
         <button>Search</button>
+      </form>
+      <form
+        aria-label="Company filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const next = { ...filters, page: 1 };
+          setFilters(next);
+          void load(text, next);
+        }}
+      >
+        <label>
+          Lifecycle filter
+          <select
+            value={filters.lifecycle}
+            onChange={(event) => setFilters({ ...filters, lifecycle: event.target.value })}
+          >
+            <option value="">All lifecycles</option>
+            <option value="lead">Lead</option>
+            <option value="prospect">Prospect</option>
+            <option value="customer">Customer</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <label>
+          Owner filter
+          <input
+            value={filters.ownerId}
+            onChange={(event) => setFilters({ ...filters, ownerId: event.target.value })}
+          />
+        </label>
+        <label>
+          Industry filter
+          <input
+            value={filters.industry}
+            onChange={(event) => setFilters({ ...filters, industry: event.target.value })}
+          />
+        </label>
+        <label>
+          Size filter
+          <input
+            value={filters.size}
+            onChange={(event) => setFilters({ ...filters, size: event.target.value })}
+          />
+        </label>
+        <label>
+          Tag filter
+          <input
+            value={filters.tag}
+            onChange={(event) => setFilters({ ...filters, tag: event.target.value })}
+          />
+        </label>
+        <label>
+          Sort by
+          <select
+            value={filters.sort}
+            onChange={(event) => setFilters({ ...filters, sort: event.target.value })}
+          >
+            <option value="name">Name</option>
+            <option value="createdAt">Created</option>
+            <option value="updatedAt">Updated</option>
+            <option value="lifecycle">Lifecycle</option>
+          </select>
+        </label>
+        <label>
+          Sort direction
+          <select
+            value={filters.direction}
+            onChange={(event) => setFilters({ ...filters, direction: event.target.value })}
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={filters.includeArchived}
+            onChange={(event) => setFilters({ ...filters, includeArchived: event.target.checked })}
+          />{' '}
+          Include archived companies
+        </label>
+        <button>Apply filters</button>
       </form>
       {canWrite && (
         <form
@@ -179,6 +292,29 @@ function Companies({ canWrite }: { canWrite: boolean }) {
             ))}
             {!companies.length && <li>No companies match these filters.</li>}
           </ul>
+          <nav aria-label="Company pagination">
+            <button
+              disabled={filters.page === 1}
+              onClick={() => {
+                const next = { ...filters, page: filters.page - 1 };
+                setFilters(next);
+                void load(text, next);
+              }}
+            >
+              Previous companies
+            </button>
+            <span>Page {filters.page}</span>
+            <button
+              disabled={companies.length === 0 || filters.page * 25 >= total}
+              onClick={() => {
+                const next = { ...filters, page: filters.page + 1 };
+                setFilters(next);
+                void load(text, next);
+              }}
+            >
+              Next companies
+            </button>
+          </nav>
           {detail && (
             <section aria-labelledby="company-detail-heading">
               <h3 id="company-detail-heading">{detail.name}</h3>
@@ -192,7 +328,39 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                 <dd>{detail.deals.length}</dd>
                 <dt>Tasks</dt>
                 <dd>{detail.tasks.length}</dd>
+                <dt>Owner</dt>
+                <dd>{detail.owner_id || 'Unassigned'}</dd>
               </dl>
+              <h4>Related records</h4>
+              <ul aria-label="Company related records">
+                {detail.contacts.map((record) => (
+                  <li key={record.id}>
+                    Contact: {record.first_name} {record.last_name}
+                  </li>
+                ))}
+                {detail.activities.map((record) => (
+                  <li key={record.id}>Activity: {record.subject}</li>
+                ))}
+                {detail.deals.map((record) => (
+                  <li key={record.id}>Deal: {record.name}</li>
+                ))}
+                {detail.tasks.map((record) => (
+                  <li key={record.id}>Task: {record.title}</li>
+                ))}
+                {!detail.contacts.length &&
+                  !detail.activities.length &&
+                  !detail.deals.length &&
+                  !detail.tasks.length && <li>No related records.</li>}
+              </ul>
+              <h4>Change history</h4>
+              <ul aria-label="Company change history">
+                {detail.history.map((event) => (
+                  <li key={event.id}>
+                    {event.action} · {new Date(event.created_at).toLocaleString()}
+                  </li>
+                ))}
+                {!detail.history.length && <li>No company changes recorded.</li>}
+              </ul>
               {canWrite && (
                 <>
                   <form

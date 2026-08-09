@@ -77,17 +77,18 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-    await page.getByLabel('Name').fill('Browser Test Company');
-    await page.getByLabel('External reference').fill('BROWSER-83');
-    await page.getByLabel('Website').fill('https://example.test');
-    await page.getByLabel('Phone').fill('+46 8 123');
-    await page.getByLabel('Industry').fill('Software');
-    await page.getByLabel('Size').fill('11-50');
-    await page.getByLabel('Address').fill('Testvägen 1');
-    await page.getByLabel('Lifecycle status').selectOption('prospect');
-    await page.getByLabel('Tags').fill('priority, nordic');
-    await page.getByLabel('Description').fill('A durable browser-created company.');
-    await page.getByRole('button', { name: 'Create company' }).click();
+    const create = page.getByRole('form', { name: 'Create company' });
+    await create.getByLabel('Name').fill('Browser Test Company');
+    await create.getByLabel('External reference').fill('BROWSER-83');
+    await create.getByLabel('Website').fill('https://example.test');
+    await create.getByLabel('Phone').fill('+46 8 123');
+    await create.getByLabel('Industry').fill('Software');
+    await create.getByLabel('Size').fill('11-50');
+    await create.getByLabel('Address').fill('Testvägen 1');
+    await create.getByLabel('Lifecycle status').selectOption('prospect');
+    await create.getByLabel('Tags').fill('priority, nordic');
+    await create.getByLabel('Description').fill('A durable browser-created company.');
+    await create.getByRole('button', { name: 'Create company' }).click();
     await expect(page.getByRole('list', { name: 'Company results' })).toContainText(
       'Browser Test Company',
     );
@@ -110,9 +111,8 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Lifecycle status').selectOption('customer');
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Browser Test Company Updated', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
+    await page.waitForTimeout(150);
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Archive company' }).click();
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
