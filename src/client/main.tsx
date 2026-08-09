@@ -1743,6 +1743,8 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   const [error, setError] = useState('');
   const [stageFilter, setStageFilter] = useState(() => initialQuery.get('stageId') || '');
   const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
+  const expectedCloseFrom = initialQuery.get('expectedCloseFrom') || '';
+  const expectedCloseTo = initialQuery.get('expectedCloseTo') || '';
   const [includeArchived, setIncludeArchived] = useState(
     () => initialQuery.get('includeArchived') === 'true',
   );
@@ -1762,6 +1764,8 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
     if (status) query.set('status', status);
+    if (expectedCloseFrom) query.set('expectedCloseFrom', expectedCloseFrom);
+    if (expectedCloseTo) query.set('expectedCloseTo', expectedCloseTo);
     if (archived) query.set('includeArchived', 'true');
     query.set('page', String(nextPage));
     query.set('sort', nextSort);
@@ -2203,6 +2207,11 @@ function LiveDashboard({
         Loading dashboard metrics…
       </section>
     );
+  const closingEnd = new Date(
+    new Date(data.generatedAt).getTime() + data.semantics.closingSoonDays * 24 * 60 * 60 * 1000,
+  )
+    .toISOString()
+    .slice(0, 10);
   return (
     <section aria-labelledby="dashboard-heading">
       <div className="page-heading">
@@ -2218,7 +2227,15 @@ function LiveDashboard({
           <strong>{money(data.pipeline)}</strong>
           <small>Open, unarchived deals</small>
         </button>
-        <button className="metric" onClick={() => open('Deals', '?status=open')}>
+        <button
+          className="metric"
+          onClick={() =>
+            open(
+              'Deals',
+              `?status=open&expectedCloseFrom=${data.generatedAt.slice(0, 10)}&expectedCloseTo=${closingEnd}`,
+            )
+          }
+        >
           <p>Deals closing soon</p>
           <strong>{data.closingSoon}</strong>
           <small>Next {data.semantics.closingSoonDays} UTC days</small>
@@ -2256,6 +2273,17 @@ function LiveDashboard({
           <button className="link-button" onClick={() => open('Companies')}>
             {data.staleAccounts} without activity in {data.semantics.staleAccountDays} UTC days
           </button>
+        </article>
+        <article className="panel">
+          <h2>Won/lost trend</h2>
+          <p>Last 30 UTC days</p>
+          <ul>
+            {['won', 'lost'].map((kind) => (
+              <li key={kind}>
+                {kind}: {data.trend.find((entry: any) => entry.kind === kind)?.count || 0}
+              </li>
+            ))}
+          </ul>
         </article>
       </section>
       <section className="panel">

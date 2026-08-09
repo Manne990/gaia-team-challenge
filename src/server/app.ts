@@ -150,6 +150,8 @@ const taskListQuery = z.object({
   relation: z.enum(['company', 'contact', 'deal']).optional(),
   relationId: z.string().trim().optional(),
   due: z.enum(['overdue', 'today', 'upcoming', 'completed']).optional(),
+  dueFrom: z.string().datetime({ offset: true }).optional(),
+  dueTo: z.string().datetime({ offset: true }).optional(),
   includeArchived: z.coerce.boolean().default(false),
   sort: z.enum(['dueAt', 'createdAt', 'updatedAt', 'priority']).default('dueAt'),
   direction: z.enum(['asc', 'desc']).default('asc'),
@@ -162,6 +164,8 @@ const dealListQuery = z.object({
   ownerId: z.string().trim().min(1).optional(),
   stageId: z.string().trim().min(1).optional(),
   status: z.enum(['open', 'won', 'lost']).optional(),
+  expectedCloseFrom: z.string().date().optional(),
+  expectedCloseTo: z.string().date().optional(),
   includeArchived: z.coerce.boolean().default(false),
   sort: z
     .enum(['name', 'amount', 'createdAt', 'updatedAt', 'expectedCloseDate'])
@@ -1114,6 +1118,11 @@ export function createApp(config: AppConfig) {
           `SELECT id, subject, type, occurred_at AS occurredAt, company_id AS companyId, deal_id AS dealId FROM activities WHERE organization_id = ? ORDER BY occurred_at DESC, id DESC LIMIT 5`,
         )
         .all(s.organizationId);
+      const trend = database
+        .prepare(
+          `SELECT pipeline_stages.kind, count(*) AS count FROM deal_stage_history JOIN pipeline_stages ON pipeline_stages.id = deal_stage_history.to_stage_id AND pipeline_stages.organization_id = deal_stage_history.organization_id WHERE deal_stage_history.organization_id = ? AND deal_stage_history.changed_at >= ? AND pipeline_stages.kind IN ('won', 'lost') GROUP BY pipeline_stages.kind`,
+        )
+        .all(s.organizationId, stale.toISOString());
       return response.json({
         generatedAt: nowIso,
         semantics: {
@@ -1127,6 +1136,7 @@ export function createApp(config: AppConfig) {
         tasks: { overdue, upcoming },
         closingSoon,
         staleAccounts,
+        trend,
         recentActivity,
       });
     } catch (error) {
@@ -1261,6 +1271,14 @@ export function createApp(config: AppConfig) {
       if (query.due === 'upcoming') {
         where.push("status NOT IN ('completed', 'cancelled') AND due_at >= ?");
         args.push(tomorrow.toISOString());
+      }
+      if (query.dueFrom) {
+        where.push('due_at >= ?');
+        args.push(query.dueFrom);
+      }
+      if (query.dueTo) {
+        where.push('due_at < ?');
+        args.push(query.dueTo);
       }
       const order = {
         dueAt: 'due_at',
@@ -2428,6 +2446,14 @@ export function createApp(config: AppConfig) {
       if (query.text) {
         where.push('deals.name LIKE ?');
         args.push(`%${query.text}%`);
+      }
+      if (query.expectedCloseFrom) {
+        where.push('deals.expected_close_date >= ?');
+        args.push(query.expectedCloseFrom);
+      }
+      if (query.expectedCloseTo) {
+        where.push('deals.expected_close_date <= ?');
+        args.push(query.expectedCloseTo);
       }
       const clause = where.join(' AND ');
       const total = database
