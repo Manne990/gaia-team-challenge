@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
+import { createHash, scryptSync } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hashPassword } from '../auth/service.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 export const defaultDatabasePath =
@@ -53,6 +53,10 @@ export function resetDatabase(filename = defaultDatabasePath) {
   return db;
 }
 
+const passwordHash = (password) => {
+  const salt = createHash('sha256').update(`northstar:${password}`).digest('hex').slice(0, 32);
+  return `scrypt$${salt}$${scryptSync(password, salt, 64).toString('hex')}`;
+};
 const insert = (db, table, row) => {
   const columns = Object.keys(row);
   db.prepare(
@@ -78,7 +82,7 @@ export function seedDatabase(db) {
       insert(db, 'users', {
         id: user[0],
         email: user[1],
-        password_hash: hashPassword(user[2]),
+        password_hash: passwordHash(user[2]),
         display_name: user[3],
         created_at: seedTime,
         updated_at: seedTime,

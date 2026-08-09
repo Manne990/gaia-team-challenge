@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import { loadRuntimeConfig } from '../src/shared/config.js';
 import { assertSafeDatabaseResetTarget } from '../src/shared/database-path.js';
-
 const require = createRequire(import.meta.url);
 const { resetDatabase, openDatabase, seedDatabase } = require('../src/db/database.mjs') as {
   resetDatabase(path: string): { close(): void };
