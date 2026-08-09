@@ -304,6 +304,14 @@ END;
 CREATE TRIGGER merge_redirects_creator_update_guard BEFORE UPDATE OF organization_id, created_by_id ON merge_redirects FOR EACH ROW WHEN NEW.created_by_id IS NOT NULL BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.created_by_id) THEN RAISE(ABORT, 'merge creator is not an organization member') END;
 END;
+CREATE TRIGGER merge_redirects_target_guard BEFORE INSERT ON merge_redirects FOR EACH ROW BEGIN
+  SELECT CASE WHEN NEW.resource = 'companies' AND (NOT EXISTS (SELECT 1 FROM companies WHERE organization_id = NEW.organization_id AND id = NEW.source_id) OR NOT EXISTS (SELECT 1 FROM companies WHERE organization_id = NEW.organization_id AND id = NEW.target_id)) THEN RAISE(ABORT, 'company merge redirect must stay in organization') END;
+  SELECT CASE WHEN NEW.resource = 'contacts' AND (NOT EXISTS (SELECT 1 FROM contacts WHERE organization_id = NEW.organization_id AND id = NEW.source_id) OR NOT EXISTS (SELECT 1 FROM contacts WHERE organization_id = NEW.organization_id AND id = NEW.target_id)) THEN RAISE(ABORT, 'contact merge redirect must stay in organization') END;
+END;
+CREATE TRIGGER merge_redirects_target_update_guard BEFORE UPDATE OF organization_id, resource, source_id, target_id ON merge_redirects FOR EACH ROW BEGIN
+  SELECT CASE WHEN NEW.resource = 'companies' AND (NOT EXISTS (SELECT 1 FROM companies WHERE organization_id = NEW.organization_id AND id = NEW.source_id) OR NOT EXISTS (SELECT 1 FROM companies WHERE organization_id = NEW.organization_id AND id = NEW.target_id)) THEN RAISE(ABORT, 'company merge redirect must stay in organization') END;
+  SELECT CASE WHEN NEW.resource = 'contacts' AND (NOT EXISTS (SELECT 1 FROM contacts WHERE organization_id = NEW.organization_id AND id = NEW.source_id) OR NOT EXISTS (SELECT 1 FROM contacts WHERE organization_id = NEW.organization_id AND id = NEW.target_id)) THEN RAISE(ABORT, 'contact merge redirect must stay in organization') END;
+END;
 CREATE TRIGGER audit_events_actor_guard BEFORE INSERT ON audit_events FOR EACH ROW WHEN NEW.actor_id IS NOT NULL BEGIN
   SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM memberships WHERE organization_id = NEW.organization_id AND user_id = NEW.actor_id) THEN RAISE(ABORT, 'audit actor is not an organization member') END;
 END;

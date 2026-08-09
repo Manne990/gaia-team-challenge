@@ -88,6 +88,20 @@ try {
   assert.throws(() =>
     db
       .prepare(
+        'INSERT INTO merge_redirects (id, organization_id, resource, source_id, target_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'bad-merge',
+        'org_northstar',
+        'companies',
+        'co_acme',
+        'co_outside',
+        '2026-01-15T12:00:00.000Z',
+      ),
+  );
+  assert.throws(() =>
+    db
+      .prepare(
         'INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
