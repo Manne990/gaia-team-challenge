@@ -968,7 +968,7 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   );
 }
 
-function Deals() {
+function Deals({ canWrite }: { canWrite: boolean }) {
   const [deals, setDeals] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [stages, setStages] = useState<any[]>([]);
@@ -995,6 +995,65 @@ function Deals() {
     <section aria-labelledby="deals-heading">
       <h2 id="deals-heading">Deals</h2>
       {error && <p role="alert">{error}</p>}
+      {canWrite && (
+        <form
+          aria-label="Create deal"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const response = await fetch('/api/deals', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                name: form.get('name'),
+                companyId: form.get('companyId'),
+                stageId: form.get('stageId'),
+                amountCents: Number(form.get('amountCents')),
+                currency: form.get('currency'),
+                probability: Number(form.get('probability')),
+              }),
+            });
+            if (!response.ok) return setError('Deal could not be created.');
+            event.currentTarget.reset();
+            void load();
+          }}
+        >
+          <h3>New deal</h3>
+          <label>
+            Name
+            <input name="name" required />
+          </label>
+          <label>
+            Company ID
+            <input name="companyId" required />
+          </label>
+          <label>
+            Stage
+            <select name="stageId" required>
+              {stages
+                .filter((stage) => stage.kind === 'open')
+                .map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Amount (cents)
+            <input name="amountCents" type="number" min="0" required />
+          </label>
+          <label>
+            Currency
+            <input name="currency" defaultValue="USD" required />
+          </label>
+          <label>
+            Probability
+            <input name="probability" type="number" min="0" max="100" defaultValue="0" required />
+          </label>
+          <button>Create deal</button>
+        </form>
+      )}
       <form
         aria-label="Deal filters"
         onSubmit={(event) => {
@@ -1162,8 +1221,8 @@ function App() {
       workspace={session.organization}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
-      dealsContent={<Deals />}
       importsContent={<Imports canWrite={session.role !== 'viewer'} />}
+      dealsContent={<Deals canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
@@ -1177,4 +1236,3 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
-
