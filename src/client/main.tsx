@@ -1181,22 +1181,60 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
                       const form = new FormData(event.currentTarget);
                       const action = String(form.get('action'));
                       const response =
-                        action === 'archive' || action === 'restore'
-                          ? await fetch(`/api/deals/${deal.id}/${action}`, { method: 'POST' })
-                          : await fetch(`/api/deals/${deal.id}/transition`, {
-                              method: 'POST',
+                        action === 'edit'
+                          ? await fetch(`/api/deals/${deal.id}`, {
+                              method: 'PATCH',
                               headers: { 'content-type': 'application/json' },
                               body: JSON.stringify({
-                                stageId: form.get('stageId'),
+                                name: form.get('name'),
+                                companyId: deal.companyId,
+                                amountCents: Number(form.get('amountCents')),
+                                currency: deal.currency,
+                                probability: Number(form.get('probability')),
                                 version: deal.version,
-                                lossReason: form.get('lossReason') || undefined,
                               }),
-                            });
+                            })
+                          : action === 'archive' || action === 'restore'
+                            ? await fetch(`/api/deals/${deal.id}/${action}`, { method: 'POST' })
+                            : await fetch(`/api/deals/${deal.id}/transition`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({
+                                  stageId: form.get('stageId'),
+                                  version: deal.version,
+                                  lossReason: form.get('lossReason') || undefined,
+                                }),
+                              });
                       if (!response.ok)
                         return setError('Deal could not be updated. Refresh and try again.');
                       void load();
                     }}
                   >
+                    <label>
+                      Name
+                      <input name="name" defaultValue={deal.name} required />
+                    </label>
+                    <label>
+                      Amount (cents)
+                      <input
+                        name="amountCents"
+                        type="number"
+                        min="0"
+                        defaultValue={deal.amountCents}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Probability
+                      <input
+                        name="probability"
+                        type="number"
+                        min="0"
+                        max="100"
+                        defaultValue={deal.probability}
+                        required
+                      />
+                    </label>
                     <label>
                       Move to
                       <select name="stageId" defaultValue={deal.stageId}>
@@ -1213,6 +1251,9 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
                     </label>
                     <button name="action" value="transition">
                       Move
+                    </button>
+                    <button name="action" value="edit">
+                      Save details
                     </button>
                     <button name="action" value="archive">
                       Archive
