@@ -78,6 +78,13 @@ export function createApp(config: AppConfig) {
         JSON.stringify(summary),
         new Date().toISOString(),
       );
+  const assertContactOwner = (organizationId: string, ownerId: string | null | undefined) => {
+    if (!ownerId) return;
+    const membership = database
+      .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+      .get(organizationId, ownerId);
+    if (!membership) throw new Error('INVALID_CONTACT_OWNER');
+  };
   const sessionCookie = (token: string, expiresAt: string) =>
     `northstar_session=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}${config.environment === 'production' ? '; Secure' : ''}`;
 
@@ -146,6 +153,13 @@ export function createApp(config: AppConfig) {
     if (error instanceof z.ZodError)
       return response.status(400).json({
         error: { code: 'VALIDATION', message: 'Check the contact fields and try again.' },
+      });
+    if (String(error).includes('INVALID_CONTACT_OWNER'))
+      return response.status(400).json({
+        error: {
+          code: 'VALIDATION',
+          message: 'The contact owner must belong to this organization.',
+        },
       });
     if (String(error).includes('UNIQUE constraint'))
       return response.status(409).json({
@@ -225,6 +239,7 @@ export function createApp(config: AppConfig) {
       const now = new Date().toISOString();
       const id = `ct_${randomUUID()}`;
       const email = c.email ? c.email.toLowerCase() : null;
+      assertContactOwner(s.organizationId, c.ownerId || s.userId);
       const duplicate =
         email &&
         database
@@ -310,6 +325,7 @@ export function createApp(config: AppConfig) {
       const s = auth.requireRole(contactSession(request), ['owner', 'member']);
       const c = contactUpdateInput.parse(request.body);
       const now = new Date().toISOString();
+      assertContactOwner(s.organizationId, c.ownerId);
       const result = transaction(() => {
         const result = database
           .prepare(
@@ -361,10 +377,11 @@ export function createApp(config: AppConfig) {
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'That action does not exist.' } });
       const archived = request.params.action === 'archive' ? new Date().toISOString() : null;
+      const statePredicate = archived ? 'archived_at IS NULL' : 'archived_at IS NOT NULL';
       const result = transaction(() => {
         const result = database
           .prepare(
-            'UPDATE contacts SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ?',
+            `UPDATE contacts SET archived_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND ${statePredicate}`,
           )
           .run(archived, new Date().toISOString(), request.params.id, s.organizationId);
         if (result.changes)
@@ -377,8 +394,16 @@ export function createApp(config: AppConfig) {
           );
         return result;
       });
-      return result.changes
-        ? response.status(204).end()
+      if (result.changes) return response.status(204).end();
+      const exists = database
+        .prepare('SELECT 1 FROM contacts WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, s.organizationId);
+      return exists
+        ? response
+            .status(409)
+            .json({
+              error: { code: 'CONFLICT', message: 'This contact is already in that state.' },
+            })
         : response
             .status(404)
             .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
