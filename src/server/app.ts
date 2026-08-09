@@ -2191,6 +2191,18 @@ export function createApp(config: AppConfig) {
     try {
       const s = auth.requireRole(dealSession(request), ['owner', 'member']);
       const d = dealUpdate.parse(request.body);
+      if (
+        d.ownerId &&
+        !database
+          .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+          .get(s.organizationId, d.ownerId)
+      )
+        return response.status(400).json({
+          error: {
+            code: 'VALIDATION',
+            message: 'The deal owner must belong to this organization.',
+          },
+        });
       const now = new Date().toISOString();
       const result = database
         .prepare(
