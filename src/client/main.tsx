@@ -271,6 +271,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
     industry: initialQuery.get('industry') || '',
     size: initialQuery.get('size') || '',
     tag: initialQuery.get('tag') || '',
+    staleBefore: initialQuery.get('staleBefore') || '',
     sort: initialQuery.get('sort') || 'name',
     direction: initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
     includeArchived: initialQuery.get('includeArchived') === 'true',
@@ -294,6 +295,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
         industry: nextFilters.industry,
         size: nextFilters.size,
         tag: nextFilters.tag,
+        staleBefore: nextFilters.staleBefore,
       }))
         if (value) query.set(key, value);
       if (nextFilters.includeArchived) query.set('includeArchived', 'true');
@@ -613,6 +615,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
               industry: '',
               size: '',
               tag: '',
+              staleBefore: '',
               sort: 'name',
               direction: 'asc',
               includeArchived: false,
@@ -641,6 +644,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
             industry: typeof view.industry === 'string' ? view.industry : '',
             size: typeof view.size === 'string' ? view.size : '',
             tag: typeof view.tag === 'string' ? view.tag : '',
+            staleBefore: typeof view.staleBefore === 'string' ? view.staleBefore : '',
             sort: ['name', 'createdAt', 'updatedAt', 'lifecycle'].includes(String(view.sort))
               ? String(view.sort)
               : 'name',
@@ -993,11 +997,14 @@ type Activity = {
 };
 
 function Activities({ canWrite }: { canWrite: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
   const [items, setItems] = useState<Activity[]>([]);
   const [selected, setSelected] = useState<Activity | null>(null);
   const [type, setType] = useState('');
   const [authorId, setAuthorId] = useState('');
-  const [relatedRecordId, setRelatedRecordId] = useState('');
+  const [relatedRecordId, setRelatedRecordId] = useState(
+    () => initialQuery.get('relatedRecordId') || '',
+  );
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
@@ -2285,7 +2292,15 @@ function LiveDashboard({
         </article>
         <article className="panel">
           <h2>Stale accounts</h2>
-          <button className="link-button" onClick={() => open('Companies')}>
+          <button
+            className="link-button"
+            onClick={() =>
+              open(
+                'Companies',
+                `?staleBefore=${encodeURIComponent(new Date(new Date(data.generatedAt).getTime() - data.semantics.staleAccountDays * 24 * 60 * 60 * 1000).toISOString())}`,
+              )
+            }
+          >
             {data.staleAccounts} without activity in {data.semantics.staleAccountDays} UTC days
           </button>
         </article>
@@ -2295,7 +2310,9 @@ function LiveDashboard({
           <ul>
             {['won', 'lost'].map((kind) => (
               <li key={kind}>
-                {kind}: {data.trend.find((entry: any) => entry.kind === kind)?.count || 0}
+                <button className="link-button" onClick={() => open('Deals', `?status=${kind}`)}>
+                  {kind}: {data.trend.find((entry: any) => entry.kind === kind)?.count || 0}
+                </button>
               </li>
             ))}
           </ul>

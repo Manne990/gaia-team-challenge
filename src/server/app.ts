@@ -46,6 +46,7 @@ const companyListQuery = z.object({
   industry: z.string().trim().min(1).optional(),
   size: z.string().trim().min(1).optional(),
   tag: z.string().trim().min(1).optional(),
+  staleBefore: z.string().datetime({ offset: true }).optional(),
   includeArchived: z.coerce.boolean().default(false),
   sort: z.enum(['name', 'createdAt', 'updatedAt', 'lifecycle']).default('name'),
   direction: z.enum(['asc', 'desc']).default('asc'),
@@ -1483,6 +1484,12 @@ export function createApp(config: AppConfig) {
       if (query.tag) {
         terms.push('EXISTS (SELECT 1 FROM json_each(companies.tags_json) WHERE value = ?)');
         values.push(query.tag);
+      }
+      if (query.staleBefore) {
+        terms.push(
+          'NOT EXISTS (SELECT 1 FROM activities WHERE activities.organization_id = companies.organization_id AND activities.company_id = companies.id AND activities.occurred_at >= ?)',
+        );
+        values.push(query.staleBefore);
       }
       const where = terms.join(' AND ');
       const order = {
