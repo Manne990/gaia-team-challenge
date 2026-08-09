@@ -728,7 +728,12 @@ function ListPage({
                       targetId: candidate.sourceId,
                       sourceVersion: candidate.targetVersion,
                       targetVersion: candidate.sourceVersion,
-                      fields: {},
+                      fields: {
+                        phone:
+                          mergeFields[`${candidate.sourceId}:phone`] || candidate.targetPhone || '',
+                        status:
+                          mergeFields[`${candidate.sourceId}:status`] || candidate.targetStatus,
+                      },
                     }),
                   });
                   if (response.ok) {
