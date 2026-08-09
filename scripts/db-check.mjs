@@ -102,6 +102,28 @@ try {
   assert.throws(() =>
     db
       .prepare(
+        'INSERT INTO deals (id, organization_id, company_id, stage_id, name, amount_cents, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'bad-deal-status',
+        'org_northstar',
+        'co_acme',
+        'stage_qualified',
+        'Impossible won deal',
+        10000,
+        'won',
+        '2026-01-15T12:00:00.000Z',
+        '2026-01-15T12:00:00.000Z',
+      ),
+  );
+  assert.throws(() =>
+    db
+      .prepare('UPDATE deals SET stage_id = ?, status = ? WHERE id = ?')
+      .run('stage_lost', 'open', 'deal_acme'),
+  );
+  assert.throws(() =>
+    db
+      .prepare(
         'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, changed_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(
