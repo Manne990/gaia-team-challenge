@@ -53,9 +53,47 @@ test('dashboard derives metrics and opens their filtered records', async ({ page
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Open pipeline value/ })).toBeVisible();
+    const dashboard = async () => {
+      await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    };
+
     await page.getByRole('button', { name: /Open pipeline value/ }).click();
     await expect(page.getByRole('heading', { name: 'Deals' })).toBeVisible();
     await expect(page).toHaveURL(/status=open/);
+    await dashboard();
+    await page.getByRole('button', { name: /Deals closing soon/ }).click();
+    await expect(page.getByRole('heading', { name: 'Deals' })).toBeVisible();
+    await expect(page).toHaveURL(/expectedCloseFrom=.*expectedCloseTo=/);
+    await dashboard();
+    await page.getByRole('button', { name: /Overdue tasks/ }).click();
+    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+    await expect(page).toHaveURL(/due=overdue/);
+    await dashboard();
+    await page.getByRole('button', { name: /Upcoming tasks/ }).click();
+    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+    await expect(page).toHaveURL(/dueFrom=.*dueTo=/);
+    await dashboard();
+    await page.getByRole('button', { name: /Qualified:/ }).click();
+    await expect(page.getByRole('heading', { name: 'Deals' })).toBeVisible();
+    await expect(page).toHaveURL(/stageId=stage_qualified/);
+    await dashboard();
+    await page.getByRole('button', { name: /without activity/ }).click();
+    await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
+    await expect(page).toHaveURL(/staleBefore=/);
+    await dashboard();
+    await page.getByRole('button', { name: /won:/ }).click();
+    await expect(page.getByRole('heading', { name: 'Deals' })).toBeVisible();
+    await expect(page).toHaveURL(/status=won.*transitionedSince=/);
+    await dashboard();
+    await page
+      .getByRole('heading', { name: 'Recent activity' })
+      .locator('..')
+      .getByRole('button')
+      .first()
+      .click();
+    await expect(page.getByRole('heading', { name: 'Activities' })).toBeVisible();
+    await expect(page).toHaveURL(/relatedRecordId=/);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
