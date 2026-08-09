@@ -136,6 +136,7 @@ CREATE TABLE tasks (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+  CHECK ((status = 'completed' AND completed_at IS NOT NULL) OR (status <> 'completed' AND completed_at IS NULL)),
   UNIQUE (organization_id, id),
   FOREIGN KEY (organization_id, company_id) REFERENCES companies(organization_id, id),
   FOREIGN KEY (organization_id, contact_id) REFERENCES contacts(organization_id, id),

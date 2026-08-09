@@ -124,6 +124,36 @@ try {
   assert.throws(() =>
     db
       .prepare(
+        'INSERT INTO tasks (id, organization_id, title, status, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'bad-completed-task',
+        'org_northstar',
+        'Completed without time',
+        'completed',
+        null,
+        '2026-01-15T12:00:00.000Z',
+        '2026-01-15T12:00:00.000Z',
+      ),
+  );
+  assert.throws(() =>
+    db
+      .prepare(
+        'INSERT INTO tasks (id, organization_id, title, status, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'bad-open-task',
+        'org_northstar',
+        'Open with completion time',
+        'open',
+        '2026-01-15T12:00:00.000Z',
+        '2026-01-15T12:00:00.000Z',
+        '2026-01-15T12:00:00.000Z',
+      ),
+  );
+  assert.throws(() =>
+    db
+      .prepare(
         'INSERT INTO deal_stage_history (id, organization_id, deal_id, from_stage_id, to_stage_id, changed_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(
