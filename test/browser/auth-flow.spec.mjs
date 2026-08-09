@@ -172,6 +172,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Administration' })).toHaveCount(0);
+    await navigateTo(page, 'Contacts');
+    await expect(page.getByRole('button', { name: 'Add contact' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Archive / })).toHaveCount(0);
     const cookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');

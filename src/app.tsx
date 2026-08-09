@@ -265,11 +265,14 @@ function ListPage({
   page,
   workspace,
   user,
+  role,
 }: {
   page: Page;
   workspace: Workspace;
   user: ShellUser;
+  role: Role;
 }) {
+  const canEdit = role !== 'viewer';
   type Contact = {
     id: string;
     firstName: string;
@@ -389,14 +392,16 @@ function ListPage({
             Manage {workspace.name}’s {page.toLowerCase()}.
           </p>
         </div>
-        <button
-          className="primary"
-          onClick={page === 'Contacts' ? () => setShowContactForm(true) : undefined}
-        >
-          + Add {singular}
-        </button>
+        {(page !== 'Contacts' || canEdit) && (
+          <button
+            className="primary"
+            onClick={page === 'Contacts' ? () => setShowContactForm(true) : undefined}
+          >
+            + Add {singular}
+          </button>
+        )}
       </div>
-      {page === 'Contacts' && showContactForm && (
+      {page === 'Contacts' && canEdit && showContactForm && (
         <form
           className="panel"
           onSubmit={async (event) => {
@@ -637,24 +642,26 @@ function ListPage({
                     <td>{company[3]}</td>
                     <td>{company[4]}</td>
                     <td>
-                      <IconButton
-                        label={`${showArchivedContacts ? 'Restore' : 'Archive'} ${company[0]}`}
-                        onClick={
-                          page === 'Contacts'
-                            ? async () => {
-                                await fetch(
-                                  `/api/contacts/${contactAt(index)?.id}/${showArchivedContacts ? 'restore' : 'archive'}`,
-                                  {
-                                    method: 'POST',
-                                  },
-                                );
-                                refreshContacts();
-                              }
-                            : undefined
-                        }
-                      >
-                        ⋯
-                      </IconButton>
+                      {canEdit && (
+                        <IconButton
+                          label={`${showArchivedContacts ? 'Restore' : 'Archive'} ${company[0]}`}
+                          onClick={
+                            page === 'Contacts'
+                              ? async () => {
+                                  await fetch(
+                                    `/api/contacts/${contactAt(index)?.id}/${showArchivedContacts ? 'restore' : 'archive'}`,
+                                    {
+                                      method: 'POST',
+                                    },
+                                  );
+                                  refreshContacts();
+                                }
+                              : undefined
+                          }
+                        >
+                          ⋯
+                        </IconButton>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -693,83 +700,85 @@ function ListPage({
           title={`${selectedContact.firstName} ${selectedContact.lastName}`}
           onClose={() => setSelectedContact(null)}
         >
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const response = await fetch(`/api/contacts/${selectedContact.id}`, {
-                method: 'PATCH',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                  ...contactPayload(new FormData(event.currentTarget)),
-                  version: selectedContact.version,
-                }),
-              });
-              if (response.ok) {
-                setSelectedContact(await response.json());
-                refreshContacts();
-              }
-            }}
-          >
-            <p className="subtle">
-              {selectedContact.companyName || selectedContact.companyId || 'Independent contact'} ·{' '}
-              {selectedContact.ownerId || 'Unassigned owner'}
-            </p>
-            <label>
-              First name
-              <input name="firstName" required defaultValue={selectedContact.firstName} />
-            </label>
-            <label>
-              Last name
-              <input name="lastName" required defaultValue={selectedContact.lastName} />
-            </label>
-            <label>
-              Email
-              <input name="email" type="email" defaultValue={selectedContact.email || ''} />
-            </label>
-            <label>
-              Phone
-              <input name="phone" defaultValue={selectedContact.phone || ''} />
-            </label>
-            <label>
-              Job title
-              <input name="jobTitle" defaultValue={selectedContact.jobTitle || ''} />
-            </label>
-            <label>
-              Company ID
-              <input name="companyId" defaultValue={selectedContact.companyId || ''} />
-            </label>
-            <label>
-              Owner ID
-              <input name="ownerId" defaultValue={selectedContact.ownerId || ''} />
-            </label>
-            <label>
-              Status
-              <select name="status" defaultValue={selectedContact.status}>
-                <option value="active">Active</option>
-                <option value="lead">Lead</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </label>
-            <label>
-              Tags (comma separated)
-              <input
-                name="tags"
-                defaultValue={JSON.parse(selectedContact.tagsJson || '[]').join(', ')}
-              />
-            </label>
-            <label>
-              Preferred contact method
-              <select
-                name="communicationPreference"
-                defaultValue={selectedContact.communicationPreference || 'email'}
-              >
-                <option value="email">Email</option>
-                <option value="phone">Phone</option>
-                <option value="none">None</option>
-              </select>
-            </label>
-            <button className="primary">Save changes</button>
-          </form>
+          {canEdit && (
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const response = await fetch(`/api/contacts/${selectedContact.id}`, {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    ...contactPayload(new FormData(event.currentTarget)),
+                    version: selectedContact.version,
+                  }),
+                });
+                if (response.ok) {
+                  setSelectedContact(await response.json());
+                  refreshContacts();
+                }
+              }}
+            >
+              <p className="subtle">
+                {selectedContact.companyName || selectedContact.companyId || 'Independent contact'}{' '}
+                · {selectedContact.ownerId || 'Unassigned owner'}
+              </p>
+              <label>
+                First name
+                <input name="firstName" required defaultValue={selectedContact.firstName} />
+              </label>
+              <label>
+                Last name
+                <input name="lastName" required defaultValue={selectedContact.lastName} />
+              </label>
+              <label>
+                Email
+                <input name="email" type="email" defaultValue={selectedContact.email || ''} />
+              </label>
+              <label>
+                Phone
+                <input name="phone" defaultValue={selectedContact.phone || ''} />
+              </label>
+              <label>
+                Job title
+                <input name="jobTitle" defaultValue={selectedContact.jobTitle || ''} />
+              </label>
+              <label>
+                Company ID
+                <input name="companyId" defaultValue={selectedContact.companyId || ''} />
+              </label>
+              <label>
+                Owner ID
+                <input name="ownerId" defaultValue={selectedContact.ownerId || ''} />
+              </label>
+              <label>
+                Status
+                <select name="status" defaultValue={selectedContact.status}>
+                  <option value="active">Active</option>
+                  <option value="lead">Lead</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+              <label>
+                Tags (comma separated)
+                <input
+                  name="tags"
+                  defaultValue={JSON.parse(selectedContact.tagsJson || '[]').join(', ')}
+                />
+              </label>
+              <label>
+                Preferred contact method
+                <select
+                  name="communicationPreference"
+                  defaultValue={selectedContact.communicationPreference || 'email'}
+                >
+                  <option value="email">Email</option>
+                  <option value="phone">Phone</option>
+                  <option value="none">None</option>
+                </select>
+              </label>
+              <button className="primary">Save changes</button>
+            </form>
+          )}
           <section className="panel">
             <h3>Related work</h3>
             <p>
@@ -785,19 +794,21 @@ function ListPage({
                 </li>
               ))}
             </ul>
-            <button
-              className="secondary"
-              onClick={async () => {
-                await fetch(
-                  `/api/contacts/${selectedContact.id}/${selectedContact.archivedAt ? 'restore' : 'archive'}`,
-                  { method: 'POST' },
-                );
-                setSelectedContact(null);
-                refreshContacts();
-              }}
-            >
-              {selectedContact.archivedAt ? 'Restore contact' : 'Archive contact'}
-            </button>
+            {canEdit && (
+              <button
+                className="secondary"
+                onClick={async () => {
+                  await fetch(
+                    `/api/contacts/${selectedContact.id}/${selectedContact.archivedAt ? 'restore' : 'archive'}`,
+                    { method: 'POST' },
+                  );
+                  setSelectedContact(null);
+                  refreshContacts();
+                }}
+              >
+                {selectedContact.archivedAt ? 'Restore contact' : 'Archive contact'}
+              </button>
+            )}
           </section>
         </Dialog>
       )}
@@ -931,7 +942,7 @@ export function App({
     ) : page === 'Companies' && companiesContent ? (
       companiesContent
     ) : page === 'Companies' || page === 'Contacts' ? (
-      <ListPage page={page} workspace={workspace} user={user} />
+      <ListPage page={page} workspace={workspace} user={user} role={role} />
     ) : (
       <Placeholder page={page} role={role} />
     );
