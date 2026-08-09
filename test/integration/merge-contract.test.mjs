@@ -59,6 +59,12 @@ describe('explicit contact merge', () => {
     const targetVersion = db
       .prepare('SELECT version FROM contacts WHERE id = ?')
       .get('ct_ada').version;
+    const dealId = db
+      .prepare('SELECT id FROM deals WHERE organization_id = ? LIMIT 1')
+      .get('org_northstar').id;
+    db.prepare(
+      'INSERT INTO deal_contacts (deal_id, contact_id, organization_id) VALUES (?, ?, ?)',
+    ).run(dealId, 'ct_duplicate', 'org_northstar');
     db.close();
     server = createApp({
       host: '127.0.0.1',
@@ -143,6 +149,10 @@ describe('explicit contact merge', () => {
     const retired = await fetch(`${url}/api/contacts/ct_duplicate`, { headers: { cookie } });
     expect(retired.status).toBe(200);
     expect((await retired.json()).id).toBe('ct_ada');
+    const survivor = await fetch(`${url}/api/contacts/ct_ada`, { headers: { cookie } });
+    expect((await survivor.json()).deals).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: dealId })]),
+    );
     const chainedCandidate = (
       await (await fetch(`${url}/api/duplicates/contacts`, { headers: { cookie } })).json()
     ).items.find((item) => item.sourceId === 'ct_ada' && item.targetId === 'ct_third');
