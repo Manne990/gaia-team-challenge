@@ -1469,7 +1469,7 @@ export function createApp(config: AppConfig) {
   });
 
   const dealFields =
-    'deals.id, deals.company_id AS companyId, deals.owner_id AS ownerId, deals.stage_id AS stageId, deals.name, deals.amount_cents AS amountCents, deals.currency, deals.expected_close_date AS expectedCloseDate, deals.probability, deals.status, deals.loss_reason AS lossReason, deals.created_at AS createdAt, deals.updated_at AS updatedAt, deals.version';
+    'deals.id, deals.company_id AS companyId, deals.owner_id AS ownerId, deals.stage_id AS stageId, deals.name, deals.amount_cents AS amountCents, deals.currency, deals.expected_close_date AS expectedCloseDate, deals.probability, deals.status, deals.loss_reason AS lossReason, deals.created_at AS createdAt, deals.updated_at AS updatedAt, deals.archived_at AS archivedAt, deals.version';
   const dealSession = (request: express.Request) =>
     auth.authenticate(cookieToken(request.headers.cookie));
   const dealError = (error: unknown, response: express.Response) => {
@@ -1490,7 +1490,9 @@ export function createApp(config: AppConfig) {
       const s = dealSession(request);
       const page = Math.max(1, Number(request.query.page) || 1);
       const size = Math.min(100, Math.max(1, Number(request.query.pageSize) || 25));
-      const where = ['deals.organization_id = ?', 'deals.archived_at IS NULL'];
+      const includeArchived = request.query.includeArchived === 'true';
+      const where = ['deals.organization_id = ?'];
+      if (!includeArchived) where.push('deals.archived_at IS NULL');
       const args: unknown[] = [s.organizationId];
       for (const [key, column] of [
         ['companyId', 'company_id'],
@@ -1506,12 +1508,17 @@ export function createApp(config: AppConfig) {
       const total = database
         .prepare(`SELECT count(*) AS total FROM deals WHERE ${clause}`)
         .get(...args).total;
+      const aggregate = database
+        .prepare(
+          `SELECT count(*) AS count, coalesce(sum(amount_cents), 0) AS amountCents FROM deals WHERE ${clause}`,
+        )
+        .get(...args);
       const items = database
         .prepare(
           `SELECT ${dealFields}, pipeline_stages.name AS stageName FROM deals JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id AND pipeline_stages.organization_id = deals.organization_id WHERE ${clause} ORDER BY deals.updated_at DESC LIMIT ? OFFSET ?`,
         )
         .all(...args, size, (page - 1) * size);
-      return response.json({ items, page, pageSize: size, total });
+      return response.json({ items, page, pageSize: size, total, aggregate });
     } catch (error) {
       return dealError(error, response);
     }

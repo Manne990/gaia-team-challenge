@@ -65,6 +65,8 @@ describe('deals API', () => {
     expect(
       filtered.items.every((item) => item.stageId === 'stage_proposal' && item.status === 'open'),
     ).toBe(true);
+    expect(filtered.aggregate.count).toBe(filtered.total);
+    expect(filtered.aggregate.amountCents).toBeGreaterThanOrEqual(42000);
     expect((await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie } })).status).toBe(200);
     const rejected = await fetch(`${url}/api/deals/${deal.id}/transition`, {
       method: 'POST',

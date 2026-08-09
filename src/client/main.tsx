@@ -975,10 +975,12 @@ function Deals({ canWrite }: { canWrite: boolean }) {
   const [error, setError] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [includeArchived, setIncludeArchived] = useState(false);
   const load = (stage = stageFilter, status = statusFilter) => {
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
     if (status) query.set('status', status);
+    if (includeArchived) query.set('includeArchived', 'true');
     return Promise.all([
       fetch(`/api/deals?${query}`).then((r) => r.json()),
       fetch('/api/pipeline/stages').then((r) => r.json()),
@@ -1073,6 +1075,14 @@ function Deals({ canWrite }: { canWrite: boolean }) {
           </select>
         </label>
         <label>
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(event) => setIncludeArchived(event.target.checked)}
+          />
+          Include archived deals
+        </label>
+        <label>
           Status
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="">All statuses</option>
@@ -1133,8 +1143,8 @@ function Deals({ canWrite }: { canWrite: boolean }) {
                       const form = new FormData(event.currentTarget);
                       const action = String(form.get('action'));
                       const response =
-                        action === 'archive'
-                          ? await fetch(`/api/deals/${deal.id}/archive`, { method: 'POST' })
+                        action === 'archive' || action === 'restore'
+                          ? await fetch(`/api/deals/${deal.id}/${action}`, { method: 'POST' })
                           : await fetch(`/api/deals/${deal.id}/transition`, {
                               method: 'POST',
                               headers: { 'content-type': 'application/json' },
@@ -1169,6 +1179,11 @@ function Deals({ canWrite }: { canWrite: boolean }) {
                     <button name="action" value="archive">
                       Archive
                     </button>
+                    {deal.archivedAt && (
+                      <button name="action" value="restore">
+                        Restore
+                      </button>
+                    )}
                   </form>
                 </td>
               )}
