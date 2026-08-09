@@ -276,6 +276,7 @@ function ListPage({
   const [contactStatus, setContactStatus] = useState('');
   const [contactPage, setContactPage] = useState(1);
   const [contactTotal, setContactTotal] = useState(0);
+  const [showContactForm, setShowContactForm] = useState(false);
   useEffect(() => {
     if (page === 'Contacts')
       fetch(
@@ -314,28 +315,68 @@ function ListPage({
         </div>
         <button
           className="primary"
-          onClick={
-            page === 'Contacts'
-              ? async () => {
-                  const value = window.prompt('Contact name');
-                  const parts = value?.trim().split(/\s+/) || [];
-                  if (parts.length < 2) return;
-                  await fetch('/api/contacts', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({
-                      firstName: parts[0],
-                      lastName: parts.slice(1).join(' '),
-                    }),
-                  });
-                  setContactSearch('');
-                }
-              : undefined
-          }
+          onClick={page === 'Contacts' ? () => setShowContactForm(true) : undefined}
         >
           + Add {singular}
         </button>
       </div>
+      {page === 'Contacts' && showContactForm && (
+        <form
+          className="panel"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const fields = new FormData(event.currentTarget);
+            await fetch('/api/contacts', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                firstName: fields.get('firstName'),
+                lastName: fields.get('lastName'),
+                email: fields.get('email'),
+                phone: fields.get('phone'),
+                jobTitle: fields.get('jobTitle'),
+                communicationPreference: fields.get('communicationPreference'),
+              }),
+            });
+            setShowContactForm(false);
+            setContactSearch('');
+          }}
+        >
+          <h2>New contact</h2>
+          <label>
+            First name
+            <input name="firstName" required />
+          </label>
+          <label>
+            Last name
+            <input name="lastName" required />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" />
+          </label>
+          <label>
+            Phone
+            <input name="phone" />
+          </label>
+          <label>
+            Job title
+            <input name="jobTitle" />
+          </label>
+          <label>
+            Contact preference
+            <select name="communicationPreference">
+              <option value="email">Email</option>
+              <option value="phone">Phone</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <button className="primary">Save contact</button>
+          <button type="button" className="secondary" onClick={() => setShowContactForm(false)}>
+            Cancel
+          </button>
+        </form>
+      )}
       <section className="panel table-panel">
         <div className="toolbar">
           <label className="search">
