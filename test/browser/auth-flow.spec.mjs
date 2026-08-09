@@ -101,6 +101,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const cookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
+    const before = openDatabase(databasePath)
+      .prepare('SELECT name FROM companies WHERE id = ?')
+      .get('co_outside');
     await expect(
       page.request
         .put(`${url}/api/companies/co_acme`, {
@@ -110,6 +113,27 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(403);
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByLabel('Email').fill('owner@northstar.test');
+    await page.getByLabel('Password').fill('OwnerPass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('heading', { name: /Welcome, Northstar Owner/ })).toBeVisible();
+    const ownerCookieHeader = (await page.context().cookies(url))
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+    await expect(
+      page.request
+        .put(`${url}/api/companies/co_outside`, {
+          headers: { cookie: ownerCookieHeader, 'content-type': 'application/json' },
+          data: { name: 'Mutated outside record' },
+        })
+        .then((response) => response.status()),
+    ).resolves.toBe(404);
+    expect(
+      openDatabase(databasePath)
+        .prepare('SELECT name FROM companies WHERE id = ?')
+        .get('co_outside'),
+    ).toEqual(before);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
