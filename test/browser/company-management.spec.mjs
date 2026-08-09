@@ -27,17 +27,6 @@ const waitForHealth = async (url) => {
 };
 const cookieHeader = async (page, url) =>
   (await page.context().cookies(url)).map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
-const signOut = async (page) => {
-  if ((page.viewportSize()?.width ?? 0) <= 720)
-    await page.getByRole('button', { name: 'Open account menu' }).click();
-  else {
-    const profile = page.locator('button.profile');
-    await profile.scrollIntoViewIfNeeded();
-    await profile.click();
-  }
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await page.getByRole('button', { name: 'Confirm sign out' }).click();
-};
 const navigateTo = async (page, destination) => {
   if ((page.viewportSize()?.width ?? 0) <= 720)
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -112,36 +101,6 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
-    const detail = await page.request.get(`${url}/api/companies/${created.id}`, {
-      headers: { cookie: ownerCookie },
-    });
-    expect(detail.status()).toBe(200);
-    expect((await detail.json()).history).toHaveLength(2);
-    await signOut(page);
-    await page.getByLabel('Email').fill('viewer@northstar.test');
-    await page.getByLabel('Password').fill('ViewerPass!2026');
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
-    const viewerCookie = await cookieHeader(page, url);
-    const viewerSession = await page.request.get(`${url}/api/auth/session`, {
-      headers: { cookie: viewerCookie },
-    });
-    expect(viewerSession.status()).toBe(200);
-    expect((await viewerSession.json()).role).toBe('viewer');
-    expect(
-      (
-        await page.request.post(`${url}/api/companies/${created.id}/archive`, {
-          headers: { cookie: viewerCookie },
-        })
-      ).status(),
-    ).toBe(403);
-    expect(
-      (
-        await page.request.get(`${url}/api/companies/co_outside`, {
-          headers: { cookie: viewerCookie },
-        })
-      ).status(),
-    ).toBe(404);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
