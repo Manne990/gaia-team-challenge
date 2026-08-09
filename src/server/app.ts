@@ -1683,14 +1683,12 @@ export function createApp(config: AppConfig) {
           d.version,
         );
       if (!result.changes)
-        return response
-          .status(409)
-          .json({
-            error: {
-              code: 'CONFLICT',
-              message: 'This deal changed or is unavailable. Refresh and try again.',
-            },
-          });
+        return response.status(409).json({
+          error: {
+            code: 'CONFLICT',
+            message: 'This deal changed or is unavailable. Refresh and try again.',
+          },
+        });
       database
         .prepare(
           'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
