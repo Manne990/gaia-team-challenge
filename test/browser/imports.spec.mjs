@@ -51,6 +51,8 @@ test('owner previews and commits a CSV import from the Imports workspace', async
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).click();
+    if ((page.viewportSize()?.width ?? 0) <= 720)
+      await page.getByRole('button', { name: 'Open navigation' }).click();
     await page.getByRole('button', { name: 'Imports' }).click();
     await expect(page.getByRole('heading', { name: 'Imports and exports' })).toBeVisible();
     await page.getByLabel('CSV content').fill('name,external reference\nBrowser import,BROWSER-90');
