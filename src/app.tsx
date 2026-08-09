@@ -332,6 +332,8 @@ function ListPage({
   const [contactViews, setContactViews] = useState<
     Array<{ id: string; name: string; filters: Record<string, unknown> }>
   >([]);
+  const [duplicateCandidates, setDuplicateCandidates] = useState<any[]>([]);
+  const [mergeFields, setMergeFields] = useState<Record<string, string>>({});
   const contactRequest = useRef(0);
   const refreshContacts = () => setContactRefresh((value) => value + 1);
   const loadContactViews = () =>
@@ -642,6 +644,144 @@ function ListPage({
           </ul>
         </div>
       )}
+      {page === 'Contacts' && duplicateCandidates.length > 0 && (
+        <section className="panel" aria-label="Duplicate contact review">
+          <h2>Duplicate contact review</h2>
+          {duplicateCandidates.map((candidate) => (
+            <div key={`${candidate.sourceId}-${candidate.targetId}`}>
+              <p>
+                {candidate.sourceFirstName} {candidate.sourceLastName} and{' '}
+                {candidate.targetFirstName} {candidate.targetLastName} share{' '}
+                {candidate.facts[0].field}: {candidate.facts[0].normalized}.
+              </p>
+              {[
+                ['firstName', 'first name', candidate.sourceFirstName, candidate.targetFirstName],
+                ['lastName', 'last name', candidate.sourceLastName, candidate.targetLastName],
+                ['email', 'email', candidate.sourceEmail, candidate.targetEmail],
+                ['phone', 'phone', candidate.sourcePhone, candidate.targetPhone],
+                ['jobTitle', 'job title', candidate.sourceJobTitle, candidate.targetJobTitle],
+                ['companyId', 'company ID', candidate.sourceCompanyId, candidate.targetCompanyId],
+                ['ownerId', 'owner ID', candidate.sourceOwnerId, candidate.targetOwnerId],
+                ['status', 'status', candidate.sourceStatus, candidate.targetStatus],
+                ['tagsJson', 'tags', candidate.sourceTagsJson, candidate.targetTagsJson],
+                [
+                  'communicationPreference',
+                  'preferred contact method',
+                  candidate.sourceCommunicationPreference,
+                  candidate.targetCommunicationPreference,
+                ],
+              ].map(([field, label, sourceValue, targetValue]) => (
+                <label key={field}>
+                  Keep {label}
+                  <select
+                    value={mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue ?? ''}
+                    onChange={(event) =>
+                      setMergeFields({
+                        ...mergeFields,
+                        [`${candidate.sourceId}:${field}`]: event.target.value,
+                      })
+                    }
+                  >
+                    <option value={targetValue ?? ''}>
+                      {candidate.targetFirstName}: {targetValue || 'empty'}
+                    </option>
+                    <option value={sourceValue ?? ''}>
+                      {candidate.sourceFirstName}: {sourceValue || 'empty'}
+                    </option>
+                  </select>
+                </label>
+              ))}
+              <button
+                className="secondary"
+                onClick={async () => {
+                  const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      resource: 'contacts',
+                      ...candidate,
+                      fields: Object.fromEntries(
+                        [
+                          ['firstName', candidate.targetFirstName],
+                          ['lastName', candidate.targetLastName],
+                          ['email', candidate.targetEmail],
+                          ['phone', candidate.targetPhone],
+                          ['jobTitle', candidate.targetJobTitle],
+                          ['companyId', candidate.targetCompanyId],
+                          ['ownerId', candidate.targetOwnerId],
+                          ['status', candidate.targetStatus],
+                          ['tagsJson', candidate.targetTagsJson],
+                          ['communicationPreference', candidate.targetCommunicationPreference],
+                        ].map(([field, targetValue]) => {
+                          const value =
+                            mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue;
+                          return [
+                            field,
+                            ['companyId', 'ownerId'].includes(field) && !value
+                              ? null
+                              : (value ?? ''),
+                          ];
+                        }),
+                      ),
+                    }),
+                  });
+                  if (response.ok) {
+                    setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
+                    refreshContacts();
+                  }
+                }}
+              >
+                Keep {candidate.targetFirstName} {candidate.targetLastName}
+              </button>
+              <button
+                className="secondary"
+                onClick={async () => {
+                  const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      resource: 'contacts',
+                      sourceId: candidate.targetId,
+                      targetId: candidate.sourceId,
+                      sourceVersion: candidate.targetVersion,
+                      targetVersion: candidate.sourceVersion,
+                      fields: Object.fromEntries(
+                        [
+                          ['firstName', candidate.targetFirstName],
+                          ['lastName', candidate.targetLastName],
+                          ['email', candidate.targetEmail],
+                          ['phone', candidate.targetPhone],
+                          ['jobTitle', candidate.targetJobTitle],
+                          ['companyId', candidate.targetCompanyId],
+                          ['ownerId', candidate.targetOwnerId],
+                          ['status', candidate.targetStatus],
+                          ['tagsJson', candidate.targetTagsJson],
+                          ['communicationPreference', candidate.targetCommunicationPreference],
+                        ].map(([field, targetValue]) => {
+                          const value =
+                            mergeFields[`${candidate.sourceId}:${field}`] ?? targetValue;
+                          return [
+                            field,
+                            ['companyId', 'ownerId'].includes(field) && !value
+                              ? null
+                              : (value ?? ''),
+                          ];
+                        }),
+                      ),
+                    }),
+                  });
+                  if (response.ok) {
+                    setDuplicateCandidates((items) => items.filter((item) => item !== candidate));
+                    refreshContacts();
+                  }
+                }}
+              >
+                Keep {candidate.sourceFirstName} {candidate.sourceLastName}
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
       <section className="panel table-panel">
         <div className="toolbar">
           <label className="search">
@@ -687,6 +827,17 @@ function ListPage({
           >
             Clear all
           </button>
+          {page === 'Contacts' && canEdit && (
+            <button
+              className="secondary"
+              onClick={async () => {
+                const response = await fetch('/api/duplicates/contacts');
+                if (response.ok) setDuplicateCandidates((await response.json()).items);
+              }}
+            >
+              Review duplicates
+            </button>
+          )}
         </div>
         {page === 'Contacts' && showContactFilters && (
           <div className="toolbar" aria-label="Contact filters">
