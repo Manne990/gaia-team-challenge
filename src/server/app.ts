@@ -1660,6 +1660,58 @@ export function createApp(config: AppConfig) {
       return dealError(error, response);
     }
   });
+  app.patch('/api/deals/:id', (request, response) => {
+    try {
+      const s = auth.requireRole(dealSession(request), ['owner', 'member']);
+      const d = dealUpdate.parse(request.body);
+      const now = new Date().toISOString();
+      const result = database
+        .prepare(
+          'UPDATE deals SET company_id = ?, owner_id = ?, name = ?, amount_cents = ?, currency = ?, expected_close_date = ?, probability = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND archived_at IS NULL AND version = ?',
+        )
+        .run(
+          d.companyId,
+          d.ownerId || null,
+          d.name,
+          d.amountCents,
+          d.currency,
+          d.expectedCloseDate || null,
+          d.probability,
+          now,
+          request.params.id,
+          s.organizationId,
+          d.version,
+        );
+      if (!result.changes)
+        return response
+          .status(409)
+          .json({
+            error: {
+              code: 'CONFLICT',
+              message: 'This deal changed or is unavailable. Refresh and try again.',
+            },
+          });
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          s.organizationId,
+          s.userId,
+          'deal.updated',
+          'deal',
+          request.params.id,
+          JSON.stringify({ version: d.version }),
+          now,
+        );
+      return response.json(
+        database.prepare(`SELECT ${dealFields} FROM deals WHERE id = ?`).get(request.params.id),
+      );
+    } catch (error) {
+      return dealError(error, response);
+    }
+  });
   app.post('/api/deals/:id/transition', (request, response) => {
     try {
       const s = auth.requireRole(dealSession(request), ['owner', 'member']);
