@@ -105,31 +105,17 @@ test('actual company workspace creates, filters, updates, archives, restores, an
       (company) => company.external_reference === 'BROWSER-83',
     );
     expect(created).toMatchObject({ name: 'Browser Test Company', lifecycle_status: 'prospect' });
-    const updated = await page.request.put(`${url}/api/companies/${created.id}`, {
-      headers: { cookie: ownerCookie, 'content-type': 'application/json' },
-      data: {
-        name: 'Browser Test Company Updated',
-        externalReference: 'BROWSER-83',
-        website: 'https://example.test',
-        phone: '+46 8 123',
-        industry: 'Software',
-        size: '11-50',
-        address: 'Testvägen 1',
-        lifecycleStatus: 'customer',
-        tags: ['priority', 'nordic'],
-        description: 'Updated safely.',
-        version: created.version,
-      },
-    });
-    expect(updated.status()).toBe(200);
-    expect((await updated.json()).version).toBe(created.version + 1);
-    expect(
-      (
-        await page.request.post(`${url}/api/companies/${created.id}/archive`, {
-          headers: { cookie: ownerCookie },
-        })
-      ).status(),
-    ).toBe(200);
+    const edit = page.getByRole('form', { name: 'Edit company' });
+    await edit.getByLabel('Name').fill('Browser Test Company Updated');
+    await edit.getByLabel('Lifecycle status').selectOption('customer');
+    await edit.getByLabel('Description').fill('Updated safely.');
+    await edit.getByRole('button', { name: 'Save company' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Browser Test Company Updated', exact: true }),
+    ).toBeVisible();
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Archive company' }).click();
+    await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
     expect(
       (
         await (
@@ -144,13 +130,8 @@ test('actual company workspace creates, filters, updates, archives, restores, an
       { headers: { cookie: ownerCookie } },
     );
     expect((await archived.json()).total).toBe(1);
-    expect(
-      (
-        await page.request.post(`${url}/api/companies/${created.id}/restore`, {
-          headers: { cookie: ownerCookie },
-        })
-      ).status(),
-    ).toBe(200);
+    await page.getByRole('button', { name: 'Restore company' }).click();
+    await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
     const detail = await page.request.get(`${url}/api/companies/${created.id}`, {
       headers: { cookie: ownerCookie },
     });

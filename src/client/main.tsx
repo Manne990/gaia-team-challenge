@@ -21,7 +21,11 @@ type Company = {
   archived_at: string | null;
 };
 type CompanyDetail = Company & {
+  version: number;
   description: string;
+  website: string | null;
+  phone: string | null;
+  address: string | null;
   contacts: { id: string; first_name: string; last_name: string }[];
   activities: { id: string; subject: string }[];
   deals: { id: string; name: string }[];
@@ -189,6 +193,127 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                 <dt>Tasks</dt>
                 <dd>{detail.tasks.length}</dd>
               </dl>
+              {canWrite && (
+                <>
+                  <form
+                    aria-label="Edit company"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const form = new FormData(event.currentTarget);
+                      const response = await fetch(`/api/companies/${detail.id}`, {
+                        method: 'PUT',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                          name: form.get('name'),
+                          externalReference: form.get('externalReference'),
+                          website: form.get('website'),
+                          phone: form.get('phone'),
+                          industry: form.get('industry'),
+                          size: form.get('size'),
+                          address: form.get('address'),
+                          lifecycleStatus: form.get('lifecycleStatus'),
+                          tags: String(form.get('tags') || '')
+                            .split(',')
+                            .map((tag) => tag.trim())
+                            .filter(Boolean),
+                          description: form.get('description'),
+                          version: detail.version,
+                        }),
+                      });
+                      if (!response.ok) {
+                        const body = await response.json();
+                        setError(body.error?.message || 'Company could not be updated.');
+                        return;
+                      }
+                      setDetail({
+                        ...(await response.json()),
+                        contacts: detail.contacts,
+                        activities: detail.activities,
+                        deals: detail.deals,
+                        tasks: detail.tasks,
+                      });
+                      await load('');
+                    }}
+                  >
+                    <h4>Edit company</h4>
+                    <label>
+                      Name
+                      <input name="name" required defaultValue={detail.name} />
+                    </label>
+                    <label>
+                      External reference
+                      <input
+                        name="externalReference"
+                        defaultValue={detail.external_reference || ''}
+                      />
+                    </label>
+                    <label>
+                      Website
+                      <input name="website" defaultValue={detail.website || ''} />
+                    </label>
+                    <label>
+                      Phone
+                      <input name="phone" defaultValue={detail.phone || ''} />
+                    </label>
+                    <label>
+                      Industry
+                      <input name="industry" defaultValue={detail.industry || ''} />
+                    </label>
+                    <label>
+                      Size
+                      <input name="size" defaultValue={detail.size || ''} />
+                    </label>
+                    <label>
+                      Address
+                      <input name="address" defaultValue={detail.address || ''} />
+                    </label>
+                    <label>
+                      Lifecycle status
+                      <select name="lifecycleStatus" defaultValue={detail.lifecycle_status}>
+                        <option value="lead">Lead</option>
+                        <option value="prospect">Prospect</option>
+                        <option value="customer">Customer</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </label>
+                    <label>
+                      Tags
+                      <input name="tags" defaultValue={JSON.parse(detail.tags_json).join(', ')} />
+                    </label>
+                    <label>
+                      Description
+                      <textarea name="description" defaultValue={detail.description} />
+                    </label>
+                    <button type="submit">Save company</button>
+                  </form>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const action = detail.archived_at ? 'restore' : 'archive';
+                      if (
+                        action === 'archive' &&
+                        !window.confirm('Archive this company? Its history will remain available.')
+                      )
+                        return;
+                      const response = await fetch(`/api/companies/${detail.id}/${action}`, {
+                        method: 'POST',
+                      });
+                      if (!response.ok)
+                        return setError('Company lifecycle change could not be saved.');
+                      setDetail({
+                        ...(await response.json()),
+                        contacts: detail.contacts,
+                        activities: detail.activities,
+                        deals: detail.deals,
+                        tasks: detail.tasks,
+                      });
+                      await load('');
+                    }}
+                  >
+                    {detail.archived_at ? 'Restore company' : 'Archive company'}
+                  </button>
+                </>
+              )}
             </section>
           )}
         </>
