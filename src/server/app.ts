@@ -46,9 +46,12 @@ export function createApp(config: AppConfig) {
     try {
       const session = auth.signIn(parsed.data);
       response.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
-      return response
-        .status(200)
-        .json({ user: session.user, organizationId: session.organizationId, role: session.role });
+      return response.status(200).json({
+        user: session.user,
+        organizationId: session.organizationId,
+        organization: session.organization,
+        role: session.role,
+      });
     } catch (error) {
       return response.status(401).json({
         error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' },

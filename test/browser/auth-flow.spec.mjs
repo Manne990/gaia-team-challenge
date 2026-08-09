@@ -31,6 +31,11 @@ const signOut = async (page) => {
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.getByRole('button', { name: 'Confirm sign out' }).click();
 };
+const navigateTo = async (page, destination) => {
+  if ((page.viewportSize()?.width ?? 0) <= 720)
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('button', { name: destination }).click();
+};
 
 test('actual product signs in by keyboard, rejects invalid credentials, restores session, and logs out', async ({
   page,
@@ -86,11 +91,14 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    expect(
+      await page.locator('html').evaluate((element) => element.scrollWidth === element.clientWidth),
+    ).toBe(true);
     await expect(page.getByRole('button', { name: 'Administration' })).toBeVisible();
-    await page.getByRole('button', { name: 'Companies' }).click();
+    await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Companies list' })).toBeVisible();
-    await page.getByRole('button', { name: 'Dashboard' }).click();
+    await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();
     await expect(
@@ -186,6 +194,16 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(409);
+    await signOut(page);
+    await page.getByLabel('Email').fill('other-owner@outside.test');
+    await page.getByLabel('Password').fill('OutsidePass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('heading', { name: 'Good morning, Outside' })).toBeVisible();
+    await expect(page.getByText('Outside Demo', { exact: true })).toBeVisible();
+    await expect(page.getByText('Northstar Demo', { exact: true })).toHaveCount(0);
+    await navigateTo(page, 'Companies');
+    await expect(page.getByText('Acme Nordic AB', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Northstar Logistics', { exact: true })).toHaveCount(0);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

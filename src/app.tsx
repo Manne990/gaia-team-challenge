@@ -12,6 +12,7 @@ type Page =
   | 'Administration';
 export type Role = 'owner' | 'member' | 'viewer';
 export type ShellUser = { displayName: string };
+export type Workspace = { id: string; name: string };
 
 const navigation: Array<{ page: Page; icon: string; ownerOnly?: boolean }> = [
   { page: 'Dashboard', icon: '⌂' },
@@ -25,12 +26,18 @@ const navigation: Array<{ page: Page; icon: string; ownerOnly?: boolean }> = [
   { page: 'Administration', icon: '⚙', ownerOnly: true },
 ];
 
-const companies = [
-  ['Acme Nordic AB', 'Technology', 'Customer', 'Lina Berg', 'Today'],
-  ['Northstar Logistics', 'Transport', 'Qualified', 'Omar Khan', 'Yesterday'],
-  ['Acme Nordic AB', 'Technology', 'Prospect', 'Lina Berg', 'Aug 4'],
-  ['Stjärna Retail', 'Retail', 'Customer', 'Mikael Chen', 'Aug 2'],
-];
+const companiesFor = (workspace: Workspace, user: ShellUser) =>
+  workspace.id === 'org_northstar'
+    ? [
+        ['Acme Nordic AB', 'Technology', 'Customer', 'Lina Berg', 'Today'],
+        ['Northstar Logistics', 'Transport', 'Qualified', 'Omar Khan', 'Yesterday'],
+        ['Acme Nordic AB', 'Technology', 'Prospect', 'Lina Berg', 'Aug 4'],
+        ['Stjärna Retail', 'Retail', 'Customer', 'Mikael Chen', 'Aug 2'],
+      ]
+    : [
+        [`${workspace.name} account`, 'Operations', 'Active', user.displayName, 'Today'],
+        ['Prospect review', 'Services', 'Qualified', user.displayName, 'Yesterday'],
+      ];
 
 function IconButton({
   label,
@@ -114,34 +121,51 @@ function Dialog({
   );
 }
 
-function Dashboard({ user }: { user: ShellUser }) {
+function Dashboard({ user, workspace }: { user: ShellUser; workspace: Workspace }) {
   const firstName = user.displayName.split(' ')[0] || user.displayName;
+  const isNorthstar = workspace.id === 'org_northstar';
   return (
     <>
       <div className="page-heading">
         <div>
           <p className="eyebrow">Monday, August 9</p>
           <h1>Good morning, {firstName}</h1>
-          <p className="subtle">Here’s what needs your attention across Northstar Demo.</p>
+          <p className="subtle">Here’s what needs your attention across {workspace.name}.</p>
         </div>
         <button className="primary">+ Log activity</button>
       </div>
       <section className="metrics" aria-label="Dashboard metrics">
-        <Metric label="Pipeline value" value="kr 4.82m" detail="12% from last month" />
-        <Metric label="Deals closing soon" value="8" detail="kr 1.14m by Aug 31" />
-        <Metric label="Overdue tasks" value="3" detail="Needs attention today" alert />
-        <Metric label="New contacts" value="24" detail="This month" />
+        <Metric
+          label="Pipeline value"
+          value={isNorthstar ? 'kr 4.82m' : '—'}
+          detail="Current workspace"
+        />
+        <Metric
+          label="Deals closing soon"
+          value={isNorthstar ? '8' : '—'}
+          detail="Current workspace"
+        />
+        <Metric
+          label="Overdue tasks"
+          value={isNorthstar ? '3' : '0'}
+          detail="Needs attention today"
+          alert
+        />
+        <Metric label="New contacts" value={isNorthstar ? '24' : '—'} detail="This month" />
       </section>
       <section className="content-grid">
         <article className="panel">
           <PanelTitle title="Pipeline by stage" action="View deals" />
           <div className="stage-list">
-            {[
-              ['Qualified', 'kr 1.32m', 72],
-              ['Proposal', 'kr 1.08m', 58],
-              ['Negotiation', 'kr 940k', 49],
-              ['Won', 'kr 1.47m', 80],
-            ].map(([name, amount, width]) => (
+            {(isNorthstar
+              ? [
+                  ['Qualified', 'kr 1.32m', 72],
+                  ['Proposal', 'kr 1.08m', 58],
+                  ['Negotiation', 'kr 940k', 49],
+                  ['Won', 'kr 1.47m', 80],
+                ]
+              : [['No pipeline data', '—', 0]]
+            ).map(([name, amount, width]) => (
               <div className="stage" key={String(name)}>
                 <div>
                   <span>{name}</span>
@@ -159,11 +183,17 @@ function Dashboard({ user }: { user: ShellUser }) {
           <ul className="task-list">
             <Task
               urgency="overdue"
-              title="Send revised proposal to Acme Nordic"
+              title={
+                isNorthstar ? 'Send revised proposal to Acme Nordic' : 'Review workspace activity'
+              }
               due="Overdue · Fri"
             />
             <Task urgency="today" title="Prepare discovery notes" due="Due today · 14:00" />
-            <Task urgency="upcoming" title="Follow up with Stjärna Retail" due="Tomorrow · 09:30" />
+            <Task
+              urgency="upcoming"
+              title={isNorthstar ? 'Follow up with Stjärna Retail' : 'Plan next steps'}
+              due="Tomorrow · 09:30"
+            />
           </ul>
         </article>
       </section>
@@ -172,14 +202,16 @@ function Dashboard({ user }: { user: ShellUser }) {
         <div className="activity">
           <span className="avatar">LB</span>
           <p>
-            <strong>Lina Berg</strong> logged a call with <a href="#company">Acme Nordic AB</a>
+            <strong>{isNorthstar ? 'Lina Berg' : user.displayName}</strong> logged a call with{' '}
+            <a href="#company">{isNorthstar ? 'Acme Nordic AB' : `${workspace.name} account`}</a>
             <small>12 minutes ago · Call</small>
           </p>
         </div>
         <div className="activity">
           <span className="avatar dark">OK</span>
           <p>
-            <strong>Omar Khan</strong> moved Northstar Logistics to Proposal
+            <strong>{isNorthstar ? 'Omar Khan' : user.displayName}</strong> moved{' '}
+            {isNorthstar ? 'Northstar Logistics' : 'a workspace record'} to Proposal
             <small>1 hour ago · Deal change</small>
           </p>
         </div>
@@ -229,15 +261,26 @@ function Task({ title, due, urgency }: { title: string; due: string; urgency: st
   );
 }
 
-function ListPage({ page }: { page: Page }) {
+function ListPage({
+  page,
+  workspace,
+  user,
+}: {
+  page: Page;
+  workspace: Workspace;
+  user: ShellUser;
+}) {
   const singular = page === 'Companies' ? 'company' : page.slice(0, -1).toLowerCase();
+  const companies = companiesFor(workspace, user);
   return (
     <>
       <div className="page-heading">
         <div>
           <p className="eyebrow">{page === 'Companies' ? 'Accounts' : 'Workspace'}</p>
           <h1>{page}</h1>
-          <p className="subtle">Manage your organization’s {page.toLowerCase()}.</p>
+          <p className="subtle">
+            Manage {workspace.name}’s {page.toLowerCase()}.
+          </p>
         </div>
         <button className="primary">+ Add {singular}</button>
       </div>
@@ -399,10 +442,12 @@ function Placeholder({ page, role }: { page: Page; role: Role }) {
 export function App({
   role,
   user,
+  workspace,
   onSignOut,
 }: {
   role: Role;
   user: ShellUser;
+  workspace: Workspace;
   onSignOut?: () => Promise<void>;
 }) {
   const [page, setPage] = useState<Page>('Dashboard');
@@ -427,9 +472,9 @@ export function App({
   const visible = navigation.filter((item) => !item.ownerOnly || role === 'owner');
   const content =
     page === 'Dashboard' ? (
-      <Dashboard user={user} />
+      <Dashboard user={user} workspace={workspace} />
     ) : page === 'Companies' || page === 'Contacts' ? (
-      <ListPage page={page} />
+      <ListPage page={page} workspace={workspace} user={user} />
     ) : (
       <Placeholder page={page} role={role} />
     );
@@ -453,7 +498,7 @@ export function App({
         <div className="org-switch">
           <span className="org-avatar">N</span>
           <span>
-            <strong>Northstar Demo</strong>
+            <strong>{workspace.name}</strong>
             <small>Sales workspace</small>
           </span>
           <span aria-hidden="true">⌄</span>

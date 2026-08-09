@@ -1,11 +1,15 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App as ShellApp, type Role } from '../app';
+import { App as ShellApp, type Role, type Workspace } from '../app';
 import './styles.css';
 import '../styles.css';
 
 type Screen = 'loading' | 'ready' | 'unavailable' | 'unexpected';
-type Session = { user: { displayName: string; email: string }; role: Role };
+type Session = {
+  user: { displayName: string; email: string };
+  role: Role;
+  organization: Workspace;
+};
 
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
@@ -94,6 +98,7 @@ function App() {
     <ShellApp
       role={session.role}
       user={session.user}
+      workspace={session.organization}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

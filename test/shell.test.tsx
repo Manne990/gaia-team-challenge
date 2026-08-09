@@ -5,7 +5,13 @@ import { App } from '../src/app';
 describe('CRM application shell', () => {
   it('renders operational navigation and changes to the companies workspace', async () => {
     const user = userEvent.setup();
-    render(<App role="owner" user={{ displayName: 'Northstar Owner' }} />);
+    render(
+      <App
+        role="owner"
+        user={{ displayName: 'Northstar Owner' }}
+        workspace={{ id: 'org_northstar', name: 'Northstar Demo' }}
+      />,
+    );
     expect(screen.getByRole('heading', { name: 'Good morning, Northstar' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Companies' }));
     expect(screen.getByRole('heading', { name: 'Companies' })).toBeInTheDocument();
@@ -15,7 +21,13 @@ describe('CRM application shell', () => {
 
   it('renders deliberate loading, error, not-found, and conflict states', async () => {
     const user = userEvent.setup();
-    render(<App role="owner" user={{ displayName: 'Northstar Owner' }} />);
+    render(
+      <App
+        role="owner"
+        user={{ displayName: 'Northstar Owner' }}
+        workspace={{ id: 'org_northstar', name: 'Northstar Demo' }}
+      />,
+    );
     await user.click(screen.getByRole('button', { name: 'Activities' }));
     expect(screen.getByRole('heading', { name: 'Loading activity' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Deals' }));
@@ -30,14 +42,42 @@ describe('CRM application shell', () => {
   });
 
   it('hides owner-only navigation for an authenticated viewer role', () => {
-    render(<App role="viewer" user={{ displayName: 'Northstar Viewer' }} />);
+    render(
+      <App
+        role="viewer"
+        user={{ displayName: 'Northstar Viewer' }}
+        workspace={{ id: 'org_northstar', name: 'Northstar Demo' }}
+      />,
+    );
     expect(screen.queryByRole('button', { name: 'Administration' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Companies' })).toBeInTheDocument();
   });
 
+  it('uses the authenticated workspace instead of Northstar demo content', async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        role="owner"
+        user={{ displayName: 'Outside Owner' }}
+        workspace={{ id: 'org_outside', name: 'Outside Demo' }}
+      />,
+    );
+    expect(screen.getByText('Outside Demo', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText('Northstar Demo', { exact: true })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Companies' }));
+    expect(screen.getByText('Outside Demo account')).toBeInTheDocument();
+    expect(screen.queryByText('Acme Nordic AB')).not.toBeInTheDocument();
+  });
+
   it('restores focus to the account trigger after the dialog closes', async () => {
     const user = userEvent.setup();
-    render(<App role="owner" user={{ displayName: 'Northstar Owner' }} />);
+    render(
+      <App
+        role="owner"
+        user={{ displayName: 'Northstar Owner' }}
+        workspace={{ id: 'org_northstar', name: 'Northstar Demo' }}
+      />,
+    );
     const trigger = screen.getByRole('button', { name: /Northstar Owner.*owner/ });
     trigger.focus();
     await user.click(trigger);
