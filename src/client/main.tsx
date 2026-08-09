@@ -28,7 +28,16 @@ type CompanyDetail = Company & {
   phone: string | null;
   address: string | null;
   contacts: { id: string; first_name: string; last_name: string }[];
-  activities: { id: string; subject: string }[];
+  activities: {
+    id: string;
+    subject: string;
+    type: string;
+    occurredAt: string;
+    creatorName: string;
+    companyLabel: string | null;
+    contactLabel: string | null;
+    dealLabel: string | null;
+  }[];
   deals: { id: string; name: string }[];
   tasks: { id: string; title: string }[];
   history: { id: string; action: string; created_at: string; summary_json: string }[];
@@ -343,9 +352,6 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                     Contact: {record.first_name} {record.last_name}
                   </li>
                 ))}
-                {detail.activities.map((record) => (
-                  <li key={record.id}>Activity: {record.subject}</li>
-                ))}
                 {detail.deals.map((record) => (
                   <li key={record.id}>Deal: {record.name}</li>
                 ))}
@@ -356,6 +362,16 @@ function Companies({ canWrite }: { canWrite: boolean }) {
                   !detail.activities.length &&
                   !detail.deals.length &&
                   !detail.tasks.length && <li>No related records.</li>}
+              </ul>
+              <h4>Activity timeline</h4>
+              <ul aria-label="Company activity timeline">
+                {detail.activities.map((record) => (
+                  <li key={record.id}>
+                    {record.subject} · {record.type} · {record.creatorName} ·{' '}
+                    {new Date(record.occurredAt).toLocaleString()}
+                  </li>
+                ))}
+                {!detail.activities.length && <li>No activity recorded for this company.</li>}
               </ul>
               <h4>Change history</h4>
               <ul aria-label="Company change history">
@@ -496,6 +512,319 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   );
 }
 
+type Activity = {
+  id: string;
+  type: string;
+  subject: string;
+  body: string;
+  occurredAt: string;
+  creatorName: string;
+  participantNamesJson: string;
+  companyLabel: string | null;
+  contactLabel: string | null;
+  dealLabel: string | null;
+  version: number;
+};
+
+function Activities({ canWrite }: { canWrite: boolean }) {
+  const [items, setItems] = useState<Activity[]>([]);
+  const [selected, setSelected] = useState<Activity | null>(null);
+  const [type, setType] = useState('');
+  const [authorId, setAuthorId] = useState('');
+  const [relatedRecordId, setRelatedRecordId] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [page, setPage] = useState(1);
+  const [snapshotCreatedAt, setSnapshotCreatedAt] = useState('');
+  const [cursors, setCursors] = useState<Array<{ occurredAt: string; id: string } | null>>([null]);
+  const [total, setTotal] = useState(0);
+  const [notice, setNotice] = useState('');
+  const load = async (
+    nextPage = page,
+    cursor = cursors[nextPage - 1],
+    snapshot = snapshotCreatedAt,
+  ) => {
+    const query = new URLSearchParams({ page: String(nextPage) });
+    if (type) query.set('type', type);
+    if (authorId) query.set('authorId', authorId);
+    if (relatedRecordId) query.set('relatedRecordId', relatedRecordId);
+    if (from) query.set('from', new Date(from).toISOString());
+    if (to) query.set('to', new Date(to).toISOString());
+    if (snapshot) query.set('snapshotCreatedAt', snapshot);
+    if (cursor) {
+      query.set('cursorOccurredAt', cursor.occurredAt);
+      query.set('cursorId', cursor.id);
+    }
+    const response = await fetch(`/api/activities?${query}`);
+    if (!response.ok) return setNotice('Activities could not be loaded. Try again.');
+    const body = await response.json();
+    setItems(body.items);
+    setTotal(body.total);
+    setPage(nextPage);
+    setSnapshotCreatedAt(body.snapshotCreatedAt);
+    setCursors((current) => {
+      const next = [...current];
+      next[nextPage] = body.nextCursor;
+      return next;
+    });
+  };
+  useEffect(() => {
+    void load(1);
+  }, []);
+  const payload = (form: FormData) => ({
+    type: form.get('type'),
+    subject: form.get('subject'),
+    body: form.get('body'),
+    occurredAt: new Date(String(form.get('occurredAt'))).toISOString(),
+    participantNames: String(form.get('participants') || '')
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean),
+    companyId: String(form.get('companyId') || '') || null,
+    contactId: String(form.get('contactId') || '') || null,
+    dealId: String(form.get('dealId') || '') || null,
+  });
+  return (
+    <section aria-labelledby="activities-heading">
+      <h2 id="activities-heading">Activities</h2>
+      <p className="subtle">
+        Activity facts and links are permanent. Creators and owners can amend descriptive notes for
+        15 minutes after recording.
+      </p>
+      <form
+        aria-label="Activity filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSnapshotCreatedAt('');
+          setCursors([null]);
+          void load(1, null, '');
+        }}
+      >
+        <label>
+          Type
+          <select value={type} onChange={(event) => setType(event.target.value)}>
+            <option value="">All activity types</option>
+            <option value="call">Call</option>
+            <option value="email">Email</option>
+            <option value="meeting">Meeting</option>
+            <option value="note">Note</option>
+            <option value="status_change">Status change</option>
+          </select>
+        </label>
+        <label>
+          Author ID
+          <input value={authorId} onChange={(event) => setAuthorId(event.target.value)} />
+        </label>
+        <label>
+          Related record ID
+          <input
+            value={relatedRecordId}
+            onChange={(event) => setRelatedRecordId(event.target.value)}
+          />
+        </label>
+        <label>
+          From
+          <input
+            type="datetime-local"
+            value={from}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+        </label>
+        <label>
+          To
+          <input type="datetime-local" value={to} onChange={(event) => setTo(event.target.value)} />
+        </label>
+        <button>Apply filters</button>
+      </form>
+      {canWrite && (
+        <form
+          aria-label="Log activity"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setNotice('');
+            const formElement = event.currentTarget;
+            const form = new FormData(formElement);
+            const response = await fetch('/api/activities', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                ...payload(form),
+                followUp: form.get('followUpTitle')
+                  ? {
+                      title: form.get('followUpTitle'),
+                      dueAt: form.get('followUpDueAt')
+                        ? new Date(String(form.get('followUpDueAt'))).toISOString()
+                        : null,
+                      priority: form.get('followUpPriority'),
+                    }
+                  : undefined,
+              }),
+            });
+            if (!response.ok) {
+              const body = await response.json();
+              return setNotice(body.error?.message || 'Activity could not be recorded.');
+            }
+            formElement.reset();
+            setNotice('Activity recorded.');
+            setSnapshotCreatedAt('');
+            setCursors([null]);
+            await load(1, null, '');
+          }}
+        >
+          <h3>Log activity</h3>
+          <label>
+            Type
+            <select name="type" defaultValue="call">
+              <option value="call">Call</option>
+              <option value="email">Email</option>
+              <option value="meeting">Meeting</option>
+              <option value="note">Note</option>
+              <option value="status_change">Status change</option>
+            </select>
+          </label>
+          <label>
+            Subject
+            <input name="subject" required maxLength={300} />
+          </label>
+          <label>
+            Occurred at
+            <input name="occurredAt" type="datetime-local" required />
+          </label>
+          <label>
+            Notes
+            <textarea name="body" maxLength={10000} />
+          </label>
+          <label>
+            Participants
+            <input name="participants" placeholder="Comma separated names" />
+          </label>
+          <label>
+            Company ID
+            <input name="companyId" />
+          </label>
+          <label>
+            Contact ID
+            <input name="contactId" />
+          </label>
+          <label>
+            Deal ID
+            <input name="dealId" />
+          </label>
+          <fieldset>
+            <legend>Optional linked follow-up</legend>
+            <label>
+              Task title
+              <input name="followUpTitle" />
+            </label>
+            <label>
+              Due at
+              <input name="followUpDueAt" type="datetime-local" />
+            </label>
+            <label>
+              Priority
+              <select name="followUpPriority" defaultValue="medium">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+          </fieldset>
+          <button type="submit">Record activity</button>
+        </form>
+      )}
+      {notice && <p role="alert">{notice}</p>}
+      <ul aria-label="Activity timeline">
+        {items.map((activity) => (
+          <li key={activity.id}>
+            <button type="button" onClick={() => setSelected(activity)}>
+              {activity.subject}
+            </button>{' '}
+            <span>
+              {activity.type} · {new Date(activity.occurredAt).toLocaleString()} ·{' '}
+              {activity.creatorName}
+            </span>
+            {(activity.companyLabel || activity.contactLabel || activity.dealLabel) && (
+              <small>
+                {' '}
+                ·{' '}
+                {[activity.companyLabel, activity.contactLabel, activity.dealLabel]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </small>
+            )}
+          </li>
+        ))}
+        {!items.length && <li>No activities match these filters.</li>}
+      </ul>
+      <nav aria-label="Activity pagination">
+        <button disabled={page === 1} onClick={() => void load(page - 1, cursors[page - 2])}>
+          Previous activities
+        </button>
+        <span>Page {page}</span>
+        <button disabled={!cursors[page]} onClick={() => void load(page + 1, cursors[page])}>
+          Next activities
+        </button>
+      </nav>
+      {selected && (
+        <section aria-labelledby="activity-detail-heading">
+          <h3 id="activity-detail-heading">{selected.subject}</h3>
+          <p>{selected.body || 'No notes recorded.'}</p>
+          <p>
+            Recorded by {selected.creatorName} · {new Date(selected.occurredAt).toLocaleString()}
+          </p>
+          {canWrite && (
+            <form
+              aria-label="Edit activity"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                const response = await fetch(`/api/activities/${selected.id}`, {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    subject: form.get('subject'),
+                    body: form.get('body'),
+                    participantNames: String(form.get('participants') || '')
+                      .split(',')
+                      .map((name) => name.trim())
+                      .filter(Boolean),
+                    version: selected.version,
+                  }),
+                });
+                if (!response.ok) {
+                  const body = await response.json();
+                  return setNotice(body.error?.message || 'Activity could not be updated.');
+                }
+                setSelected(await response.json());
+                setNotice('Activity updated.');
+                await load(page, cursors[page - 1]);
+              }}
+            >
+              <h4>Edit activity notes</h4>
+              <label>
+                Subject
+                <input name="subject" required defaultValue={selected.subject} />
+              </label>
+              <label>
+                Notes
+                <textarea name="body" defaultValue={selected.body} />
+              </label>
+              <label>
+                Participants
+                <input
+                  name="participants"
+                  defaultValue={JSON.parse(selected.participantNamesJson || '[]').join(', ')}
+                />
+              </label>
+              <button type="submit">Save activity notes</button>
+            </form>
+          )}
+        </section>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -585,6 +914,7 @@ function App() {
       user={session.user}
       workspace={session.organization}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
+      activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);

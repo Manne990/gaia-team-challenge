@@ -60,6 +60,47 @@ const contactInput = z.object({
 });
 const contactUpdateInput = contactInput.extend({ version: z.number().int().positive() });
 const contactFields = `id, first_name AS firstName, last_name AS lastName, email, phone, job_title AS jobTitle, company_id AS companyId, owner_id AS ownerId, status, tags_json AS tagsJson, communication_preference AS communicationPreference, created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt, version`;
+const activityTypes = ['call', 'email', 'meeting', 'note', 'status_change'] as const;
+const activityInput = z.object({
+  type: z.enum(activityTypes),
+  subject: z.string().trim().min(1).max(300),
+  body: z.string().trim().max(10_000).default(''),
+  occurredAt: z.string().datetime({ offset: true }),
+  participantNames: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+  companyId: z.string().trim().min(1).max(100).nullable().optional(),
+  contactId: z.string().trim().min(1).max(100).nullable().optional(),
+  dealId: z.string().trim().min(1).max(100).nullable().optional(),
+  followUp: z
+    .object({
+      title: z.string().trim().min(1).max(300),
+      description: z.string().trim().max(10_000).default(''),
+      dueAt: z.string().datetime({ offset: true }).nullable().optional(),
+      priority: z.enum(['low', 'medium', 'high']).default('medium'),
+      assigneeId: z.string().trim().min(1).max(100).nullable().optional(),
+    })
+    .optional(),
+});
+const activityUpdateInput = z.object({
+  subject: z.string().trim().min(1).max(300),
+  body: z.string().trim().max(10_000),
+  participantNames: z.array(z.string().trim().min(1).max(160)).max(50),
+  version: z.coerce.number().int().positive(),
+});
+const activityListQuery = z
+  .object({
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    type: z.enum(activityTypes).optional(),
+    authorId: z.string().trim().min(1).max(100).optional(),
+    relatedRecordId: z.string().trim().min(1).max(100).optional(),
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+    cursorOccurredAt: z.string().datetime({ offset: true }).optional(),
+    cursorId: z.string().trim().min(1).max(100).optional(),
+    snapshotCreatedAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .refine((query) => Boolean(query.cursorOccurredAt) === Boolean(query.cursorId), {
+    message: 'A timeline cursor needs both its occurrence time and identifier.',
+  });
 const cookieToken = (cookie = '') =>
   cookie
     .split(';')
@@ -83,6 +124,80 @@ export function createApp(config: AppConfig) {
       database.exec('ROLLBACK');
       throw error;
     }
+  };
+  const activityFields = `
+    id, type, subject, body, occurred_at AS occurredAt, creator_id AS creatorId,
+    creator_name_snapshot AS creatorName, company_id AS companyId,
+    contact_id AS contactId, deal_id AS dealId, task_id AS taskId,
+    participant_names_json AS participantNamesJson,
+    company_label_snapshot AS companyLabel, contact_label_snapshot AS contactLabel,
+    deal_label_snapshot AS dealLabel, created_at AS createdAt, updated_at AS updatedAt, version`;
+  const activitySession = (request: express.Request) =>
+    auth.authenticate(cookieToken(request.headers.cookie));
+  const sendActivityError = (error: unknown, response: express.Response) => {
+    if (error instanceof AuthError)
+      return response.status(error.code === 'FORBIDDEN' ? 403 : 401).json({
+        error: {
+          code: error.code,
+          message:
+            error.code === 'FORBIDDEN'
+              ? 'You do not have permission to do that.'
+              : 'Please sign in to continue.',
+        },
+      });
+    if (error instanceof z.ZodError)
+      return response.status(400).json({
+        error: { code: 'VALIDATION', message: 'Check the activity fields and try again.' },
+      });
+    if (String(error).includes('INVALID_ACTIVITY_RELATION'))
+      return response.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'A related record was not found.' },
+      });
+    if (String(error).includes('INVALID_TASK_ASSIGNEE'))
+      return response.status(400).json({
+        error: { code: 'VALIDATION', message: 'The follow-up assignee must be an active member.' },
+      });
+    return response.status(500).json({
+      error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong. Please try again.' },
+    });
+  };
+  const relatedLabels = (
+    organizationId: string,
+    input: { companyId?: string | null; contactId?: string | null; dealId?: string | null },
+  ) => {
+    const company = input.companyId
+      ? database
+          .prepare('SELECT name FROM companies WHERE id = ? AND organization_id = ?')
+          .get(input.companyId, organizationId)
+      : null;
+    const contact = input.contactId
+      ? database
+          .prepare(
+            'SELECT first_name, last_name FROM contacts WHERE id = ? AND organization_id = ?',
+          )
+          .get(input.contactId, organizationId)
+      : null;
+    const deal = input.dealId
+      ? database
+          .prepare('SELECT name FROM deals WHERE id = ? AND organization_id = ?')
+          .get(input.dealId, organizationId)
+      : null;
+    if ((input.companyId && !company) || (input.contactId && !contact) || (input.dealId && !deal))
+      throw new Error('INVALID_ACTIVITY_RELATION');
+    return {
+      companyLabel: company?.name || null,
+      contactLabel: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      dealLabel: deal?.name || null,
+    };
+  };
+  const assertTaskAssignee = (organizationId: string, assigneeId: string | null | undefined) => {
+    if (!assigneeId) return;
+    if (
+      !database
+        .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+        .get(organizationId, assigneeId)
+    )
+      throw new Error('INVALID_TASK_ASSIGNEE');
   };
   const auditContact = (
     organizationId: string,
@@ -321,7 +436,7 @@ export function createApp(config: AppConfig) {
             ...c,
             activities: database
               .prepare(
-                'SELECT id, type, subject, occurred_at AS occurredAt FROM activities WHERE organization_id = ? AND contact_id = ? ORDER BY occurred_at DESC',
+                `SELECT ${activityFields} FROM activities WHERE organization_id = ? AND contact_id = ? ORDER BY occurred_at DESC, id DESC`,
               )
               .all(s.organizationId, c.id),
             deals: database
@@ -608,7 +723,7 @@ export function createApp(config: AppConfig) {
           .all(session.organizationId, company.id),
         activities: database
           .prepare(
-            'SELECT * FROM activities WHERE organization_id = ? AND company_id = ? ORDER BY occurred_at DESC, id DESC',
+            `SELECT ${activityFields} FROM activities WHERE organization_id = ? AND company_id = ? ORDER BY occurred_at DESC, id DESC`,
           )
           .all(session.organizationId, company.id),
         deals: database
@@ -812,6 +927,198 @@ export function createApp(config: AppConfig) {
       }
     });
   }
+
+  app.get('/api/activities', (request, response) => {
+    try {
+      const session = activitySession(request);
+      const query = activityListQuery.parse(request.query);
+      const where = ['organization_id = ?'];
+      const args: unknown[] = [session.organizationId];
+      if (query.type) {
+        where.push('type = ?');
+        args.push(query.type);
+      }
+      if (query.authorId) {
+        where.push('creator_id = ?');
+        args.push(query.authorId);
+      }
+      if (query.relatedRecordId) {
+        where.push('(company_id = ? OR contact_id = ? OR deal_id = ? OR task_id = ?)');
+        args.push(
+          query.relatedRecordId,
+          query.relatedRecordId,
+          query.relatedRecordId,
+          query.relatedRecordId,
+        );
+      }
+      if (query.from) {
+        where.push('occurred_at >= ?');
+        args.push(query.from);
+      }
+      if (query.to) {
+        where.push('occurred_at <= ?');
+        args.push(query.to);
+      }
+      const snapshotCreatedAt = query.snapshotCreatedAt || new Date().toISOString();
+      where.push('created_at <= ?');
+      args.push(snapshotCreatedAt);
+      if (query.cursorOccurredAt && query.cursorId) {
+        where.push('(occurred_at < ? OR (occurred_at = ? AND id < ?))');
+        args.push(query.cursorOccurredAt, query.cursorOccurredAt, query.cursorId);
+      }
+      const clause = where.join(' AND ');
+      const total = database
+        .prepare(`SELECT count(*) AS total FROM activities WHERE ${clause}`)
+        .get(...args).total;
+      const items = database
+        .prepare(
+          `SELECT ${activityFields} FROM activities WHERE ${clause} ORDER BY occurred_at DESC, id DESC LIMIT ?`,
+        )
+        .all(...args, query.pageSize);
+      const last = items.at(-1);
+      return response.json({
+        items,
+        pageSize: query.pageSize,
+        total,
+        snapshotCreatedAt,
+        nextCursor:
+          items.length === query.pageSize && last
+            ? { occurredAt: last.occurredAt, id: last.id }
+            : null,
+      });
+    } catch (error) {
+      return sendActivityError(error, response);
+    }
+  });
+
+  app.get('/api/activities/:id', (request, response) => {
+    try {
+      const session = activitySession(request);
+      const activity = database
+        .prepare(`SELECT ${activityFields} FROM activities WHERE id = ? AND organization_id = ?`)
+        .get(request.params.id, session.organizationId);
+      return activity
+        ? response.json(activity)
+        : response
+            .status(404)
+            .json({ error: { code: 'NOT_FOUND', message: 'This activity was not found.' } });
+    } catch (error) {
+      return sendActivityError(error, response);
+    }
+  });
+
+  app.post('/api/activities', (request, response) => {
+    try {
+      const session = auth.requireRole(activitySession(request), ['owner', 'member']);
+      const input = activityInput.parse(request.body);
+      const id = `act_${randomUUID()}`;
+      const taskId = input.followUp ? `task_${randomUUID()}` : null;
+      const now = new Date().toISOString();
+      const labels = relatedLabels(session.organizationId, input);
+      assertTaskAssignee(session.organizationId, input.followUp?.assigneeId);
+      transaction(() => {
+        if (input.followUp)
+          database
+            .prepare(
+              'INSERT INTO tasks (id, organization_id, title, description, assignee_id, due_at, priority, status, company_id, contact_id, deal_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              taskId,
+              session.organizationId,
+              input.followUp.title,
+              input.followUp.description,
+              input.followUp.assigneeId || session.userId,
+              input.followUp.dueAt || null,
+              input.followUp.priority,
+              'open',
+              input.companyId || null,
+              input.contactId || null,
+              input.dealId || null,
+              now,
+              now,
+            );
+        database
+          .prepare(
+            `INSERT INTO activities (id, organization_id, type, subject, body, occurred_at, creator_id, company_id, contact_id, deal_id, task_id, participant_names_json, creator_name_snapshot, company_label_snapshot, contact_label_snapshot, deal_label_snapshot, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            id,
+            session.organizationId,
+            input.type,
+            input.subject,
+            input.body,
+            input.occurredAt,
+            session.userId,
+            input.companyId || null,
+            input.contactId || null,
+            input.dealId || null,
+            taskId,
+            JSON.stringify(input.participantNames),
+            session.user.displayName,
+            labels.companyLabel,
+            labels.contactLabel,
+            labels.dealLabel,
+            now,
+            now,
+          );
+      });
+      return response.status(201).json({
+        ...database.prepare(`SELECT ${activityFields} FROM activities WHERE id = ?`).get(id),
+        followUpTaskId: taskId,
+      });
+    } catch (error) {
+      return sendActivityError(error, response);
+    }
+  });
+
+  app.patch('/api/activities/:id', (request, response) => {
+    try {
+      const session = auth.requireRole(activitySession(request), ['owner', 'member']);
+      const input = activityUpdateInput.parse(request.body);
+      const activity = database
+        .prepare(
+          'SELECT id, creator_id AS creatorId, created_at AS createdAt FROM activities WHERE id = ? AND organization_id = ?',
+        )
+        .get(request.params.id, session.organizationId);
+      if (!activity)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This activity was not found.' } });
+      const withinEditWindow = Date.now() - Date.parse(activity.createdAt) <= 15 * 60 * 1000;
+      if ((session.role !== 'owner' && activity.creatorId !== session.userId) || !withinEditWindow)
+        return response.status(403).json({
+          error: {
+            code: 'FORBIDDEN',
+            message:
+              'Activities may only be edited by their creator or an owner within 15 minutes.',
+          },
+        });
+      const result = database
+        .prepare(
+          'UPDATE activities SET subject = ?, body = ?, participant_names_json = ?, updated_at = ?, version = version + 1 WHERE id = ? AND organization_id = ? AND version = ?',
+        )
+        .run(
+          input.subject,
+          input.body,
+          JSON.stringify(input.participantNames),
+          new Date().toISOString(),
+          request.params.id,
+          session.organizationId,
+          input.version,
+        );
+      if (!result.changes)
+        return response.status(409).json({
+          error: { code: 'CONFLICT', message: 'This activity changed. Refresh it before saving.' },
+        });
+      return response.json(
+        database
+          .prepare(`SELECT ${activityFields} FROM activities WHERE id = ?`)
+          .get(request.params.id),
+      );
+    } catch (error) {
+      return sendActivityError(error, response);
+    }
+  });
 
   app.use('/api', (_request, response) => {
     response.status(404).json({

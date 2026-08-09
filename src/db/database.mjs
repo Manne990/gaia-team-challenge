@@ -291,7 +291,11 @@ export function seedDatabase(db) {
         contact_id: contactId,
         deal_id: `deal_fixture_${suffix}`,
         creator_name_snapshot: index % 2 === 0 ? 'Northstar Owner' : 'Northstar Member',
+        company_label_snapshot: `Northstar Fixture ${suffix}`,
+        contact_label_snapshot: `Fixture${suffix} Contact${suffix}`,
+        deal_label_snapshot: `Fixture opportunity ${suffix}`,
         created_at: seedTime,
+        updated_at: seedTime,
       });
     }
     db.exec('COMMIT');

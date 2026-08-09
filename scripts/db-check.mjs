@@ -20,6 +20,8 @@ try {
     INSERT INTO organizations (id, name, created_at, updated_at) VALUES ('upgrade_b', 'B', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
     INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES ('upgrade_user', 'upgrade@example.test', 'hash', 'Upgrade User', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
     INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at) VALUES ('upgrade_membership', 'upgrade_b', 'upgrade_user', 'member', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+    INSERT INTO companies (id, organization_id, name, created_at, updated_at) VALUES ('upgrade_activity_company', 'upgrade_b', 'Original account label', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
+    INSERT INTO activities (id, organization_id, type, subject, occurred_at, creator_id, company_id, creator_name_snapshot, created_at) VALUES ('upgrade_activity', 'upgrade_b', 'note', 'Legacy activity', '2026-01-15T12:00:00.000Z', 'upgrade_user', 'upgrade_activity_company', 'Upgrade User', '2026-01-15T12:00:00.000Z');
     INSERT INTO saved_views (id, organization_id, user_id, resource, name, filters_json, created_at, updated_at) VALUES ('upgrade_bad_view', 'upgrade_a', 'upgrade_user', 'companies', 'Bad legacy view', '{}', '2026-01-15T12:00:00.000Z', '2026-01-15T12:00:00.000Z');
   `);
   assert.throws(
@@ -48,7 +50,27 @@ try {
       '002_enforce_crm_integrity.sql',
       '003_company_archiving.sql',
       '003_contact_archival.sql',
+      '004_activity_history.sql',
     ],
+  );
+  assert.equal(
+    upgrade
+      .prepare(
+        "SELECT count(*) AS total FROM pragma_table_info('activities') WHERE name = 'version'",
+      )
+      .get().total,
+    1,
+    'an existing 001 database must receive activity edit versioning',
+  );
+  upgrade
+    .prepare('UPDATE companies SET name = ?, archived_at = ? WHERE id = ?')
+    .run('Renamed account', '2026-01-16T12:00:00.000Z', 'upgrade_activity_company');
+  assert.equal(
+    upgrade
+      .prepare('SELECT company_label_snapshot FROM activities WHERE id = ?')
+      .get('upgrade_activity').company_label_snapshot,
+    'Original account label',
+    'the forward migration must preserve pre-existing activity labels before records change',
   );
   upgrade.close();
   let db = resetAndSeed(filename);
