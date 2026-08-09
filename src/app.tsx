@@ -408,7 +408,22 @@ function ListPage({
                 companies.map((company, index) => (
                   <tr key={`${company[0]}-${index}`}>
                     <td>
-                      <a href={page === 'Contacts' ? `#contact-${contactIdAt(index)}` : '#company'}>
+                      <a
+                        href={page === 'Contacts' ? `#contact-${contactIdAt(index)}` : '#company'}
+                        onClick={
+                          page === 'Contacts'
+                            ? async (event) => {
+                                event.preventDefault();
+                                const detail = await fetch(
+                                  `/api/contacts/${contactIdAt(index)}`,
+                                ).then((response) => response.json());
+                                window.alert(
+                                  `${detail.firstName} ${detail.lastName}\n${detail.email || 'No email'}\nActivities: ${detail.activities?.length || 0}\nTasks: ${detail.tasks?.length || 0}\nHistory: ${detail.history?.length || 0}`,
+                                );
+                              }
+                            : undefined
+                        }
+                      >
                         {company[0]}
                       </a>
                     </td>
