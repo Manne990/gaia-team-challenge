@@ -56,6 +56,7 @@ describe('dashboard API', () => {
     );
     expect(dashboard.closingSoon).toBeGreaterThan(0);
     expect(dashboard.tasks.upcoming).toBeGreaterThan(0);
+    expect(dashboard.trend).toEqual(expect.any(Array));
     expect(dashboard.semantics).toMatchObject({
       timezone: 'UTC',
       closingSoonDays: 30,

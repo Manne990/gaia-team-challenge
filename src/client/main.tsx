@@ -1426,6 +1426,8 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('');
   const [due, setDue] = useState(() => initialQuery.get('due') || '');
+  const dueFrom = initialQuery.get('dueFrom') || '';
+  const dueTo = initialQuery.get('dueTo') || '';
   const [mine, setMine] = useState(() => initialQuery.get('assigneeId') === 'me');
   const [relation, setRelation] = useState(() => {
     const kind = initialQuery.get('relation');
@@ -1451,6 +1453,8 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       page: String(nextPage),
     });
     if (nextDue) query.set('due', nextDue);
+    if (dueFrom) query.set('dueFrom', dueFrom);
+    if (dueTo) query.set('dueTo', dueTo);
     if (nextMine) query.set('assigneeId', 'me');
     if (nextRelation) {
       const [kind, id] = nextRelation.split(':');
@@ -2212,6 +2216,9 @@ function LiveDashboard({
   )
     .toISOString()
     .slice(0, 10);
+  const upcomingEnd = new Date(
+    new Date(data.generatedAt).getTime() + data.semantics.upcomingTaskDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
   return (
     <section aria-labelledby="dashboard-heading">
       <div className="page-heading">
@@ -2245,7 +2252,15 @@ function LiveDashboard({
           <strong>{data.tasks.overdue}</strong>
           <small className="alert">Open tasks before now</small>
         </button>
-        <button className="metric" onClick={() => open('Tasks', '?due=upcoming')}>
+        <button
+          className="metric"
+          onClick={() =>
+            open(
+              'Tasks',
+              `?dueFrom=${encodeURIComponent(data.generatedAt)}&dueTo=${encodeURIComponent(upcomingEnd)}`,
+            )
+          }
+        >
           <p>Upcoming tasks</p>
           <strong>{data.tasks.upcoming}</strong>
           <small>Next {data.semantics.upcomingTaskDays} UTC days</small>
