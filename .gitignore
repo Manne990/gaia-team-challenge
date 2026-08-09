@@ -8,6 +8,7 @@ test-results/
 *.db-shm
 *.db-wal
 *.sqlite
+*.sqlite-*
 *.sqlite3
 .env
 .env.*

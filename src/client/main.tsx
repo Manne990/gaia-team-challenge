@@ -93,6 +93,18 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   useEffect(() => {
     void load('');
   }, []);
+  const exportQuery = new URLSearchParams();
+  if (text) exportQuery.set('text', text);
+  for (const [key, value] of Object.entries({
+    lifecycle: filters.lifecycle,
+    ownerId: filters.ownerId,
+    industry: filters.industry,
+    size: filters.size,
+    tag: filters.tag,
+  }))
+    if (value) exportQuery.set(key, value);
+  if (filters.includeArchived) exportQuery.set('includeArchived', 'true');
+  const companyExportHref = `/api/exports/companies.csv${exportQuery.size ? `?${exportQuery}` : ''}`;
   return (
     <section aria-labelledby="companies-heading">
       <h2 id="companies-heading">Companies</h2>
@@ -191,6 +203,9 @@ function Companies({ canWrite }: { canWrite: boolean }) {
         </label>
         <button>Apply filters</button>
       </form>
+      <a href={companyExportHref} download>
+        Export filtered companies
+      </a>
       {canWrite && (
         <form
           aria-label="Create company"
@@ -825,6 +840,134 @@ function Activities({ canWrite }: { canWrite: boolean }) {
   );
 }
 
+function Imports({ canWrite }: { canWrite: boolean }) {
+  const [resource, setResource] = useState<'companies' | 'contacts'>('companies');
+  const [csv, setCsv] = useState('name,external reference\nExample AB,EXAMPLE-1');
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<any>(null);
+  const [message, setMessage] = useState('');
+  const headers = csv
+    .split(/\r?\n/, 1)[0]
+    .split(',')
+    .map((header) => header.trim());
+  const headerForTarget = (target: string) =>
+    headers.find((header) => header.toLowerCase().replace(/[^a-z0-9]/g, '') === target) || '';
+  const targets =
+    resource === 'companies'
+      ? [
+          'name',
+          'externalreference',
+          'website',
+          'phone',
+          'industry',
+          'size',
+          'address',
+          'lifecyclestatus',
+          'tags',
+          'description',
+        ]
+      : [
+          'firstname',
+          'lastname',
+          'email',
+          'phone',
+          'jobtitle',
+          'status',
+          'tags',
+          'communicationpreference',
+        ];
+  const resolvedMapping = Object.fromEntries(
+    targets.map((target) => [target, mapping[target] ?? headerForTarget(target)]),
+  );
+  const createPreview = async () => {
+    setMessage('Preparing preview…');
+    const response = await fetch('/api/imports/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resource, csv, mapping: resolvedMapping }),
+    });
+    const body = await response.json();
+    if (!response.ok) return setMessage(body.error?.message || 'Preview could not be created.');
+    setPreview(body);
+    setMessage(`${body.validRows} rows are ready; invalid or duplicate rows will not be imported.`);
+  };
+  return (
+    <section aria-labelledby="imports-heading">
+      <h2 id="imports-heading">Imports and exports</h2>
+      <p>Preview CSV rows before committing. Existing records are never merged automatically.</p>
+      <label>
+        Record type{' '}
+        <select value={resource} onChange={(event) => setResource(event.target.value as any)}>
+          <option value="companies">Companies</option>
+          <option value="contacts">Contacts</option>
+        </select>
+      </label>
+      <label>
+        CSV content{' '}
+        <textarea value={csv} onChange={(event) => setCsv(event.target.value)} rows={8} />
+      </label>
+      <fieldset>
+        <legend>Column mapping</legend>
+        {targets.map((target) => (
+          <label key={target}>
+            {target}
+            <select
+              value={mapping[target] ?? headerForTarget(target)}
+              onChange={(event) => setMapping({ ...mapping, [target]: event.target.value })}
+            >
+              <option value="">Do not import</option>
+              {headers.map((header) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </fieldset>
+      {canWrite && <button onClick={() => void createPreview()}>Preview import</button>}
+      {resource === 'contacts' && (
+        <a href="/api/exports/contacts.csv" download>
+          Export contacts
+        </a>
+      )}
+      {message && <p role="status">{message}</p>}
+      {preview && (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Line</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.rows.map((row: any) => (
+                <tr key={row.line}>
+                  <td>{row.line}</td>
+                  <td>
+                    {row.errors.join(' ') ||
+                      (row.duplicate ? `Possible duplicate: ${row.duplicate.name}` : 'Ready')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button
+            onClick={async () => {
+              const response = await fetch(`/api/imports/${preview.id}/commit`, { method: 'POST' });
+              setMessage(response.ok ? 'Import committed.' : 'Import could not be committed.');
+            }}
+            disabled={!canWrite || !preview.validRows}
+          >
+            Commit valid rows
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [session, setSession] = useState<Session | null>(null);
@@ -915,6 +1058,7 @@ function App() {
       workspace={session.organization}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
+      importsContent={<Imports canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
