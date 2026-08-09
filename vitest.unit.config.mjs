@@ -1,8 +1,8 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ['test/unit/**/*.test.mjs'],
+    include: ["test/unit/**/*.test.mjs"],
     passWithNoTests: false,
   },
 });

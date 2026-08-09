@@ -1,21 +1,13 @@
-import js from '@eslint/js';
+import js from "@eslint/js";
 
 export default [
-  { ignores: ['node_modules/', 'dist/', 'data/', 'playwright-report/', 'test-results/'] },
+  { ignores: ["node_modules/", "playwright-report/", "test-results/"] },
   js.configs.recommended,
   {
     languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: {
-        console: 'readonly',
-        Buffer: 'readonly',
-        fetch: 'readonly',
-        setTimeout: 'readonly',
-        process: 'readonly',
-        URL: 'readonly',
-        structuredClone: 'readonly',
-      },
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: { console: "readonly", process: "readonly", URL: "readonly", structuredClone: "readonly" },
     },
   },
 ];
