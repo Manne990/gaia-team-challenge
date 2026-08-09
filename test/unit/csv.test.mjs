@@ -14,4 +14,8 @@ describe('CSV safety helpers', () => {
     expect(escapeCsv('=2+2')).toBe("'=2+2");
     expect(escapeCsv('A, B')).toBe('"A, B"');
   });
+
+  it('rejects oversized input before parsing it', () => {
+    expect(() => parseCsv(`name\n${'x'.repeat(1_000_000)}`)).toThrow('too large');
+  });
 });

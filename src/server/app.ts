@@ -1362,16 +1362,35 @@ export function createApp(config: AppConfig) {
         resource === 'companies'
           ? companyListQuery.parse(request.query)
           : { text: String(request.query.text || '').trim() };
+      const companyQuery: any = query;
+      const companyTerms = ['organization_id = ?'];
+      const companyValues: unknown[] = [session.organizationId];
+      if (companyQuery.includeArchived !== true) companyTerms.push('archived_at IS NULL');
+      if (companyQuery.text) {
+        companyTerms.push('(name LIKE ? OR external_reference LIKE ?)');
+        companyValues.push(`%${companyQuery.text}%`, `%${companyQuery.text}%`);
+      }
+      for (const [field, column] of [
+        ['lifecycle', 'lifecycle_status'],
+        ['ownerId', 'owner_id'],
+        ['industry', 'industry'],
+        ['size', 'size'],
+      ] as const)
+        if (companyQuery[field]) {
+          companyTerms.push(`${column} = ?`);
+          companyValues.push(companyQuery[field]);
+        }
+      if (companyQuery.tag) {
+        companyTerms.push('EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?)');
+        companyValues.push(companyQuery.tag);
+      }
       const rows =
         resource === 'companies'
           ? database
               .prepare(
-                `SELECT name, external_reference AS externalReference, website, phone, industry, size, address, lifecycle_status AS lifecycleStatus, tags_json AS tags, description FROM companies WHERE organization_id = ? AND archived_at IS NULL${query.text ? ' AND (name LIKE ? OR external_reference LIKE ?)' : ''} ORDER BY name COLLATE NOCASE`,
+                `SELECT name, external_reference AS externalReference, website, phone, industry, size, address, lifecycle_status AS lifecycleStatus, tags_json AS tags, description FROM companies WHERE ${companyTerms.join(' AND ')} ORDER BY name COLLATE NOCASE`,
               )
-              .all(
-                session.organizationId,
-                ...(query.text ? [`%${query.text}%`, `%${query.text}%`] : []),
-              )
+              .all(...companyValues)
           : database
               .prepare(
                 `SELECT first_name AS firstName, last_name AS lastName, email, phone, job_title AS jobTitle, status, tags_json AS tags, communication_preference AS communicationPreference FROM contacts WHERE organization_id = ? AND archived_at IS NULL${query.text ? ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)' : ''} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`,

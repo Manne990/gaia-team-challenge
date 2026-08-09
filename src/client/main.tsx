@@ -828,6 +828,7 @@ function Activities({ canWrite }: { canWrite: boolean }) {
 function Imports({ canWrite }: { canWrite: boolean }) {
   const [resource, setResource] = useState<'companies' | 'contacts'>('companies');
   const [csv, setCsv] = useState('name,external reference\nExample AB,EXAMPLE-1');
+  const [mapping, setMapping] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<any>(null);
   const [message, setMessage] = useState('');
   const createPreview = async () => {
@@ -835,13 +836,41 @@ function Imports({ canWrite }: { canWrite: boolean }) {
     const response = await fetch('/api/imports/preview', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ resource, csv }),
+      body: JSON.stringify({ resource, csv, mapping }),
     });
     const body = await response.json();
     if (!response.ok) return setMessage(body.error?.message || 'Preview could not be created.');
     setPreview(body);
     setMessage(`${body.validRows} rows are ready; invalid or duplicate rows will not be imported.`);
   };
+  const headers = csv
+    .split(/\r?\n/, 1)[0]
+    .split(',')
+    .map((header) => header.trim());
+  const targets =
+    resource === 'companies'
+      ? [
+          'name',
+          'externalreference',
+          'website',
+          'phone',
+          'industry',
+          'size',
+          'address',
+          'lifecyclestatus',
+          'tags',
+          'description',
+        ]
+      : [
+          'firstname',
+          'lastname',
+          'email',
+          'phone',
+          'jobtitle',
+          'status',
+          'tags',
+          'communicationpreference',
+        ];
   return (
     <section aria-labelledby="imports-heading">
       <h2 id="imports-heading">Imports and exports</h2>
@@ -857,6 +886,25 @@ function Imports({ canWrite }: { canWrite: boolean }) {
         CSV content{' '}
         <textarea value={csv} onChange={(event) => setCsv(event.target.value)} rows={8} />
       </label>
+      <fieldset>
+        <legend>Column mapping</legend>
+        {targets.map((target) => (
+          <label key={target}>
+            {target}
+            <select
+              value={mapping[target] || target}
+              onChange={(event) => setMapping({ ...mapping, [target]: event.target.value })}
+            >
+              <option value="">Do not import</option>
+              {headers.map((header) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </fieldset>
       {canWrite && <button onClick={() => void createPreview()}>Preview import</button>}
       <a href={`/api/exports/${resource}.csv`} download>
         Export filtered {resource}
