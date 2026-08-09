@@ -62,5 +62,20 @@ describe('notifications API', () => {
         })
       ).status,
     ).toBe(404);
+    expect(
+      (
+        await fetch(`${url}/api/notifications/read-all`, {
+          method: 'POST',
+          headers: { cookie: owner },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await (
+          await fetch(`${url}/api/notifications?unread=true`, { headers: { cookie: owner } })
+        ).json()
+      ).items,
+    ).toHaveLength(0);
   });
 });
