@@ -28,7 +28,7 @@ const ready = async (url) => {
 const navigate = async (page, name) => {
   if ((page.viewportSize()?.width ?? 0) <= 720)
     await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('button', { name }).click();
+  await page.getByRole('button', { name, exact: true }).click();
 };
 
 test('actual task workspace creates, completes, reopens, archives, and keeps viewers read-only', async ({
