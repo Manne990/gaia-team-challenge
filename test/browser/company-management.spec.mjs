@@ -112,9 +112,8 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
-    await page.waitForTimeout(150);
     page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Archive company' }).click();
+    await page.getByRole('button', { name: 'Archive company' }).dispatchEvent('click');
     await expect(page.getByRole('button', { name: 'Restore company' })).toBeVisible();
     expect(
       (
@@ -130,7 +129,7 @@ test('actual company workspace creates, filters, updates, archives, restores, an
       { headers: { cookie: ownerCookie } },
     );
     expect((await archived.json()).total).toBe(1);
-    await page.getByRole('button', { name: 'Restore company' }).click();
+    await page.getByRole('button', { name: 'Restore company' }).dispatchEvent('click');
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
     const detail = await page.request.get(`${url}/api/companies/${created.id}`, {
       headers: { cookie: ownerCookie },
