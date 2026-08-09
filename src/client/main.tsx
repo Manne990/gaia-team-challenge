@@ -1,9 +1,11 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { App as ShellApp, type Role } from '../app';
 import './styles.css';
+import '../styles.css';
 
 type Screen = 'loading' | 'ready' | 'unavailable' | 'unexpected';
-type Session = { user: { displayName: string; email: string }; role: string };
+type Session = { user: { displayName: string; email: string }; role: Role };
 
 function App() {
   const [screen, setScreen] = useState<Screen>('loading');
@@ -55,7 +57,7 @@ function App() {
   }
   if (!session)
     return (
-      <main>
+      <main className="authentication">
         <p className="eyebrow">Northstar CRM</p>
         <h1>Sign in</h1>
         {expired && <p role="alert">Your session has expired. Please sign in again.</p>}
@@ -89,20 +91,14 @@ function App() {
       </main>
     );
   return (
-    <main>
-      <p className="eyebrow">Northstar CRM</p>
-      <h1>Welcome, {session.user.displayName}</h1>
-      <p>You are signed in as a {session.role}.</p>
-      <button
-        type="button"
-        onClick={async () => {
-          await fetch('/api/auth/logout', { method: 'POST' });
-          setSession(null);
-        }}
-      >
-        Sign out
-      </button>
-    </main>
+    <ShellApp
+      role={session.role}
+      user={session.user}
+      onSignOut={async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        setSession(null);
+      }}
+    />
   );
 }
 

@@ -10,7 +10,8 @@ type Page =
   | 'Imports'
   | 'Audit'
   | 'Administration';
-type Role = 'owner' | 'member' | 'viewer';
+export type Role = 'owner' | 'member' | 'viewer';
+export type ShellUser = { displayName: string };
 
 const navigation: Array<{ page: Page; icon: string; ownerOnly?: boolean }> = [
   { page: 'Dashboard', icon: '⌂' },
@@ -113,13 +114,14 @@ function Dialog({
   );
 }
 
-function Dashboard() {
+function Dashboard({ user }: { user: ShellUser }) {
+  const firstName = user.displayName.split(' ')[0] || user.displayName;
   return (
     <>
       <div className="page-heading">
         <div>
           <p className="eyebrow">Monday, August 9</p>
-          <h1>Good morning, Lina</h1>
+          <h1>Good morning, {firstName}</h1>
           <p className="subtle">Here’s what needs your attention across Northstar Demo.</p>
         </div>
         <button className="primary">+ Log activity</button>
@@ -394,7 +396,15 @@ function Placeholder({ page, role }: { page: Page; role: Role }) {
   );
 }
 
-export function App({ role }: { role: Role }) {
+export function App({
+  role,
+  user,
+  onSignOut,
+}: {
+  role: Role;
+  user: ShellUser;
+  onSignOut?: () => Promise<void>;
+}) {
   const [page, setPage] = useState<Page>('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dialog, setDialog] = useState(false);
@@ -417,7 +427,7 @@ export function App({ role }: { role: Role }) {
   const visible = navigation.filter((item) => !item.ownerOnly || role === 'owner');
   const content =
     page === 'Dashboard' ? (
-      <Dashboard />
+      <Dashboard user={user} />
     ) : page === 'Companies' || page === 'Contacts' ? (
       <ListPage page={page} />
     ) : (
@@ -464,7 +474,7 @@ export function App({ role }: { role: Role }) {
           <button className="profile" onClick={(event) => openDialog(event.currentTarget)}>
             <span className="avatar">LB</span>
             <span>
-              <strong>Lina Berg</strong>
+              <strong>{user.displayName}</strong>
               <small>{role}</small>
             </span>
             <span aria-hidden="true">⌄</span>
@@ -523,7 +533,7 @@ export function App({ role }: { role: Role }) {
               'Signing out ends this session on this device. Unsaved changes will be lost.'
             ) : (
               <>
-                Signed in as <strong>Lina Berg</strong>.
+                Signed in as <strong>{user.displayName}</strong>.
               </>
             )}
           </p>
@@ -533,11 +543,12 @@ export function App({ role }: { role: Role }) {
             </button>
             <button
               className="danger"
-              onClick={() => {
+              onClick={async () => {
                 if (!confirmingSignOut) {
                   setConfirmingSignOut(true);
                   return;
                 }
+                await onSignOut?.();
                 closeDialog();
                 setNotice('You have been signed out.');
               }}
