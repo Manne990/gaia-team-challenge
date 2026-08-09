@@ -1276,7 +1276,12 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     const response = await fetch(`/api/tasks?${query}`);
     if (response.ok) {
       const body = await response.json();
-      setItems(body.items);
+      let nextItems = body.items;
+      if (selectedRecord && !nextItems.some((item: any) => item.id === selectedRecord)) {
+        const detail = await fetch(`/api/tasks/${encodeURIComponent(selectedRecord)}`);
+        if (detail.ok) nextItems = [await detail.json(), ...nextItems];
+      }
+      setItems(nextItems);
       setTotal(body.total);
     }
   };
@@ -1562,8 +1567,13 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     return Promise.all([
       fetch(`/api/deals?${query}`).then((r) => r.json()),
       fetch('/api/pipeline/stages').then((r) => r.json()),
-    ]).then(([list, pipeline]) => {
-      setDeals(list.items || []);
+    ]).then(async ([list, pipeline]) => {
+      let nextDeals = list.items || [];
+      if (selectedRecord && !nextDeals.some((deal: any) => deal.id === selectedRecord)) {
+        const detail = await fetch(`/api/deals/${encodeURIComponent(selectedRecord)}`);
+        if (detail.ok) nextDeals = [await detail.json(), ...nextDeals];
+      }
+      setDeals(nextDeals);
       setTotal(list.total || 0);
       setStages(pipeline || []);
     });
