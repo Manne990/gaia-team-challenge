@@ -90,7 +90,15 @@ export function createApp(config: AppConfig) {
           .status(404)
           .json({ error: { code: 'NOT_FOUND', message: 'This record was not found.' } });
       return response.json(company);
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'FORBIDDEN') {
+        return response.status(403).json({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to perform this action.',
+          },
+        });
+      }
       return response
         .status(401)
         .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
@@ -112,7 +120,17 @@ export function createApp(config: AppConfig) {
       return response.status(409).json({
         error: { code: 'NOT_IMPLEMENTED', message: 'Company editing is not available yet.' },
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'FORBIDDEN') {
+        return response
+          .status(403)
+          .json({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'You do not have permission to perform this action.',
+            },
+          });
+      }
       return response
         .status(401)
         .json({ error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } });
