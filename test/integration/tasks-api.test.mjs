@@ -63,12 +63,13 @@ describe('tasks API', () => {
     });
     expect((await listed.json()).items.map((item) => item.id)).toContain(task.id);
     const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const tomorrow = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
     );
     const boundaryTasks = [
-      ['Boundary overdue', new Date(now.getTime() - 60_000).toISOString()],
-      ['Boundary today', new Date(now.getTime() + 60_000).toISOString()],
+      ['Boundary overdue', new Date(today.getTime() - 1).toISOString()],
+      ['Boundary today', new Date(today.getTime() + 1).toISOString()],
       ['Boundary upcoming', tomorrow.toISOString()],
     ];
     for (const [title, dueAt] of boundaryTasks) {
