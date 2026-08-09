@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../src/app";
 
@@ -26,5 +26,16 @@ describe("CRM application shell", () => {
     expect(screen.getByRole("heading", { name: "No audit event found" })).toBeInTheDocument();
     await user.selectOptions(screen.getByRole("combobox", { name: "Preview role" }), "viewer");
     expect(screen.queryByRole("button", { name: "Administration" })).not.toBeInTheDocument();
+  });
+
+  it("restores focus to the account trigger after the dialog closes", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const trigger = screen.getByRole("button", { name: /Lina Berg.*owner/ });
+    trigger.focus();
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Account menu" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });
