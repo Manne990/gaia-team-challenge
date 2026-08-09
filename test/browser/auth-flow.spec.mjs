@@ -27,7 +27,13 @@ const waitForHealth = async (url) => {
   throw new Error('Northstar server did not become ready');
 };
 const signOut = async (page) => {
-  await page.getByRole('button', { name: 'Open account menu' }).click();
+  if ((page.viewportSize()?.width ?? 0) <= 720)
+    await page.getByRole('button', { name: 'Open account menu' }).click();
+  else {
+    const profile = page.locator('button.profile');
+    await profile.scrollIntoViewIfNeeded();
+    await profile.click();
+  }
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.getByRole('button', { name: 'Confirm sign out' }).click();
 };
@@ -97,7 +103,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await expect(page.getByRole('button', { name: 'Administration' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-    await expect(page.getByRole('table', { name: 'Companies list' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Company results' })).toBeVisible();
     await navigateTo(page, 'Dashboard');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -160,6 +166,20 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const ownerCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
+    const invalidCompanyOwner = await page.request.post(`${url}/api/companies`, {
+      headers: { cookie: ownerCookieHeader, 'content-type': 'application/json' },
+      data: {
+        name: 'Cross-organization owner must be rejected',
+        lifecycleStatus: 'lead',
+        ownerId: 'usr_outside',
+        tags: [],
+        description: '',
+      },
+    });
+    expect(invalidCompanyOwner.status()).toBe(400);
+    await expect(invalidCompanyOwner.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION', message: 'Company owner must belong to this organization.' },
+    });
     await expect(
       page.request
         .get(`${url}/api/companies/co_outside`, { headers: { cookie: ownerCookieHeader } })
@@ -186,14 +206,27 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     const memberCookieHeader = (await page.context().cookies(url))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join('; ');
-    await expect(
-      page.request
-        .put(`${url}/api/companies/co_acme`, {
-          headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
-          data: { name: 'Allowed member write' },
-        })
-        .then((response) => response.status()),
-    ).resolves.toBe(409);
+    const allowedMemberWrite = await page.request.put(`${url}/api/companies/co_acme`, {
+      headers: { cookie: memberCookieHeader, 'content-type': 'application/json' },
+      data: {
+        name: 'Allowed member write',
+        externalReference: 'REF-co_acme',
+        website: '',
+        phone: '',
+        industry: '',
+        size: '',
+        address: '',
+        lifecycleStatus: 'customer',
+        tags: ['seed'],
+        description: '',
+        version: 1,
+      },
+    });
+    expect(allowedMemberWrite.status()).toBe(200);
+    await expect(allowedMemberWrite.json()).resolves.toMatchObject({
+      name: 'Allowed member write',
+      version: 2,
+    });
     await signOut(page);
     await page.getByLabel('Email').fill('other-owner@outside.test');
     await page.getByLabel('Password').fill('OutsidePass!2026');
