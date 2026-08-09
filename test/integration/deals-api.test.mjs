@@ -25,8 +25,8 @@ describe('deals API', () => {
       environment: 'test',
     }).listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
-    const url = `http://127.0.0.1:${server.address().port}`;
-    const cookie = (
+    let url = `http://127.0.0.1:${server.address().port}`;
+    let cookie = (
       await fetch(`${url}/api/auth/sign-in`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -108,6 +108,23 @@ describe('deals API', () => {
       (await fetch(`${url}/api/deals/${deal.id}/restore`, { method: 'POST', headers: { cookie } }))
         .status,
     ).toBe(204);
+    await new Promise((resolve) => server.close(resolve));
+    server = createApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: environment.databasePath,
+      environment: 'test',
+    }).listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    url = `http://127.0.0.1:${server.address().port}`;
+    cookie = (
+      await fetch(`${url}/api/auth/sign-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'owner@northstar.test', password: 'OwnerPass!2026' }),
+      })
+    ).headers.get('set-cookie');
+    expect((await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie } })).status).toBe(200);
     const viewerCookie = (
       await fetch(`${url}/api/auth/sign-in`, {
         method: 'POST',
