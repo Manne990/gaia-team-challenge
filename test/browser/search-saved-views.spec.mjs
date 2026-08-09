@@ -162,6 +162,23 @@ test('task and deal saved views restore pagination, and a selected task respects
     ).toBeVisible();
     await taskSaved.getByRole('button', { name: 'Task ordered page', exact: true }).click();
     await expect(page).toHaveURL(/sort=createdAt&direction=desc&page=2/);
+    expect(
+      await page.evaluate(async () =>
+        fetch('/api/saved-views', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            resource: 'tasks',
+            name: 'Stale task due',
+            filters: { due: 'obsolete' },
+          }),
+        }).then((response) => response.status),
+      ),
+    ).toBe(201);
+    await navigateTo(page, 'Dashboard');
+    await navigateTo(page, 'Tasks');
+    await taskSaved.getByRole('button', { name: 'Stale task due', exact: true }).click();
+    await expect(taskSaved.getByRole('status')).toHaveText('This saved view is no longer valid.');
 
     await navigateTo(page, 'Deals');
     expect(
@@ -209,6 +226,29 @@ test('task and deal saved views restore pagination, and a selected task respects
     await navigateTo(page, 'Deals');
     await dealSaved.getByRole('button', { name: 'Stale deal status', exact: true }).click();
     await expect(dealSaved.getByRole('status')).toHaveText('This saved view is no longer valid.');
+
+    expect(
+      await page.evaluate(async () =>
+        fetch('/api/saved-views', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            resource: 'companies',
+            name: 'Stale lifecycle',
+            filters: { lifecycle: 'obsolete' },
+          }),
+        }).then((response) => response.status),
+      ),
+    ).toBe(201);
+    await navigateTo(page, 'Companies');
+    const companySaved = page.locator('[aria-label="Manage saved views for companies"]');
+    await expect(
+      companySaved.getByRole('button', { name: 'Stale lifecycle', exact: true }),
+    ).toBeVisible();
+    await companySaved.getByRole('button', { name: 'Stale lifecycle', exact: true }).click();
+    await expect(companySaved.getByRole('status')).toHaveText(
+      'This saved view is no longer valid.',
+    );
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

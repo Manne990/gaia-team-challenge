@@ -451,6 +451,11 @@ function Companies({ canWrite }: { canWrite: boolean }) {
         resource="companies"
         filters={{ text, ...filters }}
         onChoose={(view) => {
+          if (
+            view.lifecycle !== undefined &&
+            !['', 'lead', 'prospect', 'customer', 'inactive'].includes(String(view.lifecycle))
+          )
+            throw new Error('Invalid saved company lifecycle');
           const next = {
             lifecycle: typeof view.lifecycle === 'string' ? view.lifecycle : '',
             ownerId: typeof view.ownerId === 'string' ? view.ownerId : '',
@@ -1405,6 +1410,11 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
         resource="tasks"
         filters={{ due, mine, relation, page, sort, direction }}
         onChoose={(view) => {
+          if (
+            view.due !== undefined &&
+            !['', 'overdue', 'today', 'upcoming', 'completed'].includes(String(view.due))
+          )
+            throw new Error('Invalid saved task due state');
           const nextDue = typeof view.due === 'string' ? view.due : '';
           const nextMine = view.mine === true;
           const nextRelation = typeof view.relation === 'string' ? view.relation : '';
