@@ -1279,11 +1279,11 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       const body = await response.json();
       let nextItems = body.items;
       const record = selectedRecordPending.current;
+      selectedRecordPending.current = null;
       if (record && !nextItems.some((item: any) => item.id === record)) {
         const detail = await fetch(`/api/tasks/${encodeURIComponent(record)}`);
         if (detail.ok) nextItems = [await detail.json(), ...nextItems];
       }
-      selectedRecordPending.current = null;
       setItems(nextItems);
       setTotal(body.total);
     }
@@ -1584,11 +1584,11 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     ]).then(async ([list, pipeline]) => {
       let nextDeals = list.items || [];
       const record = selectedRecordPending.current;
+      selectedRecordPending.current = null;
       if (record && !nextDeals.some((deal: any) => deal.id === record)) {
         const detail = await fetch(`/api/deals/${encodeURIComponent(record)}`);
         if (detail.ok) nextDeals = [await detail.json(), ...nextDeals];
       }
-      selectedRecordPending.current = null;
       setDeals(nextDeals);
       setTotal(list.total || 0);
       setStages(pipeline || []);
