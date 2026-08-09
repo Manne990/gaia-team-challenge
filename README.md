@@ -20,3 +20,21 @@ npm run dev -- --host 127.0.0.1 --port 4173
 
 The complete product must run locally without paid services or private secrets.
 Reality, CI, and external acceptance determine completion.
+
+## Local configuration
+
+The app has no required secrets. Copy `.env.example` only if you need to
+override defaults. `HOST` defaults to `127.0.0.1`, `PORT` to `4173`, and
+`CRM_DB_PATH` to `data/northstar.sqlite` relative to the repository root. The
+same values can be supplied as `--host`, `--port`, and `--db-path` flags. The
+database directory is created on demand and is intentionally gitignored.
+
+```bash
+npm ci
+npm run db:reset
+npm run db:seed
+npm run dev -- --host 127.0.0.1 --port 4173
+```
+
+`npm run ci` runs formatting, TypeScript checks, unit tests, and the production
+build. See [the architecture notes](docs/architecture.md) for extension points.
