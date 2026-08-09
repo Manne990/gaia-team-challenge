@@ -967,6 +967,107 @@ function Imports({ canWrite }: { canWrite: boolean }) {
     </section>
   );
 }
+function Tasks({ canWrite }: { canWrite: boolean }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [message, setMessage] = useState('');
+  const load = async () => {
+    const response = await fetch('/api/tasks?sort=dueAt');
+    if (response.ok) setItems((await response.json()).items);
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const action = async (id: string, name: string) => {
+    const response = await fetch(`/api/tasks/${id}/${name}`, { method: 'POST' });
+    if (response.ok) {
+      setMessage(
+        `Task ${name === 'archive' ? 'archived' : name === 'complete' ? 'completed' : 'reopened'}.`,
+      );
+      await load();
+    }
+  };
+  return (
+    <section aria-labelledby="tasks-heading">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Operations · UTC</p>
+          <h1 id="tasks-heading">Tasks</h1>
+        </div>
+      </div>
+      {canWrite && (
+        <form
+          aria-label="Create task"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            const response = await fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                title: form.get('title'),
+                description: form.get('description'),
+                dueAt: form.get('dueAt') ? new Date(String(form.get('dueAt'))).toISOString() : null,
+                priority: form.get('priority'),
+              }),
+            });
+            if (response.ok) {
+              e.currentTarget.reset();
+              setMessage('Task created.');
+              await load();
+            }
+          }}
+        >
+          <h2>Create task</h2>
+          <label>
+            Title
+            <input name="title" required />
+          </label>
+          <label>
+            Description
+            <textarea name="description" />
+          </label>
+          <label>
+            Due time
+            <input name="dueAt" type="datetime-local" />
+          </label>
+          <label>
+            Priority
+            <select name="priority">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <button>Create task</button>
+        </form>
+      )}
+      {message && <p role="status">{message}</p>}
+      <ul aria-label="Task results" className="task-list">
+        {items.map((task) => (
+          <li key={task.id}>
+            <div>
+              <strong>{task.title}</strong>
+              <small>{task.status}</small>
+            </div>
+            {canWrite &&
+              (task.status === 'completed' ? (
+                <button onClick={() => void action(task.id, 'reopen')}>Reopen task</button>
+              ) : (
+                <button onClick={() => void action(task.id, 'complete')}>Complete task</button>
+              ))}
+            {canWrite && (
+              <button
+                onClick={() => void action(task.id, task.archived_at ? 'restore' : 'archive')}
+              >
+                {task.archived_at ? 'Restore task' : 'Archive task'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: boolean }) {
   const [deals, setDeals] = useState<any[]>([]);
@@ -1368,6 +1469,7 @@ function App() {
       dealsContent={
         <Deals canWrite={session.role !== 'viewer'} canConfigure={session.role === 'owner'} />
       }
+      tasksContent={<Tasks canWrite={session.role !== 'viewer'} />}
       onSignOut={async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setSession(null);
