@@ -1238,6 +1238,7 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
   const initialQuery = new URLSearchParams(window.location.search);
   const selectedRecord = initialQuery.get('record');
   const [items, setItems] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('');
   const [due, setDue] = useState(() => initialQuery.get('due') || '');
   const [mine, setMine] = useState(() => initialQuery.get('assigneeId') === 'me');
@@ -1246,8 +1247,24 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     const id = initialQuery.get('relationId');
     return kind && id ? `${kind}:${id}` : '';
   });
-  const load = async (nextDue = due, nextMine = mine, nextRelation = relation) => {
-    const query = new URLSearchParams({ sort: 'dueAt' });
+  const [page, setPage] = useState(() => Math.max(1, Number(initialQuery.get('page')) || 1));
+  const [sort, setSort] = useState(() => initialQuery.get('sort') || 'dueAt');
+  const [direction, setDirection] = useState(() =>
+    initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
+  );
+  const load = async (
+    nextDue = due,
+    nextMine = mine,
+    nextRelation = relation,
+    nextPage = page,
+    nextSort = sort,
+    nextDirection = direction,
+  ) => {
+    const query = new URLSearchParams({
+      sort: nextSort,
+      direction: nextDirection,
+      page: String(nextPage),
+    });
     if (nextDue) query.set('due', nextDue);
     if (nextMine) query.set('assigneeId', 'me');
     if (nextRelation) {
@@ -1257,7 +1274,11 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     }
     window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
     const response = await fetch(`/api/tasks?${query}`);
-    if (response.ok) setItems((await response.json()).items);
+    if (response.ok) {
+      const body = await response.json();
+      setItems(body.items);
+      setTotal(body.total);
+    }
   };
   useEffect(() => {
     void load();
@@ -1341,6 +1362,36 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           />
         </label>
         <button>Apply view</button>
+        <label>
+          Sort{' '}
+          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="dueAt">Due date</option>
+            <option value="createdAt">Created</option>
+            <option value="updatedAt">Updated</option>
+            <option value="priority">Priority</option>
+          </select>
+        </label>
+        <label>
+          Direction{' '}
+          <select value={direction} onChange={(event) => setDirection(event.target.value)}>
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setDue('');
+            setMine(false);
+            setRelation('');
+            setPage(1);
+            setSort('dueAt');
+            setDirection('asc');
+            void load('', false, '', 1, 'dueAt', 'asc');
+          }}
+        >
+          Clear task filters
+        </button>
       </form>
       <SavedViews
         resource="tasks"
@@ -1448,6 +1499,29 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
           </li>
         ))}
       </ul>
+      <nav aria-label="Task pagination">
+        <button
+          disabled={page === 1}
+          onClick={() => {
+            const next = page - 1;
+            setPage(next);
+            void load(due, mine, relation, next);
+          }}
+        >
+          Previous tasks
+        </button>
+        <span>Page {page}</span>
+        <button
+          disabled={page * 25 >= total}
+          onClick={() => {
+            const next = page + 1;
+            setPage(next);
+            void load(due, mine, relation, next);
+          }}
+        >
+          Next tasks
+        </button>
+      </nav>
     </section>
   );
 }
@@ -1464,11 +1538,26 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   const [includeArchived, setIncludeArchived] = useState(
     () => initialQuery.get('includeArchived') === 'true',
   );
-  const load = (stage = stageFilter, status = statusFilter, archived = includeArchived) => {
+  const [page, setPage] = useState(() => Math.max(1, Number(initialQuery.get('page')) || 1));
+  const [sort, setSort] = useState(() => initialQuery.get('sort') || 'updatedAt');
+  const [direction, setDirection] = useState(() =>
+    initialQuery.get('direction') === 'asc' ? 'asc' : 'desc',
+  );
+  const load = (
+    stage = stageFilter,
+    status = statusFilter,
+    archived = includeArchived,
+    nextPage = page,
+    nextSort = sort,
+    nextDirection = direction,
+  ) => {
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
     if (status) query.set('status', status);
     if (archived) query.set('includeArchived', 'true');
+    query.set('page', String(nextPage));
+    query.set('sort', nextSort);
+    query.set('direction', nextDirection);
     window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
     return Promise.all([
       fetch(`/api/deals?${query}`).then((r) => r.json()),
@@ -1622,6 +1711,37 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
           </select>
         </label>
         <button>Apply filters</button>
+        <label>
+          Sort{' '}
+          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="updatedAt">Updated</option>
+            <option value="createdAt">Created</option>
+            <option value="name">Name</option>
+            <option value="amount">Amount</option>
+            <option value="expectedCloseDate">Close date</option>
+          </select>
+        </label>
+        <label>
+          Direction{' '}
+          <select value={direction} onChange={(event) => setDirection(event.target.value)}>
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setStageFilter('');
+            setStatusFilter('');
+            setIncludeArchived(false);
+            setPage(1);
+            setSort('updatedAt');
+            setDirection('desc');
+            void load('', '', false, 1, 'updatedAt', 'desc');
+          }}
+        >
+          Clear deal filters
+        </button>
       </form>
       <SavedViews
         resource="deals"
@@ -1637,6 +1757,29 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
         }}
       />
       <p>{total} active deals</p>
+      <nav aria-label="Deal pagination">
+        <button
+          disabled={page === 1}
+          onClick={() => {
+            const next = page - 1;
+            setPage(next);
+            void load(stageFilter, statusFilter, includeArchived, next);
+          }}
+        >
+          Previous deals
+        </button>
+        <span>Page {page}</span>
+        <button
+          disabled={page * 25 >= total}
+          onClick={() => {
+            const next = page + 1;
+            setPage(next);
+            void load(stageFilter, statusFilter, includeArchived, next);
+          }}
+        >
+          Next deals
+        </button>
+      </nav>
       <div className="pipeline" aria-label="Pipeline view">
         {stages.map((stage) => (
           <section key={stage.id}>
