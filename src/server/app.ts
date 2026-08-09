@@ -2090,6 +2090,18 @@ export function createApp(config: AppConfig) {
     try {
       const s = auth.requireRole(dealSession(request), ['owner', 'member']);
       const d = dealInput.parse(request.body);
+      if (
+        d.ownerId &&
+        !database
+          .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+          .get(s.organizationId, d.ownerId)
+      )
+        return response.status(400).json({
+          error: {
+            code: 'VALIDATION',
+            message: 'The deal owner must belong to this organization.',
+          },
+        });
       const stage = database
         .prepare('SELECT kind FROM pipeline_stages WHERE id = ? AND organization_id = ?')
         .get(d.stageId, s.organizationId);
