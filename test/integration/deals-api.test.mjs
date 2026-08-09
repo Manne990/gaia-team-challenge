@@ -59,6 +59,12 @@ describe('deals API', () => {
     expect(created.status).toBe(201);
     const deal = await created.json();
     expect((await fetch(`${url}/api/deals`, { headers: { cookie } })).status).toBe(200);
+    const filtered = await (
+      await fetch(`${url}/api/deals?stageId=stage_proposal&status=open`, { headers: { cookie } })
+    ).json();
+    expect(
+      filtered.items.every((item) => item.stageId === 'stage_proposal' && item.status === 'open'),
+    ).toBe(true);
     expect((await fetch(`${url}/api/deals/${deal.id}`, { headers: { cookie } })).status).toBe(200);
     const rejected = await fetch(`${url}/api/deals/${deal.id}/transition`, {
       method: 'POST',
