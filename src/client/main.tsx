@@ -90,7 +90,7 @@ function SavedViews({
   };
   return (
     <div aria-label={`Manage saved views for ${resource}`}>
-          <h2>Saved views</h2>
+      <h2>Saved views</h2>
       <label>
         New saved view name
         <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} />
