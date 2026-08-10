@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from "node:fs";
 import { loadConfig } from "../config.js";
-import { openDatabase } from "./database.js";
+import { migrate, openDatabase } from "./database.js";
 import { seedDatabase } from "../../db/seed.js";
 
 const command = process.argv[2];
@@ -16,6 +16,7 @@ if (command === "reset") {
   );
 }
 const database = openDatabase(config.databasePath);
+migrate(database);
 if (command === "seed") seedDatabase(database);
 database.close();
 console.log(

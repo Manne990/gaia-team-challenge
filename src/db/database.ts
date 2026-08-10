@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 
 export type CrmDatabase = Database.Database;
 
-const migrationsDirectory = fileURLToPath(
-  new URL("./migrations", import.meta.url),
-);
+const moduleUrl = new URL(import.meta.url);
+const migrationsDirectory =
+  moduleUrl.protocol === "file:"
+    ? fileURLToPath(new URL("./migrations", moduleUrl))
+    : resolve(process.cwd(), "src/db/migrations");
 
 export function openDatabase(path: string): CrmDatabase {
   if (path !== ":memory:")
