@@ -127,6 +127,8 @@ export function ContactsPage({ role }: { role: ContactRole }) {
   const [detail, setDetail] = useState<Contact | null>(null);
   const [query, setQuery] = useState(initial.q ?? "");
   const [status, setStatus] = useState(initial.status ?? "all");
+  const [sort, setSort] = useState(initial.sort ?? "name");
+  const [order, setOrder] = useState(initial.order === "desc" ? "desc" : "asc");
   const [includeArchived, setIncludeArchived] = useState(
     initial.includeArchived === "true",
   );
@@ -150,6 +152,8 @@ export function ContactsPage({ role }: { role: ContactRole }) {
     });
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
+    params.set("sort", sort);
+    params.set("order", order);
     try {
       setList(await request<ListResponse>(`/api/contacts?${params}`));
     } catch (reason) {
@@ -157,7 +161,7 @@ export function ContactsPage({ role }: { role: ContactRole }) {
     } finally {
       setLoading(false);
     }
-  }, [includeArchived, page, query, status]);
+  }, [includeArchived, order, page, query, sort, status]);
   useEffect(() => {
     // Fetching is the external synchronization owned by this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -167,10 +171,12 @@ export function ContactsPage({ role }: { role: ContactRole }) {
     writeListState("contacts", {
       q: query,
       status,
+      sort,
+      order,
       includeArchived: String(includeArchived),
       page: String(page),
     });
-  }, [includeArchived, page, query, status]);
+  }, [includeArchived, order, page, query, sort, status]);
 
   const openContact = async (id: string) => {
     setSelectedId(id);
@@ -281,12 +287,16 @@ export function ContactsPage({ role }: { role: ContactRole }) {
         state={{
           q: query,
           status,
+          sort,
+          order,
           includeArchived: String(includeArchived),
           page: String(page),
         }}
         onApply={(next) => {
           setQuery(next.q ?? "");
           setStatus(next.status ?? "all");
+          setSort(next.sort ?? "name");
+          setOrder(next.order === "desc" ? "desc" : "asc");
           setIncludeArchived(next.includeArchived === "true");
           setPage(Math.max(1, Number(next.page) || 1));
         }}
@@ -306,6 +316,31 @@ export function ContactsPage({ role }: { role: ContactRole }) {
             />
           </label>
           <label>
+            Sort
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="name">Name</option>
+              <option value="company">Company</option>
+              <option value="status">Status</option>
+              <option value="updated">Updated</option>
+              <option value="created">Created</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setOrder((value) => (value === "asc" ? "desc" : "asc"));
+              setPage(1);
+            }}
+          >
+            Direction: {order}
+          </button>
+          <label>
             <span>Status</span>
             <select
               aria-label="Status"
@@ -321,6 +356,19 @@ export function ContactsPage({ role }: { role: ContactRole }) {
               <option value="unqualified">Unqualified</option>
             </select>
           </label>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setStatus("all");
+              setSort("name");
+              setOrder("asc");
+              setIncludeArchived(false);
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </button>
           <label className="archive-toggle">
             <input
               type="checkbox"

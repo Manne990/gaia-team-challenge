@@ -153,6 +153,8 @@ export function DealsPage({
   const [ownerId, setOwnerId] = useState(initial.ownerId ?? "");
   const [companyId, setCompanyId] = useState(initial.companyId ?? "");
   const [status, setStatus] = useState(initial.status ?? "all");
+  const [sort, setSort] = useState(initial.sort ?? "updated");
+  const [order, setOrder] = useState(initial.order === "asc" ? "asc" : "desc");
   const [includeArchived, setIncludeArchived] = useState(
     initial.includeArchived === "true",
   );
@@ -174,8 +176,8 @@ export function DealsPage({
       page: String(page),
       pageSize: "20",
       includeArchived: String(includeArchived),
-      sort: "expectedCloseDate",
-      order: "asc",
+      sort,
+      order,
     });
     if (query.trim()) p.set("q", query.trim());
     if (stageId !== "all") p.set("stageId", stageId);
@@ -189,7 +191,17 @@ export function DealsPage({
     } finally {
       setLoading(false);
     }
-  }, [companyId, includeArchived, ownerId, page, query, stageId, status]);
+  }, [
+    companyId,
+    includeArchived,
+    order,
+    ownerId,
+    page,
+    query,
+    sort,
+    stageId,
+    status,
+  ]);
   useEffect(() => {
     // Fetching is the external synchronization owned by this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -202,10 +214,22 @@ export function DealsPage({
       ownerId,
       companyId,
       status,
+      sort,
+      order,
       includeArchived: String(includeArchived),
       page: String(page),
     });
-  }, [companyId, includeArchived, ownerId, page, query, stageId, status]);
+  }, [
+    companyId,
+    includeArchived,
+    order,
+    ownerId,
+    page,
+    query,
+    sort,
+    stageId,
+    status,
+  ]);
   const open = async (id: string) => {
     setSelected(null);
     setSaveError(null);
@@ -336,6 +360,8 @@ export function DealsPage({
           ownerId,
           companyId,
           status,
+          sort,
+          order,
           includeArchived: String(includeArchived),
           page: String(page),
         }}
@@ -345,6 +371,8 @@ export function DealsPage({
           setOwnerId(next.ownerId ?? "");
           setCompanyId(next.companyId ?? "");
           setStatus(next.status ?? "all");
+          setSort(next.sort ?? "updated");
+          setOrder(next.order === "asc" ? "asc" : "desc");
           setIncludeArchived(next.includeArchived === "true");
           setPage(Math.max(1, Number(next.page) || 1));
         }}
@@ -363,6 +391,31 @@ export function DealsPage({
               }}
             />
           </label>
+          <label>
+            Sort
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="updated">Updated</option>
+              <option value="name">Name</option>
+              <option value="amount">Amount</option>
+              <option value="close">Close date</option>
+              <option value="stage">Stage</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setOrder((value) => (value === "asc" ? "desc" : "asc"));
+              setPage(1);
+            }}
+          >
+            Direction: {order}
+          </button>
           <label>
             <span>Stage</span>
             <select
@@ -446,6 +499,22 @@ export function DealsPage({
               Pipeline
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setStageId("all");
+              setOwnerId("");
+              setCompanyId("");
+              setStatus("all");
+              setSort("updated");
+              setOrder("desc");
+              setIncludeArchived(false);
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </button>
         </div>
         {!loading && !error && list && (
           <div className="deal-totals" aria-label="Deal totals">

@@ -115,6 +115,10 @@ export function TasksPage({
   const [query, setQuery] = useState(initial.q ?? "");
   const [priority, setPriority] = useState(initial.priority ?? "all");
   const [status, setStatus] = useState(initial.status ?? "all");
+  const [sort, setSort] = useState(initial.sort ?? "due");
+  const [direction, setDirection] = useState(
+    initial.direction === "desc" ? "desc" : "asc",
+  );
   const [includeArchived, setIncludeArchived] = useState(
     initial.archived === "include",
   );
@@ -139,6 +143,8 @@ export function TasksPage({
         view,
         page: String(page),
         pageSize: "25",
+        sort,
+        direction,
       });
       if (query.trim()) params.set("q", query.trim());
       if (priority !== "all") params.set("priority", priority);
@@ -158,7 +164,7 @@ export function TasksPage({
       setState(reason.status === 403 ? "forbidden" : "error");
       setMessage(reason.message);
     }
-  }, [includeArchived, page, priority, query, status, view]);
+  }, [direction, includeArchived, page, priority, query, sort, status, view]);
 
   useEffect(() => {
     // Synchronize the list with the selected server-side view.
@@ -171,10 +177,12 @@ export function TasksPage({
       q: query,
       priority,
       status,
+      sort,
+      direction,
       archived: includeArchived ? "include" : "",
       page: String(page),
     });
-  }, [includeArchived, page, priority, query, status, view]);
+  }, [direction, includeArchived, page, priority, query, sort, status, view]);
 
   const showError = (error: unknown) => {
     const reason = error as ApiError;
@@ -296,6 +304,8 @@ export function TasksPage({
           q: query,
           priority,
           status,
+          sort,
+          direction,
           archived: includeArchived ? "include" : "",
           page: String(page),
         }}
@@ -304,6 +314,8 @@ export function TasksPage({
           setQuery(next.q ?? "");
           setPriority(next.priority ?? "all");
           setStatus(next.status ?? "all");
+          setSort(next.sort ?? "due");
+          setDirection(next.direction === "desc" ? "desc" : "asc");
           setIncludeArchived(next.archived === "include");
           setPage(Math.max(1, Number(next.page) || 1));
         }}
@@ -320,6 +332,30 @@ export function TasksPage({
             }}
           />
         </label>
+        <label>
+          Sort
+          <select
+            value={sort}
+            onChange={(event) => {
+              setSort(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="due">Due date</option>
+            <option value="title">Title</option>
+            <option value="priority">Priority</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setDirection((value) => (value === "asc" ? "desc" : "asc"));
+            setPage(1);
+          }}
+        >
+          Direction: {direction}
+        </button>
         <label>
           View
           <select
@@ -381,6 +417,8 @@ export function TasksPage({
             setQuery("");
             setPriority("all");
             setStatus("all");
+            setSort("due");
+            setDirection("asc");
             setIncludeArchived(false);
             setPage(1);
           }}
