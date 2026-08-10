@@ -217,6 +217,25 @@ describe.sequential("CSV import and export", () => {
     expect(
       (await request(`/api/imports/${formulaBody.import.id}`, outside)).status,
     ).toBe(404);
+
+    const overlong = await request("/api/imports/preview", owner, {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        csv: `Name,Website,Tags\n${"X".repeat(201)},https://example.test,${"t".repeat(51)}`,
+        mapping: { name: "Name", website: "Website", tags: "Tags" },
+      }),
+    });
+    const overlongBody = (await overlong.json()) as {
+      import: { rows: Array<{ status: string; errors: string[] }> };
+    };
+    expect(overlongBody.import.rows[0]).toMatchObject({ status: "error" });
+    expect(overlongBody.import.rows[0]?.errors).toEqual(
+      expect.arrayContaining([
+        "name may not exceed 200 characters.",
+        "tags may not exceed 50 characters each.",
+      ]),
+    );
   });
 
   it("exports stable filtered tenant-only CSV with quoting and formula neutralization", async () => {

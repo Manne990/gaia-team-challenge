@@ -342,6 +342,15 @@ export class ImportExportService {
       : ["firstName", "lastName"])
       if (!normalized[field]) errors.push(`${field} is required.`);
     if (resource === "companies") {
+      validateLength(normalized, errors, "name", 200);
+      validateLength(normalized, errors, "externalReference", 100);
+      validateLength(normalized, errors, "website", 500);
+      validateLength(normalized, errors, "phone", 500);
+      validateLength(normalized, errors, "industry", 500);
+      validateLength(normalized, errors, "size", 500);
+      validateLength(normalized, errors, "address", 1_000);
+      validateLength(normalized, errors, "description", 5_000);
+      validateTags(normalized.tags, errors, 30);
       const lifecycle = normalized.lifecycleStatus || "lead";
       normalized.lifecycleStatus = String(lifecycle).toLowerCase();
       if (
@@ -373,6 +382,12 @@ export class ImportExportService {
           `externalReference duplicates an existing company (${ref}).`,
         );
     } else {
+      validateLength(normalized, errors, "firstName", 100);
+      validateLength(normalized, errors, "lastName", 100);
+      validateLength(normalized, errors, "email", 254);
+      validateLength(normalized, errors, "phone", 50);
+      validateLength(normalized, errors, "jobTitle", 150);
+      validateTags(normalized.tags, errors, 20);
       normalized.status = String(normalized.status || "active").toLowerCase();
       normalized.communicationPreference = String(
         normalized.communicationPreference || "email",
@@ -566,4 +581,26 @@ function addTagFilter(
     clauses.push("EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?)");
     values.push(tag);
   }
+}
+
+function validateLength(
+  normalized: Record<string, string | string[]>,
+  errors: string[],
+  field: string,
+  maximum: number,
+) {
+  if (String(normalized[field] ?? "").length > maximum)
+    errors.push(`${field} may not exceed ${maximum} characters.`);
+}
+
+function validateTags(
+  value: string | string[] | undefined,
+  errors: string[],
+  maximum: number,
+) {
+  const tags = Array.isArray(value) ? value : [];
+  if (tags.length > maximum)
+    errors.push(`tags may not contain more than ${maximum} values.`);
+  if (tags.some((tag) => tag.length > 50))
+    errors.push("tags may not exceed 50 characters each.");
 }
