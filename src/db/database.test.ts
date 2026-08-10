@@ -65,7 +65,7 @@ describe("SQLite database lifecycle", () => {
     expect(() => migrate(database)).not.toThrow();
     expect(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get(),
-    ).toEqual({ count: 6 });
+    ).toEqual({ count: 7 });
     database.close();
   });
 
