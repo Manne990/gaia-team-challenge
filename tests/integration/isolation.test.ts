@@ -1,8 +1,10 @@
+// @vitest-environment node
 import { access } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app.js";
 import { openDatabase } from "../../src/server/database/database.js";
+import { seedDatabase } from "../../src/db/seed.js";
 import {
   createTemporaryDatabase,
   expectRejectedWithoutForeignMutation,
@@ -25,21 +27,14 @@ describe("isolated test resources", () => {
   it("asserts both rejection and unchanged foreign persisted state", async () => {
     const environment = await createTemporaryDatabase();
     const database = openDatabase(environment.databasePath);
-    database.exec(`CREATE TABLE companies (
-      id TEXT PRIMARY KEY,
-      organization_id TEXT NOT NULL,
-      name TEXT NOT NULL
-    ) STRICT`);
-    database
-      .prepare("INSERT INTO companies VALUES (?, ?, ?)")
-      .run("company_outside_001", "org_outside_demo", "Acme Group");
+    seedDatabase(database);
     const app = createApp((application) => {
       application.put("/api/companies/:id", (request, response) => {
         const result = database
           .prepare(
             "UPDATE companies SET name = ? WHERE id = ? AND organization_id = ?",
           )
-          .run(request.body.name, request.params.id, "org_northstar_demo");
+          .run(request.body.name, request.params.id, "org_northstar");
         if (result.changes === 0)
           return response.status(404).json({ error: "not_found" });
         return response.status(200).json({ ok: true });
@@ -55,10 +50,10 @@ describe("isolated test resources", () => {
             .prepare(
               "SELECT id, organization_id, name FROM companies WHERE id = ?",
             )
-            .get("company_outside_001"),
+            .get("company_outside_01"),
         attempt: async () => {
           const response = await fetch(
-            `${url}/api/companies/company_outside_001`,
+            `${url}/api/companies/company_outside_01`,
             {
               method: "PUT",
               headers: { "content-type": "application/json" },
@@ -71,8 +66,8 @@ describe("isolated test resources", () => {
       expect(
         database
           .prepare("SELECT name FROM companies WHERE id = ?")
-          .get("company_outside_001"),
-      ).toEqual({ name: "Acme Group" });
+          .get("company_outside_01"),
+      ).toEqual({ name: "Outside Company" });
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),

@@ -45,7 +45,10 @@ describe("SQLite database lifecycle", () => {
     });
     expect(
       database.prepare("SELECT name FROM schema_migrations").all(),
-    ).toEqual([{ name: "001_initial.sql" }]);
+    ).toEqual([
+      { name: "001_initial.sql" },
+      { name: "002_membership_access_state.sql" },
+    ]);
     expect(database.pragma("foreign_keys", { simple: true })).toBe(1);
     database.close();
   });
@@ -57,7 +60,7 @@ describe("SQLite database lifecycle", () => {
     expect(() => migrate(database)).not.toThrow();
     expect(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get(),
-    ).toEqual({ count: 1 });
+    ).toEqual({ count: 2 });
     database.close();
   });
 
