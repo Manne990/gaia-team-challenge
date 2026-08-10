@@ -5,12 +5,12 @@ import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
-  app.use(express.json({ limit: "1mb" }));
   app.use((_request, response, next) => {
     response.locals.requestId = randomUUID();
     response.setHeader("x-request-id", response.locals.requestId as string);
     next();
   });
+  app.use(express.json({ limit: "1mb" }));
   app.get("/api/health", (_request, response) =>
     response.json({ status: "ok" }),
   );
@@ -21,6 +21,16 @@ export function createApp() {
     };
     response.json(payload);
   });
+  app.use("/api", (_request, response) => {
+    const payload: ErrorResponse = {
+      error: {
+        code: "NOT_FOUND",
+        message: "The requested API endpoint does not exist.",
+        requestId: response.locals.requestId as string,
+      },
+    };
+    response.status(404).json(payload);
+  });
   const errorHandler: ErrorRequestHandler = (
     error,
     _request,
@@ -28,7 +38,11 @@ export function createApp() {
     _next,
   ) => {
     const requestId = response.locals.requestId as string;
-    console.error("Unexpected request failure", { requestId, error });
+    console.error("Unexpected request failure", {
+      requestId,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : "Unknown failure",
+    });
     const payload: ErrorResponse = {
       error: {
         code: "UNEXPECTED_ERROR",
