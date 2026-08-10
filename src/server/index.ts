@@ -4,11 +4,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { openDatabase } from "./database/database.js";
+import { migrate, openDatabase } from "./database/database.js";
 
 async function start() {
   const config = loadConfig();
   const database = openDatabase(config.databasePath);
+  migrate(database);
   const app = createApp();
   if (config.environment === "production") {
     const clientDirectory = resolve(
