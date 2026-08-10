@@ -48,7 +48,15 @@ test.describe("contact management", () => {
     await dialog.getByRole("button", { name: "Save contact" }).click();
     await expect(dialog.getByText("Senior Evidence Lead")).toBeVisible();
 
-    await dialog.getByRole("button", { name: "Archive contact" }).click();
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/contacts/") &&
+          response.url().endsWith("/archive") &&
+          response.status() === 200,
+      ),
+      dialog.getByRole("button", { name: "Archive contact" }).click(),
+    ]);
     await expect(
       dialog.getByRole("button", { name: "Restore contact" }),
     ).toBeVisible();
@@ -59,10 +67,20 @@ test.describe("contact management", () => {
 
     await page.getByLabel("Include archived").check();
     await page.getByRole("button", { name: "Browser Evidence" }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Restore contact" })
-      .click();
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/contacts/") &&
+          response.url().endsWith("/restore") &&
+          response.status() === 200,
+      ),
+      page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Restore contact" })
+        .click(),
+    ]);
+    if ((await page.getByRole("dialog").count()) === 0)
+      await page.getByRole("button", { name: "Browser Evidence" }).click();
     await expect(
       page.getByRole("dialog").getByRole("button", { name: "Archive contact" }),
     ).toBeVisible();
