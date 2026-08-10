@@ -13,7 +13,7 @@ export default defineConfig({
     // files serially so CPU and filesystem contention cannot turn the 5s
     // behavioral timeout into a machine-dependent failure.
     fileParallelism: false,
-    sequence: { concurrent: true },
+    sequence: { concurrent: false },
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
