@@ -83,6 +83,13 @@ describe.sequential("company API", () => {
       [...body.items.map((company) => company.name)].sort(),
     );
     expect(JSON.stringify(body)).not.toContain("Outside Company");
+
+    const mixedCaseTag = await companyRequest(
+      cookie,
+      "?pageSize=100&tag=Priority",
+    );
+    expect(mixedCaseTag.status).toBe(200);
+    expect(await mixedCaseTag.json()).toMatchObject({ total: 18 });
   });
 
   it("creates updates archives and restores complete companies with safe history and conflicts", async () => {
@@ -148,6 +155,25 @@ describe.sequential("company API", () => {
     };
     expect(updated.company.version).toBe(2);
     expect(updated.history).toHaveLength(2);
+
+    const missingVersion = await companyRequest(
+      cookie,
+      `/${created.company.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(completeCompany),
+      },
+    );
+    expect(missingVersion.status).toBe(400);
+    expect(await missingVersion.json()).toMatchObject({
+      code: "VALIDATION_ERROR",
+      issues: [expect.stringContaining("version is required")],
+    });
+    expect(
+      database
+        .prepare("SELECT version FROM companies WHERE id = ?")
+        .get(created.company.id),
+    ).toEqual({ version: 2 });
 
     const stale = await companyRequest(cookie, `/${created.company.id}`, {
       method: "PUT",

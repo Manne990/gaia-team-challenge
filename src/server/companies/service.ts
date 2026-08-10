@@ -143,7 +143,7 @@ export class CompanyService {
       const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`;
       params.push(pattern, pattern, pattern);
     }
-    const tag = query.get("tag")?.trim();
+    const tag = query.get("tag")?.trim().toLowerCase();
     if (tag) {
       clauses.push(
         "EXISTS (SELECT 1 FROM json_each(c.tags_json) WHERE value = ?)",
@@ -292,7 +292,15 @@ export class CompanyService {
   }
 
   update(identity: SessionIdentity, id: string, value: unknown) {
+    const visible = this.db
+      .prepare("SELECT 1 FROM companies WHERE organization_id = ? AND id = ?")
+      .get(identity.organizationId, id);
+    if (!visible) throw new CompanyNotFoundError("Company not found.");
     const input = parseInput(value);
+    if (input.version === undefined)
+      throw new CompanyValidationError([
+        "Company version is required. Refresh and try again.",
+      ]);
     this.assertOwner(identity, input.ownerMembershipId);
     const timestamp = this.now().toISOString();
     try {
@@ -309,7 +317,7 @@ export class CompanyService {
             throw new CompanyConflictError(
               "Restore this company before editing it.",
             );
-          if (input.version !== undefined && input.version !== current.version)
+          if (input.version !== current.version)
             throw new CompanyVersionConflictError(
               "This company changed since you opened it. Refresh and try again.",
             );
