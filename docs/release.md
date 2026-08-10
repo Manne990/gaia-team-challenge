@@ -42,18 +42,18 @@ All workspace routes require a live session. Anonymous or expired requests see
 the sign-in/expired-session state. Owner, member, viewer, and outside-owner
 sessions are always scoped to their own organization.
 
-| Hash route                | Owner         | Member        | Viewer | Outside owner | Mutation policy     |
-| ------------------------- | ------------- | ------------- | ------ | ------------- | ------------------- |
-| `#dashboard`              | read          | read          | read   | own org       | none                |
-| `#companies`, `#contacts` | CRUD          | CRUD          | read   | own org       | member+             |
-| `#activities`             | CRU           | CRU           | read   | own org       | member+             |
-| `#deals`, `#deals/:id`    | CRUD          | CRUD          | read   | own org       | member+             |
-| `#tasks`, `#tasks/:id`    | CRUD          | CRUD          | read   | own org       | member+             |
-| `#notifications`          | own           | own           | own    | own org       | personal read state |
-| `#imports`                | import/export | import/export | export | own org       | imports member+     |
-| `#duplicates`             | review/merge  | review/merge  | read   | own org       | merge member+       |
-| `#audit`                  | read          | hidden        | hidden | own org       | owner only          |
-| `#administration`         | manage        | hidden        | hidden | own org       | owner only          |
+| Hash route                | Owner         | Member        | Viewer | Outside owner | Mutation policy             |
+| ------------------------- | ------------- | ------------- | ------ | ------------- | --------------------------- |
+| `#dashboard`              | read          | read          | read   | own org       | none                        |
+| `#companies`, `#contacts` | CRUD          | CRUD          | read   | own org       | member+                     |
+| `#activities`             | CRUD          | CRUD          | read   | own org       | creator 24h; owner recovery |
+| `#deals`, `#deals/:id`    | CRUD          | CRUD          | read   | own org       | member+                     |
+| `#tasks`, `#tasks/:id`    | CRUD          | CRUD          | read   | own org       | member+                     |
+| `#notifications`          | own           | own           | own    | own org       | personal read state         |
+| `#imports`                | import/export | import/export | export | own org       | imports member+             |
+| `#duplicates`             | review/merge  | review/merge  | read   | own org       | merge member+               |
+| `#audit`                  | read          | hidden        | hidden | own org       | owner only                  |
+| `#administration`         | manage        | hidden        | hidden | own org       | owner only                  |
 
 The global search and personal saved-view controls are available within the
 authenticated shell. Search results, saved views, dashboard aggregates,

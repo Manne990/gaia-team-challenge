@@ -318,6 +318,26 @@ describe("authorization and tenant isolation", () => {
 });
 
 describe("authentication HTTP boundary", () => {
+  it("supports a console-clean optional anonymous session probe", async () => {
+    const server = createApp(db).listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => server.once("listening", resolve));
+    try {
+      const address = server.address();
+      assert(address && typeof address === "object");
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/auth/session?optional=1`,
+      );
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        code: "UNAUTHENTICATED",
+        error: "Authentication required.",
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
   it("sets an HTTP-only cookie and revokes it through logout", async () => {
     const server = createApp(db).listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));

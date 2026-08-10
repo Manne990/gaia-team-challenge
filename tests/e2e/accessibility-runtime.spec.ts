@@ -47,6 +47,20 @@ async function expectNoHorizontalScroll(
 }
 
 test.describe("browser accessibility and runtime health", () => {
+  test("renders the anonymous sign-in state without console errors", async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { name: "Welcome back", exact: true }),
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   for (const viewport of viewports) {
     test(`has no page-level horizontal scrolling at ${viewport.width}x${viewport.height}`, async ({
       page,

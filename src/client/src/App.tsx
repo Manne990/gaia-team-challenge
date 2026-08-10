@@ -43,13 +43,13 @@ export function App() {
   const [state, setState] = useState<AppState>({ kind: "loading" });
   const loadSession = useCallback(() => {
     const controller = new AbortController();
-    fetch("/api/auth/session", { signal: controller.signal })
+    fetch("/api/auth/session?optional=1", { signal: controller.signal })
       .then(async (response) => {
         const body = (await response.json()) as {
           code?: string;
           user?: SessionUser;
         };
-        if (response.status === 401) {
+        if (response.status === 401 || (!body.user && response.ok)) {
           setState({
             kind: "signed-out",
             expired: body.code === "SESSION_EXPIRED",

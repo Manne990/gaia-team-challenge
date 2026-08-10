@@ -1,10 +1,11 @@
 # Activity edit policy
 
 Activities are immutable records of who created them and when they were first
-recorded. Members may correct activities they created for 24 hours; owners may
-correct any activity later for administrative recovery. Edits require the
+recorded. Members may correct or delete activities they created for 24 hours;
+owners may correct or delete any activity later for administrative recovery. Edits require the
 visible record version, preserve creator and creation facts, append an audit
-event, and never edit audit history. Viewers have read-only access.
+event, and never edit audit history. Deletion appends a safe audit event before
+removing the activity and its participant links. Viewers have read-only access.
 
 Display labels captured with the activity remain safe and intelligible if a
 creator is removed or a related record is renamed or archived. Links retain

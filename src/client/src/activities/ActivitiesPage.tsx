@@ -217,7 +217,15 @@ export function ActivitiesPage({ role }: { role: UserRole }) {
         />
       )}
       {selected && (
-        <ActivityDialog activity={selected} onClose={() => setSelected(null)} />
+        <ActivityDialog
+          activity={selected}
+          role={role}
+          onClose={() => setSelected(null)}
+          onDeleted={() => {
+            setSelected(null);
+            void load();
+          }}
+        />
       )}
     </section>
   );
@@ -381,18 +389,50 @@ function ActivityComposer({
 }
 function ActivityDialog({
   activity,
+  role,
   onClose,
+  onDeleted,
 }: {
   activity: Activity;
+  role: UserRole;
   onClose: () => void;
+  onDeleted: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [message, setMessage] = useState("");
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
   const close = () => {
     dialog.current?.close();
     onClose();
+  };
+  const remove = async () => {
+    if (!window.confirm(`Delete activity “${activity.subject}”?`)) return;
+    setDeleting(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/activities/${activity.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          message?: string;
+        };
+        throw new Error(body.message || "The activity could not be deleted.");
+      }
+      dialog.current?.close();
+      onDeleted();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The activity could not be deleted.",
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
   return (
     <dialog
@@ -419,7 +459,22 @@ function ActivityDialog({
             </>
           )}
         </dl>
-        <button onClick={close}>Close</button>
+        {message && <p role="alert">{message}</p>}
+        <div className="dialog-actions">
+          {role !== "viewer" && (
+            <button
+              type="button"
+              className="button-danger"
+              disabled={deleting}
+              onClick={() => void remove()}
+            >
+              {deleting ? "Deleting…" : "Delete activity"}
+            </button>
+          )}
+          <button type="button" onClick={close} disabled={deleting}>
+            Close
+          </button>
+        </div>
       </article>
     </dialog>
   );
