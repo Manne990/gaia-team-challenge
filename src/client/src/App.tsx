@@ -14,6 +14,7 @@ import { DashboardPage } from "./shell/DashboardPage";
 import { ContactsPage } from "./contacts/ContactsPage";
 import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
+import { CompaniesPage } from "./companies/CompaniesPage";
 
 interface SessionUser {
   id: string;
@@ -30,9 +31,6 @@ type AppState =
 
 export function App() {
   const [state, setState] = useState<AppState>({ kind: "loading" });
-  const [route, setRoute] = useState(
-    () => window.location.hash || "#dashboard",
-  );
   const loadSession = useCallback(() => {
     const controller = new AbortController();
     fetch("/api/auth/session", { signal: controller.signal })
@@ -59,11 +57,6 @@ export function App() {
   }, []);
 
   useEffect(() => loadSession(), [loadSession]);
-  useEffect(() => {
-    const updateRoute = () => setRoute(window.location.hash || "#dashboard");
-    window.addEventListener("hashchange", updateRoute);
-    return () => window.removeEventListener("hashchange", updateRoute);
-  }, []);
 
   if (state.kind === "loading") {
     return <StatePanel kind="loading" title="Loading your workspace" />;
@@ -97,13 +90,21 @@ export function App() {
         />
       }
     >
-      {route === "#contacts" ? (
-        <ContactsPage role={state.user.role} />
-      ) : (
-        <DashboardPage userName={state.user.displayName} />
-      )}
+      <WorkspacePage user={state.user} />
     </AppShell>
   );
+}
+
+function WorkspacePage({ user }: { user: SessionUser }) {
+  const [hash, setHash] = useState(() => window.location.hash || "#dashboard");
+  useEffect(() => {
+    const onHashChange = () => setHash(window.location.hash || "#dashboard");
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+  if (hash === "#companies") return <CompaniesPage role={user.role} />;
+  if (hash === "#contacts") return <ContactsPage role={user.role} />;
+  return <DashboardPage userName={user.displayName} />;
 }
 
 interface ErrorBoundaryState {

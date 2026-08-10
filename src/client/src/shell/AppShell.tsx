@@ -37,10 +37,9 @@ export function AppShell({
   }, [menuOpen]);
 
   useEffect(() => {
-    const updateActiveHref = () =>
-      setActiveHref(window.location.hash || "#dashboard");
-    window.addEventListener("hashchange", updateActiveHref);
-    return () => window.removeEventListener("hashchange", updateActiveHref);
+    const syncHash = () => setActiveHref(window.location.hash || "#dashboard");
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
   }, []);
 
   function closeMenu() {
