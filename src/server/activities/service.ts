@@ -210,6 +210,30 @@ export class ActivitiesService {
     this.db
       .transaction(() => {
         const labels = this.validateRelations(identity, input);
+        const companyLabel =
+          (input.companyId ?? null) === current.companyId
+            ? current.companyLabel
+            : labels.company;
+        const contactLabel =
+          (input.contactId ?? null) === current.contactId
+            ? current.contactLabel
+            : labels.contact;
+        const dealLabel =
+          (input.dealId ?? null) === current.dealId
+            ? current.dealLabel
+            : labels.deal;
+        const participantLabels = new Map(
+          (
+            this.db
+              .prepare(
+                "SELECT contact_id AS contactId, contact_label AS contactLabel FROM activity_participants WHERE organization_id=? AND activity_id=?",
+              )
+              .all(identity.organizationId, id) as Array<{
+              contactId: string;
+              contactLabel: string | null;
+            }>
+          ).map(({ contactId, contactLabel }) => [contactId, contactLabel]),
+        );
         const result = this.db
           .prepare(
             `UPDATE activities SET company_id=?, contact_id=?, deal_id=?, type=?, subject=?, body=?, occurred_at=?, company_label=?, contact_label=?, deal_label=?, updated_at=?, version=version+1 WHERE organization_id=? AND id=? AND version=?`,
@@ -222,9 +246,9 @@ export class ActivitiesService {
             input.subject,
             input.body,
             input.occurredAt,
-            labels.company,
-            labels.contact,
-            labels.deal,
+            companyLabel,
+            contactLabel,
+            dealLabel,
             timestamp,
             identity.organizationId,
             id,
@@ -247,12 +271,13 @@ export class ActivitiesService {
             identity.organizationId,
             id,
             contactId,
-            this.relationLabel(
-              identity,
-              "contacts",
-              contactId,
-              "trim(first_name||' '||last_name)",
-            ),
+            participantLabels.get(contactId) ??
+              this.relationLabel(
+                identity,
+                "contacts",
+                contactId,
+                "trim(first_name||' '||last_name)",
+              ),
           );
         this.audit(identity, "activity.updated", id, {
           version: input.version + 1,

@@ -192,6 +192,26 @@ describe.sequential("activity timeline HTTP boundary", () => {
         "UPDATE companies SET name='Renamed company', archived_at='2026-08-10T12:00:00.000Z' WHERE id='company_northstar_01'",
       )
       .run();
+    database
+      .prepare(
+        "UPDATE contacts SET first_name='Renamed' WHERE id='contact_northstar_02'",
+      )
+      .run();
+    const corrected = await request(`/api/activities/${activity.id}`, member, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...input,
+        followUp: undefined,
+        subject: "Corrected without changing relationships",
+        version: activity.version,
+      }),
+    });
+    expect(corrected.status).toBe(200);
+    const correctedActivity = (await corrected.json()) as { activity: any };
+    expect(correctedActivity.activity.companyLabel).not.toBe("Renamed company");
+    expect(correctedActivity.activity.participants[0].label).not.toContain(
+      "Renamed",
+    );
     await new Promise<void>((r) => server.close(() => r()));
     database.close();
     database = openDatabase(databasePath);
