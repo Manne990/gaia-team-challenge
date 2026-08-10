@@ -1766,7 +1766,14 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     () => initialQuery.get('includeArchived') === 'true',
   );
   const [page, setPage] = useState(() => Math.max(1, Number(initialQuery.get('page')) || 1));
-  const [sort, setSort] = useState(() => initialQuery.get('sort') || 'updatedAt');
+  const [sort, setSort] = useState(() => {
+    const candidate = initialQuery.get('sort');
+    return ['updatedAt', 'createdAt', 'name', 'amount', 'expectedCloseDate'].includes(
+      candidate || '',
+    )
+      ? candidate!
+      : 'updatedAt';
+  });
   const [direction, setDirection] = useState(() =>
     initialQuery.get('direction') === 'asc' ? 'asc' : 'desc',
   );
