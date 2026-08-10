@@ -595,7 +595,7 @@ export function createApp(config: AppConfig) {
         session.userId,
         'authentication.signed_out',
         'session',
-        session.sessionId,
+        session.userId,
         '{}',
         new Date().toISOString(),
       );
