@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { openDatabase } from '../../src/db/database.mjs';
 
 const freePort = () =>
@@ -40,6 +41,18 @@ const navigateTo = async (page, destination) => {
 test('actual product signs in by keyboard, rejects invalid credentials, restores session, and logs out', async ({
   page,
 }) => {
+  const runtimeErrors = [];
+  page.on('pageerror', (error) => {
+    if (!/websocket|\[vite\]/i.test(error.message)) runtimeErrors.push(error.message);
+  });
+  page.on('console', (message) => {
+    if (
+      message.type() === 'error' &&
+      !message.text().includes('401 (Unauthorized)') &&
+      !/websocket|\[vite\]/i.test(message.text())
+    )
+      runtimeErrors.push(message.text());
+  });
   const directory = mkdtempSync(join(tmpdir(), 'northstar-auth-browser-'));
   const databasePath = join(directory, 'crm.sqlite');
   const port = await freePort();
@@ -91,6 +104,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(
       await page.locator('html').evaluate((element) => element.scrollWidth === element.clientWidth),
     ).toBe(true);
@@ -272,6 +286,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(404);
+    expect(runtimeErrors).toEqual([]);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

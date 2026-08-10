@@ -53,8 +53,14 @@ test('owner reads notification inbox', async ({ page }) => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.getByRole('button', { name: 'Notifications' }).click();
     await expect(page.getByRole('region', { name: 'Notifications' })).toBeVisible();
-    await page.getByRole('button', { name: 'Mark all read' }).click();
-    await expect(page.getByText('No unread notifications.')).toBeVisible();
+    const notification = page
+      .getByRole('region', { name: 'Notifications' })
+      .getByRole('listitem')
+      .first()
+      .getByRole('button');
+    await expect(notification).toBeVisible();
+    await notification.click();
+    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
