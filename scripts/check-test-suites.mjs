@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
 
 const roots = ["tests/unit", "tests/integration", "tests/e2e"];
-const forbidden = /\b(?:describe|it|test)\s*\.\s*(?:only|skip|todo|fixme)\b|\b(?:xit|xdescribe)\s*\(/;
+const forbidden = /\b(?:describe|it|test)(?:\s*\.\s*\w+)*\s*\.\s*(?:only|skip|skipIf|runIf|todo|fixme)\b|\b(?:xit|xdescribe)\s*\(/;
 let testFiles = 0;
 
 async function scan(directory) {

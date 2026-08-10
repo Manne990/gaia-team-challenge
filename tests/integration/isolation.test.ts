@@ -20,4 +20,12 @@ describe("isolated test resources", () => {
     });
     expect(foreignRows).toEqual([{ id: "company_outside_001", name: "Acme Group" }]);
   });
+
+  it("detects a disclosing authorization response even when state is unchanged", async () => {
+    await expect(expectRejectedWithoutForeignMutation({
+      readForeignState: async () => [{ id: "company_outside_001" }],
+      attempt: async () => ({ status: 403, body: { error: "belongs_to_another_organization" } }),
+      expectedStatus: 403,
+    })).rejects.toThrow("disclosed an unexpected response");
+  });
 });
