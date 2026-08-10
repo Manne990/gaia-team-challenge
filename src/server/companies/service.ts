@@ -221,7 +221,12 @@ export class CompanyService {
         .all(...args),
       activities: this.db
         .prepare(
-          "SELECT id, type, subject, body, occurred_at AS occurredAt FROM activities WHERE organization_id = ? AND company_id = ? ORDER BY occurred_at DESC, id",
+          `SELECT id, type, subject, body, occurred_at AS occurredAt,
+            COALESCE(creator_label, 'Former team member') AS creatorLabel,
+            company_label AS companyLabel, contact_label AS contactLabel,
+            follow_up_task_id AS followUpTaskId
+          FROM activities WHERE organization_id = ? AND company_id = ?
+          ORDER BY occurred_at DESC, created_at DESC, id DESC`,
         )
         .all(...args),
       deals: this.db

@@ -38,9 +38,11 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
+.timeline{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.timeline-card{width:100%;display:grid;gap:.3rem;text-align:left;color:var(--ink);background:var(--surface);border:1px solid var(--line);padding:1rem}.timeline-card:hover{background:var(--green-soft)}.activity-type{color:var(--green-dark);font-size:.75rem;font-weight:800;text-transform:uppercase}.filter-bar{display:flex;align-items:end;gap:.75rem;flex-wrap:wrap}.filter-bar label,.form-grid label{display:grid;gap:.3rem}.filter-bar input,.filter-bar select,.form-grid input,.form-grid select,.form-grid textarea{border:1px solid var(--line);border-radius:.35rem;padding:.55rem;background:white}.pagination{display:flex;align-items:center;justify-content:space-between;gap:1rem}.form-grid{display:grid;gap:1rem}.form-grid fieldset{display:grid;gap:.75rem;border:1px solid var(--line)}
 button {
   border: 0;
   border-radius: 0.45rem;

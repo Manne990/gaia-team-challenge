@@ -159,9 +159,16 @@ export class ContactsService {
       : null;
     const activities = this.db
       .prepare(
-        "SELECT id, type, subject, body, occurred_at AS occurredAt FROM activities WHERE organization_id = ? AND contact_id = ? ORDER BY occurred_at DESC, id LIMIT 50",
+        `SELECT a.id, a.type, a.subject, a.body, a.occurred_at AS occurredAt,
+          COALESCE(a.creator_label, 'Former team member') AS creatorLabel,
+          a.company_label AS companyLabel, a.contact_label AS contactLabel,
+          a.follow_up_task_id AS followUpTaskId
+        FROM activities a WHERE a.organization_id = ? AND
+          (a.contact_id = ? OR EXISTS (SELECT 1 FROM activity_participants ap
+            WHERE ap.organization_id = a.organization_id AND ap.activity_id = a.id AND ap.contact_id = ?))
+        ORDER BY a.occurred_at DESC, a.created_at DESC, a.id DESC LIMIT 50`,
       )
-      .all(...parameters);
+      .all(...parameters, id);
     const deals = this.db
       .prepare(
         `SELECT d.id, d.name, d.amount_minor AS amountMinor, d.currency, d.status
