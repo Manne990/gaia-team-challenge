@@ -6,6 +6,7 @@ import { AuthService, createAuthHttpHandler } from "./auth/index.js";
 import { registerContactRoutes } from "./contacts/index.js";
 import { CompanyService, createCompanyHttpHandler } from "./companies/index.js";
 import { registerDealRoutes } from "./deals/index.js";
+import { createTaskHttpHandler, TaskService } from "./tasks/index.js";
 
 export function createApp(
   databaseOrRoutes?: Database.Database | ((app: Express) => void),
@@ -28,12 +29,16 @@ export function createApp(
       auth,
       new CompanyService(database),
     );
+    const taskHandler = createTaskHttpHandler(auth, new TaskService(database));
     app.use((request, response, next) => {
       void authHandler(request, response)
         .then((handled) => {
           if (handled) return;
           return companyHandler(request, response).then((companyHandled) => {
-            if (!companyHandled) next();
+            if (companyHandled) return;
+            return taskHandler(request, response).then((taskHandled) => {
+              if (!taskHandled) next();
+            });
           });
         })
         .catch(next);
