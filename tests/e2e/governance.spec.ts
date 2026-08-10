@@ -16,7 +16,15 @@ test("owner administers access and reviews correlated audit history", async ({
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.getByLabel("Name", { exact: true }).fill("Northstar Revenue");
+  const organizationSaved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/admin/organization") &&
+      response.request().method() === "PATCH" &&
+      response.ok(),
+  );
   await page.getByRole("button", { name: "Save name" }).click();
+  await organizationSaved;
+  await expect(page.getByRole("button", { name: "Save name" })).toBeEnabled();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Northstar Revenue",
   );
@@ -26,7 +34,14 @@ test("owner administers access and reviews correlated audit history", async ({
     .fill("browser.admin@northstar.test");
   await page.getByLabel("Display name").fill("Browser Member");
   await page.getByLabel("Temporary password").fill("BrowserPass!2026");
+  const memberCreated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/admin/members") &&
+      response.request().method() === "POST" &&
+      response.ok(),
+  );
   await page.getByRole("button", { name: "Add member" }).click();
+  await memberCreated;
   await expect(
     page.getByRole("cell", { name: "Browser Member", exact: true }),
   ).toBeVisible();

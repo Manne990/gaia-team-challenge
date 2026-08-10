@@ -95,7 +95,10 @@ describe.sequential("search controls", () => {
           items: [{ ...view, id: "bad", state: null }, view],
         }),
       })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ view }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ view: { ...view, id: "v2", name: "New view" } }),
+      })
       .mockResolvedValueOnce({ ok: true, status: 204, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);
     render(
@@ -127,7 +130,7 @@ describe.sequential("search controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/saved-views/v1",
+        "/api/saved-views/v2",
         expect.objectContaining({ method: "DELETE" }),
       ),
     );
