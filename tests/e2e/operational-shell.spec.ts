@@ -7,6 +7,7 @@ const ownerNavigation = [
   "Activities",
   "Deals",
   "Tasks",
+  "Notifications",
   "Imports",
   "Audit",
   "Administration",
@@ -17,6 +18,11 @@ async function expectOwnerShell(
   checkOverflow = true,
 ) {
   await page.goto("/");
+  await expect(
+    page.getByRole("heading", {
+      name: /Welcome back|Good morning, Northstar/,
+    }),
+  ).toBeVisible();
   if (await page.getByRole("heading", { name: "Welcome back" }).isVisible()) {
     await page.getByLabel("Email address").fill("owner@northstar.test");
     await page.getByLabel("Password").fill("OwnerPass!2026");

@@ -19,6 +19,7 @@ import { CompaniesPage } from "./companies/CompaniesPage";
 import { TasksPage } from "./tasks/TasksPage";
 import { ActivitiesPage } from "./activities/ActivitiesPage";
 import { ImportsPage } from "./imports/ImportsPage";
+import { NotificationsPage } from "./notifications/NotificationsPage";
 
 interface SessionUser {
   id: string;
@@ -108,8 +109,21 @@ function WorkspacePage({ user }: { user: SessionUser }) {
   }, []);
   if (hash === "#companies") return <CompaniesPage role={user.role} />;
   if (hash === "#contacts") return <ContactsPage role={user.role} />;
-  if (hash === "#deals") return <DealsPage role={user.role} />;
-  if (hash === "#tasks") return <TasksPage role={user.role} />;
+  if (hash === "#deals" || hash.startsWith("#deals/"))
+    return (
+      <DealsPage
+        role={user.role}
+        initialDealId={hash.startsWith("#deals/") ? hash.slice(7) : undefined}
+      />
+    );
+  if (hash === "#tasks" || hash.startsWith("#tasks/"))
+    return (
+      <TasksPage
+        role={user.role}
+        initialTaskId={hash.startsWith("#tasks/") ? hash.slice(7) : undefined}
+      />
+    );
+  if (hash === "#notifications") return <NotificationsPage />;
   if (hash === "#activities") return <ActivitiesPage role={user.role} />;
   if (hash === "#imports") return <ImportsPage role={user.role} />;
   return <DashboardPage userName={user.displayName} />;

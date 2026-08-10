@@ -353,7 +353,9 @@ export class DealsService {
         this.audit(identity, "deal.transitioned", id, {
           fromStageId: current.stageId,
           toStageId: input.stageId,
+          toStageName: stage.name,
           status,
+          recipientMembershipId: current.ownerMembershipId,
         });
       })
       .immediate();
