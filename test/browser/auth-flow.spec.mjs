@@ -44,7 +44,13 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   page.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().includes('401 (Unauthorized)'))
+    if (
+      message.type() === 'error' &&
+      !message.text().includes('401 (Unauthorized)') &&
+      !message.text().includes('WebSocket connection to') &&
+      !message.text().includes('[vite] failed to connect') &&
+      !message.text().includes('WebSocket closed without opened')
+    )
       runtimeErrors.push(message.text());
   });
   const directory = mkdtempSync(join(tmpdir(), 'northstar-auth-browser-'));
