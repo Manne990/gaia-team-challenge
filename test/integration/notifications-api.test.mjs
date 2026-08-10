@@ -40,6 +40,31 @@ describe('notifications API', () => {
         })
       ).headers.get('set-cookie');
     const owner = await signIn('owner@northstar.test', 'OwnerPass!2026');
+    const member = await signIn('member@northstar.test', 'MemberPass!2026');
+    const assigned = await fetch(`${url}/api/tasks`, {
+      method: 'POST',
+      headers: { cookie: owner, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Assigned notification regression',
+        description: '',
+        assigneeId: 'usr_member',
+        priority: 'medium',
+        status: 'open',
+      }),
+    });
+    expect(assigned.status).toBe(201);
+    const assignedTask = await assigned.json();
+    const memberNotifications = await fetch(`${url}/api/notifications?unread=true`, {
+      headers: { cookie: member },
+    });
+    expect((await memberNotifications.json()).items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'task_assigned',
+          payloadJson: expect.stringContaining(assignedTask.id),
+        }),
+      ]),
+    );
     const first = await fetch(`${url}/api/notifications?unread=true`, {
       headers: { cookie: owner },
     });

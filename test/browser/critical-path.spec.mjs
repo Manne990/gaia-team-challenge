@@ -22,6 +22,10 @@ test('browser test exercises the root CRM application and its health boundary ac
     env: { ...process.env, PORT: String(port), HOST: '127.0.0.1' },
   });
   const url = `http://127.0.0.1:${port}`;
+  const consoleErrors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
   try {
     await expect
       .poll(async () => {
@@ -34,6 +38,7 @@ test('browser test exercises the root CRM application and its health boundary ac
       .toBe(200);
     await page.goto(url);
     await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+    expect(consoleErrors).toEqual([]);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   } finally {
     child.kill('SIGTERM');
