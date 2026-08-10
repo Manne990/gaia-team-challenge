@@ -26,7 +26,7 @@ export const companyInput = z.object({
   size: optionalText,
   address: z.string().trim().max(1000).optional().nullable(),
   lifecycleStatus: lifecycle,
-  ownerMembershipId: z.string().trim().min(1).optional().nullable(),
+  ownerMembershipId: z.string().trim().min(1),
   tags: z
     .array(z.string().trim().toLowerCase().min(1).max(50))
     .max(30)
