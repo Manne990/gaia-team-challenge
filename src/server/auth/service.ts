@@ -168,7 +168,7 @@ export class AuthService {
       this.db.prepare("UPDATE memberships SET role = ?, updated_at = ?, version = version + 1 WHERE organization_id = ? AND user_id = ?")
         .run(role, iso(this.now()), actor.organizationId, userId);
       if (role === "viewer") this.revokeUserSessions(actor, userId);
-    })();
+    }).immediate();
   }
 
   removeMembership(actor: SessionIdentity, userId: string): void {
@@ -183,7 +183,7 @@ export class AuthService {
         .run(timestamp, actor.organizationId, userId);
       this.db.prepare("UPDATE memberships SET removed_at = ?, updated_at = ?, version = version + 1 WHERE organization_id = ? AND user_id = ?")
         .run(timestamp, timestamp, actor.organizationId, userId);
-    })();
+    }).immediate();
   }
 
   private assertAnotherOwner(organizationId: string, excludedUserId: string): void {
