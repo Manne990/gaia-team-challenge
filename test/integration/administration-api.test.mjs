@@ -67,5 +67,60 @@ describe('administration API', () => {
         ).json()
       ).total,
     ).toBe(0);
+
+    const lastOwnerRoleChange = await fetch(`${url}/api/administration/members/mem_owner`, {
+      method: 'PATCH',
+      headers: { cookie: owner, 'content-type': 'application/json' },
+      body: JSON.stringify({ role: 'member' }),
+    });
+    expect(lastOwnerRoleChange.status).toBe(400);
+    expect((await lastOwnerRoleChange.json()).error.code).toBe('LAST_OWNER');
+    const lastOwnerRemoval = await fetch(`${url}/api/administration/members/mem_owner`, {
+      method: 'DELETE',
+      headers: { cookie: owner },
+    });
+    expect(lastOwnerRemoval.status).toBe(400);
+    expect((await lastOwnerRemoval.json()).error.code).toBe('LAST_OWNER');
+
+    const addedOwner = await fetch(`${url}/api/administration/members`, {
+      method: 'POST',
+      headers: { cookie: owner, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'second-owner@northstar.test',
+        displayName: 'Second Owner',
+        password: 'SecondOwnerPass!2026',
+        role: 'owner',
+      }),
+    });
+    expect(addedOwner.status).toBe(201);
+    const addedOwnerMembership = await addedOwner.json();
+    const secondOwner = await signIn('second-owner@northstar.test', 'SecondOwnerPass!2026');
+    expect(
+      (
+        await fetch(`${url}/api/administration/members/${addedOwnerMembership.id}`, {
+          method: 'DELETE',
+          headers: { cookie: secondOwner },
+        })
+      ).status,
+    ).toBe(204);
+    const revokedSession = await fetch(`${url}/api/administration/members`, {
+      headers: { cookie: secondOwner },
+    });
+    expect(revokedSession.status).toBe(401);
+    expect((await revokedSession.json()).error.code).toBe('UNAUTHENTICATED');
+
+    const staleOwner = await signIn('owner@northstar.test', 'OwnerPass!2026');
+    const testDatabase = openDatabase(environment.databasePath);
+    testDatabase
+      .prepare(
+        "UPDATE sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE user_id = 'usr_owner'",
+      )
+      .run();
+    testDatabase.close();
+    const staleSession = await fetch(`${url}/api/administration/members`, {
+      headers: { cookie: staleOwner },
+    });
+    expect(staleSession.status).toBe(401);
+    expect((await staleSession.json()).error.code).toBe('SESSION_EXPIRED');
   });
 });

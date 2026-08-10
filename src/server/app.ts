@@ -609,12 +609,19 @@ export function createApp(config: AppConfig) {
   const administrationSession = (request: express.Request) =>
     auth.requireRole(auth.authenticate(cookieToken(request.headers.cookie)), ['owner']);
   const administrationError = (error: unknown, response: express.Response) => {
-    if (error instanceof AuthError)
-      return response
-        .status(error.code === 'NOT_FOUND' ? 404 : error.code === 'FORBIDDEN' ? 403 : 400)
-        .json({
-          error: { code: error.code, message: error.message },
-        });
+    if (error instanceof AuthError) {
+      const status =
+        error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'FORBIDDEN'
+            ? 403
+            : error.code === 'UNAUTHENTICATED' || error.code === 'SESSION_EXPIRED'
+              ? 401
+              : 400;
+      return response.status(status).json({
+        error: { code: error.code, message: error.message },
+      });
+    }
     if (error instanceof z.ZodError)
       return response
         .status(400)
