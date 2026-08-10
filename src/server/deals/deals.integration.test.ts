@@ -63,7 +63,7 @@ describe.sequential("deal and pipeline API", () => {
     const body = (await response.json()) as {
       items: Array<{ id: string; amountMinor: number }>;
       total: number;
-      totals: { amountMinor: number };
+      totals: { amountMinor: string };
       stages: unknown[];
     };
     expect(body.items).toHaveLength(5);
@@ -73,7 +73,7 @@ describe.sequential("deal and pipeline API", () => {
         (a, b) => a - b,
       ),
     );
-    expect(body.totals.amountMinor).toBeGreaterThan(0);
+    expect(BigInt(body.totals.amountMinor)).toBeGreaterThan(0n);
     expect(JSON.stringify(body)).not.toContain("outside");
     expect(
       (
@@ -147,6 +147,35 @@ describe.sequential("deal and pipeline API", () => {
         })
       ).status,
     ).toBe(200);
+  });
+
+  it("returns exact aggregates when accepted safe amounts sum beyond the JavaScript integer range", async () => {
+    const member = await signIn("member@northstar.test", "MemberPass!2026");
+    for (let index = 1; index <= 3; index += 1) {
+      const response = await request(member, "/api/deals", {
+        method: "POST",
+        body: JSON.stringify({
+          ...input,
+          name: `Exact Aggregate ${index}`,
+          amountMinor: Number.MAX_SAFE_INTEGER,
+          currency: "USD",
+          contactIds: [],
+        }),
+      });
+      expect(response.status).toBe(201);
+    }
+    const list = (await (
+      await request(member, "/api/deals?q=Exact%20Aggregate")
+    ).json()) as {
+      totals: {
+        amountMinor: string;
+        byCurrency: Array<{ currency: string; amountMinor: string }>;
+      };
+    };
+    expect(list.totals.amountMinor).toBe("27021597764222973");
+    expect(list.totals.byCurrency).toEqual([
+      { currency: "USD", amountMinor: "27021597764222973" },
+    ]);
   });
 
   it("requires valid outcomes and preserves transactional transition history including reopen", async () => {

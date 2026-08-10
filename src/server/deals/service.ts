@@ -144,16 +144,16 @@ export class DealsService {
     );
     const aggregate = this.db
       .prepare(
-        `SELECT coalesce(sum(d.amount_minor),0) amountMinor, count(DISTINCT d.currency) currencies, min(d.currency) currency FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where}`,
+        `SELECT CAST(coalesce(sum(d.amount_minor),0) AS TEXT) amountMinor, count(DISTINCT d.currency) currencies, min(d.currency) currency FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where}`,
       )
       .get(...params) as {
-      amountMinor: number;
+      amountMinor: string;
       currencies: number;
       currency: string | null;
     };
     const byCurrency = this.db
       .prepare(
-        `SELECT d.currency, sum(d.amount_minor) amountMinor FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where} GROUP BY d.currency ORDER BY d.currency`,
+        `SELECT d.currency, CAST(sum(d.amount_minor) AS TEXT) amountMinor FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where} GROUP BY d.currency ORDER BY d.currency`,
       )
       .all(...params);
     return {

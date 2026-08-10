@@ -46,9 +46,9 @@ interface DealList {
   total: number;
   totalPages: number;
   totals: {
-    amountMinor: number | null;
+    amountMinor: string | number | null;
     currency: string | null;
-    byCurrency: Array<{ currency: string; amountMinor: number }>;
+    byCurrency: Array<{ currency: string; amountMinor: string | number }>;
   };
   stages: DealStage[];
 }
@@ -113,10 +113,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong. Try again.";
-const money = (minor: number, currency: string) =>
-  new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
-    minor / 100,
-  );
+const money = (minor: number | string, currency: string) => {
+  const value = BigInt(minor);
+  if (value <= BigInt(Number.MAX_SAFE_INTEGER))
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(Number(value) / 100);
+  const whole = value / 100n;
+  const fraction = String(value % 100n).padStart(2, "0");
+  return `${currency} ${whole.toLocaleString()}.${fraction}`;
+};
 const formFrom = (d: Deal): FormValues => ({
   name: d.name,
   companyId: d.companyId ?? "",
