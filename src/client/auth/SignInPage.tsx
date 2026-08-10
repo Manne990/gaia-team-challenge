@@ -1,5 +1,4 @@
-import { type FormEvent, useId, useState } from "react";
-import "./auth.css";
+import React, { type FormEvent, useId, useState } from "react";
 
 export interface SignInPageProps {
   expired?: boolean;

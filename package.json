@@ -12,7 +12,7 @@
     "ci": "node scripts/baseline.mjs ci",
     "build": "node scripts/baseline.mjs build",
     "dev": "node scripts/baseline.mjs dev",
-    "test:auth": "tsx --test test/auth.test.ts",
+    "test:auth": "tsx --test test/auth*.test.ts*",
     "typecheck:auth": "tsc --noEmit"
   },
   "dependencies": {
