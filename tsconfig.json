@@ -14,7 +14,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src/client", "src/shared", "vite.config.ts"]
+  "include": ["src/client", "src/shared", "tests", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
 }
