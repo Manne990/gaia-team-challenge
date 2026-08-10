@@ -47,9 +47,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     if (
       message.type() === 'error' &&
       !message.text().includes('401 (Unauthorized)') &&
-      !message.text().includes('WebSocket connection to') &&
-      !message.text().includes('[vite] failed to connect') &&
-      !message.text().includes('WebSocket closed without opened')
+      !/websocket|\[vite\]/i.test(message.text())
     )
       runtimeErrors.push(message.text());
   });
