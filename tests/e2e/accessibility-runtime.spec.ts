@@ -23,6 +23,11 @@ const authenticatedRoutes = [
 
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/");
+  await expect(
+    page.getByRole("heading", {
+      name: /Welcome back|Good morning, Northstar/,
+    }),
+  ).toBeVisible();
   if (await page.getByRole("heading", { name: "Welcome back" }).isVisible()) {
     await page.getByLabel("Email address").fill("owner@northstar.test");
     await page.getByLabel("Password").fill("OwnerPass!2026");
@@ -99,7 +104,7 @@ test.describe("browser accessibility and runtime health", () => {
 
     await page.goto("/#activities");
     await expect(
-      page.getByRole("heading", { name: "Activities" }),
+      page.getByRole("heading", { name: "Activities", exact: true }),
     ).toBeVisible();
     const record = page.getByRole("button", { name: "Record activity" });
     await record.click();

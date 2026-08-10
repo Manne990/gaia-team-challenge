@@ -8,7 +8,9 @@ test("activity composer is modal, keyboard-safe, and records shared history", as
   await page.getByLabel("Email address").fill("member@northstar.test");
   await page.getByLabel("Password").fill("MemberPass!2026");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Activities" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Activities", exact: true }),
+  ).toBeVisible();
 
   const record = page.getByRole("button", { name: "Record activity" });
   await record.click();

@@ -39,7 +39,9 @@ test("dashboard metrics reconcile with their filtered records and refresh once",
   const activitiesLink = page.getByRole("link", { name: "View activities" });
   const expectedActivityWindow = await activitiesLink.getAttribute("href");
   await activitiesLink.click();
-  await expect(page.getByRole("heading", { name: "Activities" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Activities", exact: true }),
+  ).toBeVisible();
   const activityWindow = await page.evaluate(() => {
     const query = new URLSearchParams(location.hash.split("?")[1]);
     return { from: query.get("from"), to: query.get("to") };
