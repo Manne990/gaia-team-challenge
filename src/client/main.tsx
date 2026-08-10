@@ -271,6 +271,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
     industry: initialQuery.get('industry') || '',
     size: initialQuery.get('size') || '',
     tag: initialQuery.get('tag') || '',
+    staleBefore: initialQuery.get('staleBefore') || '',
     sort: initialQuery.get('sort') || 'name',
     direction: initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
     includeArchived: initialQuery.get('includeArchived') === 'true',
@@ -294,6 +295,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
         industry: nextFilters.industry,
         size: nextFilters.size,
         tag: nextFilters.tag,
+        staleBefore: nextFilters.staleBefore,
       }))
         if (value) query.set(key, value);
       if (nextFilters.includeArchived) query.set('includeArchived', 'true');
@@ -613,6 +615,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
               industry: '',
               size: '',
               tag: '',
+              staleBefore: '',
               sort: 'name',
               direction: 'asc',
               includeArchived: false,
@@ -641,6 +644,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
             industry: typeof view.industry === 'string' ? view.industry : '',
             size: typeof view.size === 'string' ? view.size : '',
             tag: typeof view.tag === 'string' ? view.tag : '',
+            staleBefore: typeof view.staleBefore === 'string' ? view.staleBefore : '',
             sort: ['name', 'createdAt', 'updatedAt', 'lifecycle'].includes(String(view.sort))
               ? String(view.sort)
               : 'name',
@@ -993,11 +997,14 @@ type Activity = {
 };
 
 function Activities({ canWrite }: { canWrite: boolean }) {
+  const initialQuery = new URLSearchParams(window.location.search);
   const [items, setItems] = useState<Activity[]>([]);
   const [selected, setSelected] = useState<Activity | null>(null);
   const [type, setType] = useState('');
   const [authorId, setAuthorId] = useState('');
-  const [relatedRecordId, setRelatedRecordId] = useState('');
+  const [relatedRecordId, setRelatedRecordId] = useState(
+    () => initialQuery.get('relatedRecordId') || '',
+  );
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
@@ -1426,6 +1433,8 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('');
   const [due, setDue] = useState(() => initialQuery.get('due') || '');
+  const dueFrom = initialQuery.get('dueFrom') || '';
+  const dueTo = initialQuery.get('dueTo') || '';
   const [mine, setMine] = useState(() => initialQuery.get('assigneeId') === 'me');
   const [relation, setRelation] = useState(() => {
     const kind = initialQuery.get('relation');
@@ -1451,6 +1460,8 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
       page: String(nextPage),
     });
     if (nextDue) query.set('due', nextDue);
+    if (dueFrom) query.set('dueFrom', dueFrom);
+    if (dueTo) query.set('dueTo', dueTo);
     if (nextMine) query.set('assigneeId', 'me');
     if (nextRelation) {
       const [kind, id] = nextRelation.split(':');
@@ -1743,6 +1754,9 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   const [error, setError] = useState('');
   const [stageFilter, setStageFilter] = useState(() => initialQuery.get('stageId') || '');
   const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
+  const expectedCloseFrom = initialQuery.get('expectedCloseFrom') || '';
+  const expectedCloseTo = initialQuery.get('expectedCloseTo') || '';
+  const transitionedSince = initialQuery.get('transitionedSince') || '';
   const [includeArchived, setIncludeArchived] = useState(
     () => initialQuery.get('includeArchived') === 'true',
   );
@@ -1762,6 +1776,9 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
     const query = new URLSearchParams();
     if (stage) query.set('stageId', stage);
     if (status) query.set('status', status);
+    if (expectedCloseFrom) query.set('expectedCloseFrom', expectedCloseFrom);
+    if (expectedCloseTo) query.set('expectedCloseTo', expectedCloseTo);
+    if (transitionedSince) query.set('transitionedSince', transitionedSince);
     if (archived) query.set('includeArchived', 'true');
     query.set('page', String(nextPage));
     query.set('sort', nextSort);
@@ -2168,6 +2185,174 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   );
 }
 
+function LiveDashboard({
+  navigate,
+}: {
+  navigate: (page: 'Activities' | 'Deals' | 'Tasks' | 'Companies') => void;
+}) {
+  const [data, setData] = useState<any>();
+  const [error, setError] = useState('');
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then(setData)
+      .catch(() => setError('Dashboard metrics could not be loaded.'));
+  }, []);
+  const open = (page: 'Activities' | 'Deals' | 'Tasks' | 'Companies', query = '') => {
+    window.history.replaceState(null, '', `${window.location.pathname}${query}`);
+    navigate(page);
+  };
+  const money = (items: any[]) =>
+    items.length
+      ? items
+          .map((item) => `${item.currency} ${(item.amountCents / 100).toLocaleString()}`)
+          .join(' · ')
+      : '—';
+  if (error)
+    return (
+      <section className="state-panel state-error" role="alert">
+        {error}
+      </section>
+    );
+  if (!data)
+    return (
+      <section className="state-panel state-loading" aria-live="polite">
+        Loading dashboard metrics…
+      </section>
+    );
+  const closingEnd = new Date(
+    new Date(data.generatedAt).getTime() + data.semantics.closingSoonDays * 24 * 60 * 60 * 1000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  const upcomingEnd = new Date(
+    new Date(data.generatedAt).getTime() + data.semantics.upcomingTaskDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  return (
+    <section aria-labelledby="dashboard-heading">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Evidence-derived · {data.semantics.timezone}</p>
+          <h1 id="dashboard-heading">Dashboard</h1>
+          <p className="subtle">Live organization metrics, refreshed when this dashboard opens.</p>
+        </div>
+      </div>
+      <section className="metrics" aria-label="Dashboard metrics">
+        <button className="metric" onClick={() => open('Deals', '?status=open')}>
+          <p>Open pipeline value</p>
+          <strong>{money(data.pipeline)}</strong>
+          <small>Open, unarchived deals</small>
+        </button>
+        <button
+          className="metric"
+          onClick={() =>
+            open(
+              'Deals',
+              `?status=open&expectedCloseFrom=${data.generatedAt.slice(0, 10)}&expectedCloseTo=${closingEnd}`,
+            )
+          }
+        >
+          <p>Deals closing soon</p>
+          <strong>{data.closingSoon}</strong>
+          <small>Next {data.semantics.closingSoonDays} UTC days</small>
+        </button>
+        <button className="metric" onClick={() => open('Tasks', '?due=overdue')}>
+          <p>Overdue tasks</p>
+          <strong>{data.tasks.overdue}</strong>
+          <small className="alert">Open tasks before now</small>
+        </button>
+        <button
+          className="metric"
+          onClick={() =>
+            open(
+              'Tasks',
+              `?dueFrom=${encodeURIComponent(data.generatedAt)}&dueTo=${encodeURIComponent(upcomingEnd)}`,
+            )
+          }
+        >
+          <p>Upcoming tasks</p>
+          <strong>{data.tasks.upcoming}</strong>
+          <small>Next {data.semantics.upcomingTaskDays} UTC days</small>
+        </button>
+      </section>
+      <section className="content-grid">
+        <article className="panel">
+          <h2>Pipeline by stage</h2>
+          <ul>
+            {data.stages.map((stage: any) => (
+              <li key={stage.id}>
+                <button
+                  className="link-button"
+                  onClick={() => open('Deals', `?stageId=${encodeURIComponent(stage.id)}`)}
+                >
+                  {stage.name}: {stage.count}
+                </button>
+              </li>
+            ))}
+            {!data.stages.length && <li>No pipeline data.</li>}
+          </ul>
+        </article>
+        <article className="panel">
+          <h2>Stale accounts</h2>
+          <button
+            className="link-button"
+            onClick={() =>
+              open(
+                'Companies',
+                `?staleBefore=${encodeURIComponent(new Date(new Date(data.generatedAt).getTime() - data.semantics.staleAccountDays * 24 * 60 * 60 * 1000).toISOString())}`,
+              )
+            }
+          >
+            {data.staleAccounts} without activity in {data.semantics.staleAccountDays} UTC days
+          </button>
+        </article>
+        <article className="panel">
+          <h2>Won/lost trend</h2>
+          <p>Last 30 UTC days</p>
+          <ul>
+            {['won', 'lost'].map((kind) => (
+              <li key={kind}>
+                <button
+                  className="link-button"
+                  onClick={() =>
+                    open(
+                      'Deals',
+                      `?status=${kind}&transitionedSince=${encodeURIComponent(new Date(new Date(data.generatedAt).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString())}`,
+                    )
+                  }
+                >
+                  {kind}: {data.trend.find((entry: any) => entry.kind === kind)?.count || 0}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </section>
+      <section className="panel">
+        <h2>Recent activity</h2>
+        <ul>
+          {data.recentActivity.map((activity: any) => (
+            <li key={activity.id}>
+              <button
+                className="link-button"
+                onClick={() =>
+                  open(
+                    'Activities',
+                    `?relatedRecordId=${encodeURIComponent(activity.companyId || activity.contactId || activity.dealId || activity.taskId || '')}`,
+                  )
+                }
+              >
+                {activity.subject} · {new Date(activity.occurredAt).toLocaleString()}
+              </button>
+            </li>
+          ))}
+          {!data.recentActivity.length && <li>No recent activity.</li>}
+        </ul>
+      </section>
+    </section>
+  );
+}
+
 function Notifications({
   navigate,
 }: {
@@ -2322,6 +2507,7 @@ function App() {
       role={session.role}
       user={session.user}
       workspace={session.organization}
+      dashboardContent={(navigate) => <LiveDashboard navigate={navigate} />}
       companiesContent={<Companies canWrite={session.role !== 'viewer'} />}
       activitiesContent={<Activities canWrite={session.role !== 'viewer'} />}
       importsContent={<Imports canWrite={session.role !== 'viewer'} />}

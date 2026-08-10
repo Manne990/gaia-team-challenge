@@ -114,7 +114,7 @@ test('task and deal saved views restore pagination, and a selected task respects
     await page.getByLabel('Email').fill('owner@northstar.test');
     await page.getByLabel('Password').fill('OwnerPass!2026');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Good morning, Northstar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     expect(
       await page.evaluate(async () =>
         fetch('/api/tasks', {
