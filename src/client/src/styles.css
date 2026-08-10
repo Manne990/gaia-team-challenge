@@ -104,6 +104,45 @@ textarea {
   gap: 0.75rem;
   border: 1px solid var(--line);
 }
+.duplicate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+.surface-card {
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+.surface-card h2 {
+  margin-top: 0;
+}
+.merge-review {
+  max-height: min(90vh, 55rem);
+  overflow: auto;
+}
+.merge-review table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.merge-review th,
+.merge-review td {
+  padding: 0.55rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.merge-review select {
+  width: 100%;
+  max-width: 32rem;
+}
+.warning-panel {
+  padding: 1rem;
+  border: 2px solid var(--danger);
+  background: #fff5f5;
+}
 button {
   border: 0;
   border-radius: 0.45rem;

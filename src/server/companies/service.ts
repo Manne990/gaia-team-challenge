@@ -117,7 +117,10 @@ export class CompanyService {
     const sort =
       allowedSort[query.get("sort") ?? "updatedAt"] ?? "c.updated_at";
     const direction = query.get("direction") === "asc" ? "ASC" : "DESC";
-    const clauses = ["c.organization_id = ?"];
+    const clauses = [
+      "c.organization_id = ?",
+      "NOT EXISTS (SELECT 1 FROM merge_redirects mr WHERE mr.organization_id=c.organization_id AND mr.entity_type='company' AND mr.source_id=c.id)",
+    ];
     const params: unknown[] = [identity.organizationId];
     if (query.get("archived") === "only")
       clauses.push("c.archived_at IS NOT NULL");
@@ -206,6 +209,13 @@ export class CompanyService {
   }
 
   get(identity: SessionIdentity, id: string) {
+    const requestedId = id;
+    const redirect = this.db
+      .prepare(
+        "SELECT target_id AS targetId FROM merge_redirects WHERE organization_id=? AND entity_type='company' AND source_id=?",
+      )
+      .get(identity.organizationId, id) as { targetId: string } | undefined;
+    if (redirect) id = redirect.targetId;
     const row = this.db
       .prepare(`${selectCompany} WHERE c.organization_id = ? AND c.id = ?`)
       .get(identity.organizationId, id) as Record<string, unknown> | undefined;
@@ -214,6 +224,7 @@ export class CompanyService {
     const args = [identity.organizationId, id];
     return {
       company,
+      redirect: redirect ? { from: requestedId, to: id } : undefined,
       contacts: this.db
         .prepare(
           "SELECT id, first_name AS firstName, last_name AS lastName, email, status FROM contacts WHERE organization_id = ? AND company_id = ? ORDER BY last_name, first_name",
@@ -297,6 +308,7 @@ export class CompanyService {
   }
 
   update(identity: SessionIdentity, id: string, value: unknown) {
+    this.assertNotMerged(identity, id);
     const visible = this.db
       .prepare("SELECT 1 FROM companies WHERE organization_id = ? AND id = ?")
       .get(identity.organizationId, id);
@@ -361,6 +373,7 @@ export class CompanyService {
   }
 
   setArchived(identity: SessionIdentity, id: string, archived: boolean) {
+    this.assertNotMerged(identity, id);
     const timestamp = this.now().toISOString();
     this.db
       .transaction(() => {
@@ -413,6 +426,19 @@ export class CompanyService {
       throw new CompanyValidationError([
         "Choose an active owner in your organization.",
       ]);
+  }
+
+  private assertNotMerged(identity: SessionIdentity, id: string) {
+    if (
+      this.db
+        .prepare(
+          "SELECT 1 FROM merge_redirects WHERE organization_id=? AND entity_type='company' AND source_id=?",
+        )
+        .get(identity.organizationId, id)
+    )
+      throw new CompanyConflictError(
+        "This company was merged. Open its surviving record instead.",
+      );
   }
 
   private audit(
