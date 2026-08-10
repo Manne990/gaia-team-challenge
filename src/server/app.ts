@@ -4,6 +4,7 @@ import express, { type ErrorRequestHandler, type Express } from "express";
 import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 import { AuthService, createAuthHttpHandler } from "./auth/index.js";
 import { registerContactRoutes } from "./contacts/index.js";
+import { registerImportRoutes } from "./imports/http.js";
 import { CompanyService, createCompanyHttpHandler } from "./companies/index.js";
 import { registerDealRoutes } from "./deals/index.js";
 import { createTaskHttpHandler, TaskService } from "./tasks/index.js";
@@ -59,6 +60,7 @@ export function createApp(
   if (database) registerContactRoutes(app, database);
   if (database) registerDealRoutes(app, database);
   if (database) registerActivityRoutes(app, database);
+  if (database) registerImportRoutes(app, database);
   configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {

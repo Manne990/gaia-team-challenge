@@ -57,3 +57,13 @@ The complete challenge requires all issue, CI, clean-checkout, review, and exter
 
 See [`docs/testing.md`](docs/testing.md) for the deterministic fixtures,
 isolated test lifecycle, CI policy, and failure-reproduction commands.
+
+## CSV data movement
+
+The Imports workspace accepts UTF-8 company or contact CSV files up to 512 KiB
+and 2,000 data rows. Preview persists normalized rows and all row-level errors;
+commit is deliberately all-or-nothing and is disabled while any validation or
+duplicate warning remains. Repeating a successful commit is idempotent. CSV
+exports are organization-scoped, exclude archived records, apply the supplied
+list filters, use stable columns, quote CSV metacharacters, and prefix values
+that spreadsheet programs could interpret as formulas.
