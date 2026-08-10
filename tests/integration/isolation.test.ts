@@ -3,7 +3,7 @@ import { access } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app.js";
-import { openDatabase } from "../../src/server/database/database.js";
+import { migrate, openDatabase } from "../../src/server/database/database.js";
 import { seedDatabase } from "../../src/db/seed.js";
 import {
   createTemporaryDatabase,
@@ -27,6 +27,7 @@ describe("isolated test resources", () => {
   it("asserts both rejection and unchanged foreign persisted state", async () => {
     const environment = await createTemporaryDatabase();
     const database = openDatabase(environment.databasePath);
+    migrate(database);
     seedDatabase(database);
     const app = createApp((application) => {
       application.put("/api/companies/:id", (request, response) => {
