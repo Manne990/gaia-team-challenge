@@ -9,6 +9,10 @@ export default defineConfig({
       "tests/{unit,integration}/**/*.test.ts",
     ],
     passWithNoTests: false,
+    // Integration suites repeatedly migrate and seed real SQLite files. Run
+    // files serially so CPU and filesystem contention cannot turn the 5s
+    // behavioral timeout into a machine-dependent failure.
+    fileParallelism: false,
     sequence: { concurrent: true },
     coverage: {
       provider: "v8",

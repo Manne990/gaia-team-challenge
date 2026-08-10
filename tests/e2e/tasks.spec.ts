@@ -1,5 +1,5 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("member creates and completes a durable UTC task", async ({ page }) => {
   await page.goto("/");

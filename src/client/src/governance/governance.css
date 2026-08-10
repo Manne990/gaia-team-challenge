@@ -1,5 +1,6 @@
 .governance-page {
   display: grid;
+  min-width: 0;
   gap: 1.5rem;
 }
 .governance-header {
@@ -12,6 +13,7 @@
   margin-bottom: 0.35rem;
 }
 .governance-card {
+  min-width: 0;
   background: var(--surface, #fff);
   border: 1px solid var(--border, #d9dee7);
   border-radius: 0.75rem;
@@ -119,8 +121,18 @@
   .audit-item header {
     flex-direction: column;
   }
+  .governance-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .governance-form input,
+  .governance-form select {
+    width: 100%;
+    min-width: 0;
+  }
   .governance-table {
     display: block;
+    max-width: 100%;
     overflow-x: auto;
   }
 }

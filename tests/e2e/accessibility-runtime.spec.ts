@@ -1,10 +1,24 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 const viewports = [
   { width: 1440, height: 900 },
   { width: 1024, height: 768 },
   { width: 390, height: 844 },
 ];
+
+const authenticatedRoutes = [
+  ["#dashboard", "Good morning, Northstar"],
+  ["#companies", "Companies"],
+  ["#contacts", "Contacts"],
+  ["#activities", "Activities"],
+  ["#deals", "Deals"],
+  ["#tasks", "Tasks"],
+  ["#notifications", "Notifications"],
+  ["#imports", "Imports"],
+  ["#duplicates", "Duplicate review"],
+  ["#audit", "Audit history"],
+  ["#administration", "Organization administration"],
+] as const;
 
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/");
@@ -38,54 +52,22 @@ test.describe("browser accessibility and runtime health", () => {
       page,
     }) => {
       await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(
+        page.getByRole("heading", { name: "Welcome back", exact: true }),
+      ).toBeVisible();
+      await expectNoHorizontalScroll(page, "sign-in");
       await signIn(page);
-      for (const route of [
-        "#dashboard",
-        "#companies",
-        "#contacts",
-        "#activities",
-        "#deals",
-        "#tasks",
-        "#notifications",
-      ]) {
+      for (const [route, heading] of authenticatedRoutes) {
         await page.goto(`/${route}`);
+        await expect(
+          page.getByRole("heading", { name: heading, exact: true }),
+        ).toBeVisible();
+        await page.waitForLoadState("networkidle");
         await expectNoHorizontalScroll(page, route);
       }
     });
   }
-
-  test("keeps primary routes free of console errors and unhandled page errors", async ({
-    page,
-  }) => {
-    const consoleErrors: string[] = [];
-    const pageErrors: string[] = [];
-    await signIn(page);
-    page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
-    });
-    page.on("pageerror", (error) => pageErrors.push(error.message));
-
-    for (const [route, heading] of [
-      ["#dashboard", "Good morning, Northstar"],
-      ["#companies", "Companies"],
-      ["#contacts", "Contacts"],
-      ["#activities", "Activities"],
-      ["#deals", "Deals"],
-      ["#tasks", "Tasks"],
-      ["#notifications", "Notifications"],
-    ] as const) {
-      await page.goto(`/${route}`);
-      await expect(
-        page.getByRole("heading", { name: heading, exact: true }),
-      ).toBeVisible();
-    }
-
-    expect(
-      consoleErrors,
-      `console errors: ${consoleErrors.join(" | ")}`,
-    ).toEqual([]);
-    expect(pageErrors, `page errors: ${pageErrors.join(" | ")}`).toEqual([]);
-  });
 
   test("supports skip-link keyboard navigation and named dialog focus", async ({
     page,
