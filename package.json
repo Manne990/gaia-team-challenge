@@ -10,6 +10,7 @@
   "scripts": {
     "db:reset": "tsx src/server/database/cli.ts reset",
     "db:seed": "tsx src/server/database/cli.ts seed",
+    "db:migrate": "tsx src/server/database/cli.ts migrate",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "check:test-suites": "node scripts/check-test-suites.mjs",
@@ -18,7 +19,7 @@
     "test": "vitest run --coverage && npm run test:auth",
     "test:browser": "node scripts/run-browser-tests.mjs",
     "ci": "npm run format && npm run check:test-suites && npm run lint && npm run typecheck && npm test && npm run test:browser && npm run build",
-    "build": "vite build && tsc -p tsconfig.server.json",
+    "build": "vite build && tsc -p tsconfig.server.json && node scripts/copy-database-assets.mjs",
     "dev": "tsx watch src/server/index.ts",
     "start": "node dist/server/server/index.js",
     "test:auth": "tsx --test test/auth*.test.ts*",
