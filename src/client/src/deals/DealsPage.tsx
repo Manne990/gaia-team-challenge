@@ -138,7 +138,13 @@ const formFrom = (d: Deal): FormValues => ({
   contactIds: d.contactIds.join(", "),
 });
 
-export function DealsPage({ role }: { role: DealRole }) {
+export function DealsPage({
+  role,
+  initialDealId,
+}: {
+  role: DealRole;
+  initialDealId?: string;
+}) {
   const initial = readListState("deals");
   const canEdit = role !== "viewer";
   const [list, setList] = useState<DealList | null>(null);
@@ -212,6 +218,17 @@ export function DealsPage({ role }: { role: DealRole }) {
       setSaveError(errorText(e));
     }
   };
+  useEffect(() => {
+    if (!initialDealId) return;
+    request<{ deal: Deal }>(`/api/deals/${encodeURIComponent(initialDealId)}`)
+      .then(({ deal }) => {
+        setSelected(deal);
+        setTransitionStage(deal.stageId);
+        setLossReason("");
+        setSaveError(null);
+      })
+      .catch((error) => setSaveError(errorText(error)));
+  }, [initialDealId]);
   const create = () => {
     setSelected(null);
     setForm({ ...blankForm, stageId: list?.stages[0]?.id ?? "" });

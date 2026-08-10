@@ -101,8 +101,18 @@ export function AppShell({
                 <a
                   ref={index === 0 ? firstLink : undefined}
                   href={item.href}
-                  className={activeHref === item.href ? "active" : undefined}
-                  aria-current={activeHref === item.href ? "page" : undefined}
+                  className={
+                    activeHref === item.href ||
+                    activeHref.startsWith(`${item.href}/`)
+                      ? "active"
+                      : undefined
+                  }
+                  aria-current={
+                    activeHref === item.href ||
+                    activeHref.startsWith(`${item.href}/`)
+                      ? "page"
+                      : undefined
+                  }
                   onClick={() => {
                     setActiveHref(item.href);
                     setMenuOpen(false);

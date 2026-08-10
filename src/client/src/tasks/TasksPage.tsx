@@ -100,7 +100,13 @@ function toPayload(form: FormValues, version?: number) {
   return version === undefined ? payload : { ...payload, version };
 }
 
-export function TasksPage({ role }: { role: Role }) {
+export function TasksPage({
+  role,
+  initialTaskId,
+}: {
+  role: Role;
+  initialTaskId?: string;
+}) {
   const initial = readListState("tasks");
   const canMutate = role !== "viewer";
   const [view, setView] = useState<View>(
@@ -188,6 +194,16 @@ export function TasksPage({ role }: { role: Role }) {
       showError(error);
     }
   };
+  useEffect(() => {
+    if (!initialTaskId) return;
+    request<{ task: Task }>(`/api/tasks/${encodeURIComponent(initialTaskId)}`)
+      .then(({ task }) => {
+        setSelected(task);
+        setEditing(false);
+        setFormError(null);
+      })
+      .catch(showError);
+  }, [initialTaskId]);
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);

@@ -7,6 +7,10 @@ import { registerContactRoutes } from "./contacts/index.js";
 import { registerImportRoutes } from "./imports/http.js";
 import { CompanyService, createCompanyHttpHandler } from "./companies/index.js";
 import { registerDealRoutes } from "./deals/index.js";
+import {
+  createNotificationHttpHandler,
+  NotificationService,
+} from "./notifications/index.js";
 import { createTaskHttpHandler, TaskService } from "./tasks/index.js";
 import { registerSearchRoutes } from "./search/index.js";
 import { registerActivityRoutes } from "./activities/index.js";
@@ -33,6 +37,10 @@ export function createApp(
       new CompanyService(database),
     );
     const taskHandler = createTaskHttpHandler(auth, new TaskService(database));
+    const notificationHandler = createNotificationHttpHandler(
+      auth,
+      new NotificationService(database),
+    );
     app.use((request, response, next) => {
       void authHandler(request, response)
         .then((handled) => {
@@ -40,7 +48,12 @@ export function createApp(
           return companyHandler(request, response).then((companyHandled) => {
             if (companyHandled) return;
             return taskHandler(request, response).then((taskHandled) => {
-              if (!taskHandled) next();
+              if (taskHandled) return;
+              return notificationHandler(request, response).then(
+                (notificationHandled) => {
+                  if (!notificationHandled) next();
+                },
+              );
             });
           });
         })
