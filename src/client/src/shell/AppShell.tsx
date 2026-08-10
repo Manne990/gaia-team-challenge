@@ -100,7 +100,9 @@ export function AppShell({
               <li key={item.href}>
                 <a
                   ref={index === 0 ? firstLink : undefined}
+                  id={item.href.slice(1)}
                   href={item.href}
+                  aria-label={item.label}
                   className={
                     activeHref === item.href ||
                     activeHref.startsWith(`${item.href}/`)

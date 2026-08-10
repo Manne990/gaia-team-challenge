@@ -15,7 +15,9 @@ describe("AppShell", () => {
     );
     const view = within(container);
     for (const item of navigation) {
-      expect(view.getByRole("link", { name: item.label })).toBeInTheDocument();
+      const link = view.getByRole("link", { name: item.label });
+      expect(link).toHaveAttribute("aria-label", item.label);
+      expect(link).toHaveAttribute("id", item.href.slice(1));
     }
   });
 
