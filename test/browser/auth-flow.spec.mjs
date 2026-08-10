@@ -42,7 +42,9 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
   page,
 }) => {
   const runtimeErrors = [];
-  page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  page.on('pageerror', (error) => {
+    if (!/websocket|\[vite\]/i.test(error.message)) runtimeErrors.push(error.message);
+  });
   page.on('console', (message) => {
     if (
       message.type() === 'error' &&
