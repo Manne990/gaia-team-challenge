@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import express, { type ErrorRequestHandler } from "express";
+import type Database from "better-sqlite3";
 import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
+import { AuthService, createAuthHttpHandler } from "./auth/index.js";
 
-export function createApp() {
+export function createApp(database?: Database.Database) {
   const app = express();
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
@@ -10,6 +12,16 @@ export function createApp() {
     response.setHeader("x-request-id", response.locals.requestId as string);
     next();
   });
+  if (database) {
+    const authHandler = createAuthHttpHandler(new AuthService(database));
+    app.use((request, response, next) => {
+      void authHandler(request, response)
+        .then((handled) => {
+          if (!handled) next();
+        })
+        .catch(next);
+    });
+  }
   app.use(express.json({ limit: "1mb" }));
   app.get("/api/health", (_request, response) =>
     response.json({ status: "ok" }),

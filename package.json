@@ -14,7 +14,7 @@
     "format:write": "prettier --write .",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:auth",
     "ci": "npm run format && npm run lint && npm run typecheck && npm test && npm run build",
     "build": "vite build && tsc -p tsconfig.server.json",
     "dev": "tsx watch src/server/index.ts",

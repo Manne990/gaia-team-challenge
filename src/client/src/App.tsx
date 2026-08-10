@@ -2,27 +2,45 @@ import {
   Component,
   type ErrorInfo,
   type ReactNode,
+  useCallback,
   useEffect,
   useState,
 } from "react";
-import type { BootstrapResponse } from "../../shared/api";
+import { LogoutButton, SignInPage } from "../auth/SignInPage";
+import "../auth/auth.css";
+
+interface SessionUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
 
 type AppState =
   | { kind: "loading" }
-  | { kind: "ready"; data: BootstrapResponse }
+  | { kind: "signed-out"; expired: boolean }
+  | { kind: "ready"; user: SessionUser }
   | { kind: "unavailable" };
 
 export function App() {
   const [state, setState] = useState<AppState>({ kind: "loading" });
-  useEffect(() => {
+  const loadSession = useCallback(() => {
     const controller = new AbortController();
-    fetch("/api/bootstrap", { signal: controller.signal })
+    fetch("/api/auth/session", { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error("bootstrap unavailable");
-        setState({
-          kind: "ready",
-          data: (await response.json()) as BootstrapResponse,
-        });
+        const body = (await response.json()) as {
+          code?: string;
+          user?: SessionUser;
+        };
+        if (response.status === 401) {
+          setState({
+            kind: "signed-out",
+            expired: body.code === "SESSION_EXPIRED",
+          });
+          return;
+        }
+        if (!response.ok || !body.user) throw new Error("session unavailable");
+        setState({ kind: "ready", user: body.user });
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError"))
@@ -30,6 +48,9 @@ export function App() {
       });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    return loadSession();
+  }, [loadSession]);
   if (state.kind === "loading")
     return (
       <StatusPanel
@@ -44,13 +65,16 @@ export function App() {
         detail="Check your connection, then refresh the page. Your data has not been changed."
       />
     );
+  if (state.kind === "signed-out")
+    return <SignInPage expired={state.expired} onSignedIn={loadSession} />;
   return (
     <main className="shell">
-      <p className="eyebrow">{state.data.product}</p>
-      <h1>Your customer workspace is ready.</h1>
-      <p className="lede">
-        The application foundation is running. CRM modules will appear here.
-      </p>
+      <p className="eyebrow">Northstar CRM</p>
+      <h1>Welcome, {state.user.displayName}.</h1>
+      <p className="lede">Your {state.user.role} workspace is ready.</p>
+      <LogoutButton
+        onLoggedOut={() => setState({ kind: "signed-out", expired: false })}
+      />
     </main>
   );
 }

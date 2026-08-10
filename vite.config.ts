@@ -9,6 +9,6 @@ export default defineConfig({
     root: process.cwd(),
     environment: "jsdom",
     setupFiles: "./src/client/test/setup.ts",
-    exclude: ["dist/**", "node_modules/**"],
+    exclude: ["dist/**", "node_modules/**", "test/**"],
   },
 });
