@@ -46,7 +46,7 @@ const response = () => ({
   ],
 });
 
-describe("DealsPage", () => {
+describe.sequential("DealsPage", () => {
   it("shares filters and renders totals in table and pipeline views", async () => {
     const fetchMock = vi
       .fn()
