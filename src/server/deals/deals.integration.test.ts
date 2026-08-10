@@ -178,6 +178,38 @@ describe.sequential("deal and pipeline API", () => {
     ]);
   });
 
+  it("does not overflow SQLite while aggregating many accepted amounts", async () => {
+    const member = await signIn("member@northstar.test", "MemberPass!2026");
+    const insert = database.prepare(`INSERT INTO deals
+      (id,organization_id,company_id,owner_membership_id,stage_id,name,amount_minor,currency,
+       expected_close_date,probability,status,loss_reason,created_at,updated_at)
+      VALUES (?, 'org_northstar', 'company_northstar_01', 'membership_member',
+       'stage_northstar_lead', ?, ?, 'USD', NULL, 25, 'open', NULL, ?, ?)`);
+    const timestamp = "2026-01-15T12:00:00.000Z";
+    database
+      .transaction(() => {
+        for (let index = 1; index <= 1_025; index += 1)
+          insert.run(
+            `deal_overflow_${index}`,
+            `OverflowBoundary ${index}`,
+            Number.MAX_SAFE_INTEGER,
+            timestamp,
+            timestamp,
+          );
+      })
+      .immediate();
+    const response = await request(member, "/api/deals?q=OverflowBoundary");
+    expect(response.status).toBe(200);
+    const list = (await response.json()) as {
+      total: number;
+      totals: { amountMinor: string };
+    };
+    expect(list.total).toBe(1_025);
+    expect(list.totals.amountMinor).toBe(
+      (BigInt(Number.MAX_SAFE_INTEGER) * 1_025n).toString(),
+    );
+  });
+
   it("requires valid outcomes and preserves transactional transition history including reopen", async () => {
     const owner = await signIn("owner@northstar.test", "OwnerPass!2026");
     const created = (await request(owner, "/api/deals", {

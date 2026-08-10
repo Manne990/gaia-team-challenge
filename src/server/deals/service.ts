@@ -142,20 +142,23 @@ export class DealsService {
     const items = rows.map((row) =>
       this.withContacts(identity.organizationId, row),
     );
-    const aggregate = this.db
+    const aggregateRows = this.db
       .prepare(
-        `SELECT CAST(coalesce(sum(d.amount_minor),0) AS TEXT) amountMinor, count(DISTINCT d.currency) currencies, min(d.currency) currency FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where}`,
+        `SELECT d.currency, d.amount_minor AS amountMinor FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where}`,
       )
-      .get(...params) as {
-      amountMinor: string;
-      currencies: number;
-      currency: string | null;
-    };
-    const byCurrency = this.db
-      .prepare(
-        `SELECT d.currency, CAST(sum(d.amount_minor) AS TEXT) amountMinor FROM deals d JOIN companies c ON c.id=d.company_id AND c.organization_id=d.organization_id WHERE ${where} GROUP BY d.currency ORDER BY d.currency`,
-      )
-      .all(...params);
+      .all(...params) as Array<{ currency: string; amountMinor: number }>;
+    const exactTotals = new Map<string, bigint>();
+    for (const row of aggregateRows)
+      exactTotals.set(
+        row.currency,
+        (exactTotals.get(row.currency) ?? 0n) + BigInt(row.amountMinor),
+      );
+    const byCurrency = [...exactTotals]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([currency, amountMinor]) => ({
+        currency,
+        amountMinor: amountMinor.toString(),
+      }));
     return {
       items,
       page,
@@ -163,8 +166,9 @@ export class DealsService {
       total,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
       totals: {
-        amountMinor: aggregate.currencies === 1 ? aggregate.amountMinor : null,
-        currency: aggregate.currencies === 1 ? aggregate.currency : null,
+        amountMinor:
+          byCurrency.length === 1 ? byCurrency[0]!.amountMinor : null,
+        currency: byCurrency.length === 1 ? byCurrency[0]!.currency : null,
         byCurrency,
       },
       stages: this.stages(identity),
