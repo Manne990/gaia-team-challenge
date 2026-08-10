@@ -97,4 +97,11 @@ export function registerActivityRoutes(app: Express, db: Database.Database) {
       res.json({ activity: service.update(identity(req), id(req), req.body) }),
     ),
   );
+  app.delete(
+    "/api/activities/:id",
+    route((req, res) => {
+      service.delete(identity(req), id(req));
+      res.status(204).end();
+    }),
+  );
 }

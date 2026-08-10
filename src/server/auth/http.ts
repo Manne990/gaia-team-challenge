@@ -39,7 +39,8 @@ export function createAuthHttpHandler(auth: AuthService) {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<boolean> => {
-    const path = new URL(request.url ?? "/", "http://local").pathname;
+    const url = new URL(request.url ?? "/", "http://local");
+    const path = url.pathname;
     const origin = request.headers.origin;
     const host = request.headers.host;
     if (request.method !== "GET" && origin && host) {
@@ -129,7 +130,7 @@ export function createAuthHttpHandler(auth: AuthService) {
         if (!(error instanceof AuthenticationError)) throw error;
         json(
           response,
-          401,
+          url.searchParams.get("optional") === "1" ? 200 : 401,
           error instanceof SessionExpiredError
             ? { code: "SESSION_EXPIRED", error: error.message }
             : { code: "UNAUTHENTICATED", error: "Authentication required." },

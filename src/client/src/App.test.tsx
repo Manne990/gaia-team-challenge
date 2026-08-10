@@ -53,8 +53,8 @@ describe.sequential("App", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
+        ok: true,
+        status: 200,
         json: async () => ({ code: "SESSION_EXPIRED" }),
       }),
     );
@@ -66,6 +66,10 @@ describe.sequential("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Email address")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/auth/session?optional=1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
   it("shows an actionable unavailable state", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));

@@ -28,4 +28,20 @@ test("activity composer is modal, keyboard-safe, and records shared history", as
   await composer.getByRole("button", { name: "Save activity" }).click();
   await expect(composer).toHaveCount(0);
   await expect(page.getByText("Browser timeline evidence")).toBeVisible();
+  await page.getByText("Browser timeline evidence").click();
+  await page.getByRole("button", { name: "Edit activity" }).click();
+  const editor = page.getByRole("dialog", { name: "Edit activity" });
+  await editor.getByLabel("Subject").fill("Edited browser timeline evidence");
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edited browser timeline evidence" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Delete activity" }),
+  ).toBeVisible();
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await page.getByRole("button", { name: "Delete activity" }).click();
+  await expect(page.getByText("Edited browser timeline evidence")).toHaveCount(
+    0,
+  );
 });

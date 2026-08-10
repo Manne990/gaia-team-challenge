@@ -229,4 +229,46 @@ describe.sequential("activity timeline HTTP boundary", () => {
     expect(retained.activity.creatorLabel).toBe("Northstar Member");
     expect(retained.activity.companyLabel).not.toBe("Renamed company");
   });
+  it("deletes through the creator window without crossing tenant or viewer boundaries", async () => {
+    const member = await signIn("member@northstar.test", "MemberPass!2026"),
+      viewer = await signIn("viewer@northstar.test", "ViewerPass!2026"),
+      outside = await signIn("other-owner@outside.test", "OutsidePass!2026");
+    const { activity } = (await (
+      await request("/api/activities", member, {
+        method: "POST",
+        body: JSON.stringify({ ...input, followUp: null }),
+      })
+    ).json()) as { activity: any };
+    expect(
+      (
+        await request(`/api/activities/${activity.id}`, outside, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(`/api/activities/${activity.id}`, viewer, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(`/api/activities/${activity.id}`, member, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (await request(`/api/activities/${activity.id}`, member)).status,
+    ).toBe(404);
+    expect(
+      database
+        .prepare(
+          "SELECT action,entity_id entityId FROM audit_events WHERE organization_id=? AND action='activity.deleted' ORDER BY occurred_at DESC LIMIT 1",
+        )
+        .get("org_northstar"),
+    ).toEqual({ action: "activity.deleted", entityId: activity.id });
+  });
 });

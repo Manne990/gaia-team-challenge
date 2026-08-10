@@ -189,20 +189,7 @@ export class ActivitiesService {
     this.auth.requireRole(identity, "member");
     const input = activityUpdateSchema.parse(raw);
     const current = this.find(identity, id);
-    if (
-      identity.role !== "owner" &&
-      current.creatorMembershipId !== identity.membershipId
-    )
-      throw new AuthorizationError(
-        "Only the creator or an owner can edit this activity.",
-      );
-    if (
-      identity.role !== "owner" &&
-      this.now().getTime() - Date.parse(current.createdAt) > 24 * 60 * 60 * 1000
-    )
-      throw new AuthorizationError(
-        "Activities can only be edited by their creator for 24 hours.",
-      );
+    this.requireMutable(identity, current, "edit");
     if (current.version !== input.version)
       throw new ActivityConflictError(
         "This activity changed since you opened it. Refresh and try again.",
@@ -286,6 +273,45 @@ export class ActivitiesService {
       })
       .immediate();
     return this.get(identity, id);
+  }
+
+  delete(identity: SessionIdentity, id: string) {
+    this.auth.requireRole(identity, "member");
+    const current = this.find(identity, id);
+    this.requireMutable(identity, current, "delete");
+    this.db
+      .transaction(() => {
+        this.audit(identity, "activity.deleted", id, {
+          subject: current.subject,
+          creatorMembershipId: current.creatorMembershipId,
+        });
+        const result = this.db
+          .prepare("DELETE FROM activities WHERE organization_id=? AND id=?")
+          .run(identity.organizationId, id);
+        if (!result.changes) throw new ActivityNotFoundError();
+      })
+      .immediate();
+  }
+
+  private requireMutable(
+    identity: SessionIdentity,
+    current: ActivityRow,
+    action: "edit" | "delete",
+  ) {
+    if (
+      identity.role !== "owner" &&
+      current.creatorMembershipId !== identity.membershipId
+    )
+      throw new AuthorizationError(
+        `Only the creator or an owner can ${action} this activity.`,
+      );
+    if (
+      identity.role !== "owner" &&
+      this.now().getTime() - Date.parse(current.createdAt) > 24 * 60 * 60 * 1000
+    )
+      throw new AuthorizationError(
+        `Activities can only be ${action === "edit" ? "edited" : "deleted"} by their creator for 24 hours.`,
+      );
   }
 
   private find(identity: SessionIdentity, id: string) {
