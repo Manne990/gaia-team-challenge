@@ -20,7 +20,7 @@ export class AuthorizationError extends Error {}
 export class MembershipConflictError extends Error {}
 
 const GENERIC_SIGN_IN_ERROR = "The email or password is incorrect.";
-const DUMMY_HASH = "$argon2id$v=19$m=19456,t=2,p=1$bm9ydGhzdGFyLWR1bW15LTEyMw$Kz+sx0bQGLX+PdT1f55pCmTmZa43r0xrh06PBnoD+eM";
+const DUMMY_HASH = "$argon2id$v=19$m=19456,t=2,p=1$MilXVaKmEFoeDIk6cQjtbw$OXYLzUOeI6RiV0cOALKtw69vZZH9DV0gtsqULIz8Iy4";
 
 const iso = (date: Date): string => date.toISOString();
 const digest = (token: string): string => createHash("sha256").update(token).digest("hex");
@@ -75,7 +75,7 @@ export class AuthService {
 
     const membership = this.db.prepare(`
       SELECT id AS membershipId, organization_id AS organizationId, role FROM memberships
-      WHERE user_id = ? AND (? IS NULL OR organization_id = ?)
+      WHERE user_id = ? AND removed_at IS NULL AND (? IS NULL OR organization_id = ?)
       ORDER BY organization_id LIMIT 1
     `).get(user.id, organizationId ?? null, organizationId ?? null) as { membershipId: string; organizationId: string; role: Role } | undefined;
     if (!membership) throw new AuthenticationError(GENERIC_SIGN_IN_ERROR);
@@ -106,7 +106,7 @@ export class AuthService {
       FROM sessions s
       JOIN memberships m ON m.organization_id = s.organization_id AND m.user_id = s.user_id
       JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?
+      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND m.removed_at IS NULL
     `).get(digest(token), iso(this.now())) as SessionIdentity | undefined;
     if (!row) throw new AuthenticationError("Authentication required.");
     return row;
@@ -142,21 +142,26 @@ export class AuthService {
     return this.db.prepare(`
       SELECT m.user_id AS userId, u.email, u.display_name AS displayName, m.role
       FROM memberships m JOIN users u ON u.id = m.user_id
-      WHERE m.organization_id = ? ORDER BY u.email
+      WHERE m.organization_id = ? AND m.removed_at IS NULL ORDER BY u.email
     `).all(actor.organizationId) as Array<{ userId: string; email: string; displayName: string; role: Role }>;
   }
 
   addMembership(actor: SessionIdentity, input: { userId: string; role: Role }): void {
     this.requireRole(actor, "owner");
     const timestamp = iso(this.now());
-    this.db.prepare(`INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`)
-      .run(newOpaqueId(), actor.organizationId, input.userId, input.role, timestamp, timestamp);
+    this.db.prepare(`
+      INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (organization_id, user_id) DO UPDATE SET
+        role = excluded.role, removed_at = NULL, updated_at = excluded.updated_at,
+        version = memberships.version + 1
+    `).run(newOpaqueId(), actor.organizationId, input.userId, input.role, timestamp, timestamp);
   }
 
   updateMembership(actor: SessionIdentity, userId: string, role: Role): void {
     this.requireRole(actor, "owner");
     this.db.transaction(() => {
-      const current = this.db.prepare("SELECT role FROM memberships WHERE organization_id = ? AND user_id = ?")
+      const current = this.db.prepare("SELECT role FROM memberships WHERE organization_id = ? AND user_id = ? AND removed_at IS NULL")
         .get(actor.organizationId, userId) as { role: Role } | undefined;
       if (!current) throw new AuthorizationError("The requested resource was not found.");
       if (current.role === "owner" && role !== "owner") this.assertAnotherOwner(actor.organizationId, userId);
@@ -169,18 +174,21 @@ export class AuthService {
   removeMembership(actor: SessionIdentity, userId: string): void {
     this.requireRole(actor, "owner");
     this.db.transaction(() => {
-      const current = this.db.prepare("SELECT role FROM memberships WHERE organization_id = ? AND user_id = ?")
+      const current = this.db.prepare("SELECT role FROM memberships WHERE organization_id = ? AND user_id = ? AND removed_at IS NULL")
         .get(actor.organizationId, userId) as { role: Role } | undefined;
       if (!current) throw new AuthorizationError("The requested resource was not found.");
       if (current.role === "owner") this.assertAnotherOwner(actor.organizationId, userId);
-      this.db.prepare("DELETE FROM memberships WHERE organization_id = ? AND user_id = ?")
-        .run(actor.organizationId, userId);
+      const timestamp = iso(this.now());
+      this.db.prepare("UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE organization_id = ? AND user_id = ?")
+        .run(timestamp, actor.organizationId, userId);
+      this.db.prepare("UPDATE memberships SET removed_at = ?, updated_at = ?, version = version + 1 WHERE organization_id = ? AND user_id = ?")
+        .run(timestamp, timestamp, actor.organizationId, userId);
     })();
   }
 
   private assertAnotherOwner(organizationId: string, excludedUserId: string): void {
     const another = this.db.prepare(`
-      SELECT 1 FROM memberships WHERE organization_id = ? AND role = 'owner' AND user_id <> ? LIMIT 1
+      SELECT 1 FROM memberships WHERE organization_id = ? AND role = 'owner' AND removed_at IS NULL AND user_id <> ? LIMIT 1
     `).get(organizationId, excludedUserId);
     if (!another) throw new MembershipConflictError("An organization must always have at least one owner.");
   }

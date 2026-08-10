@@ -130,7 +130,8 @@ describe("authorization and tenant isolation", () => {
   it("allows owner transfer and revokes sessions when access is reduced", async () => {
     auth.updateMembership(owner, "user-member", "owner");
     auth.removeMembership(owner, "user-owner");
-    assert.equal(db.prepare("SELECT 1 FROM memberships WHERE user_id = 'user-owner'").get(), undefined);
+    assert.equal(typeof (db.prepare("SELECT removed_at AS removedAt FROM memberships WHERE user_id = 'user-owner'").get() as { removedAt: string }).removedAt, "string");
+    await assert.rejects(() => auth.signIn("owner@northstar.test", "OwnerPass!2026"), AuthenticationError);
     const newOwner = { ...owner, userId: "user-member" };
     auth.updateMembership(newOwner, "user-viewer", "member");
     const memberSession = await auth.signIn("viewer@northstar.test", "OwnerPass!2026");

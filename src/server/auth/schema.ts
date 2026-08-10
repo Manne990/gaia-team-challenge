@@ -31,6 +31,7 @@ export function migrateAuthSchema(db: Database.Database): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       version INTEGER NOT NULL DEFAULT 1,
+      removed_at TEXT,
       UNIQUE (organization_id, user_id),
       UNIQUE (user_id, organization_id)
     ) STRICT;
