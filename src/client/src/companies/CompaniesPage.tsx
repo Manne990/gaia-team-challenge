@@ -85,6 +85,8 @@ const emptyFilters = {
   size: "",
   tag: "",
   archived: "",
+  staleBefore: "",
+  staleThrough: "",
 };
 const labels: Record<string, string> = {
   externalReference: "External reference",
@@ -314,6 +316,12 @@ export function CompaniesPage({ role }: { role: UserRole }) {
           </div>
         </div>
         <div className="company-filters" aria-label="Company filters">
+          {filters.staleBefore && (
+            <p className="dashboard-filter-note" role="status">
+              Showing accounts with no activity since{" "}
+              {new Date(filters.staleBefore).toLocaleDateString()}.
+            </p>
+          )}
           <label>
             <span className="sr-only">Search companies</span>
             <input

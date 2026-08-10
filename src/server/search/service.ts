@@ -17,6 +17,8 @@ const allowedState: Record<Resource, Set<string>> = {
     "sort",
     "direction",
     "page",
+    "staleBefore",
+    "staleThrough",
   ]),
   contacts: new Set([
     "q",
@@ -40,6 +42,10 @@ const allowedState: Record<Resource, Set<string>> = {
     "order",
     "page",
     "view",
+    "closeFrom",
+    "closeTo",
+    "outcomeFrom",
+    "outcomeTo",
   ]),
   tasks: new Set([
     "q",
@@ -54,6 +60,8 @@ const allowedState: Record<Resource, Set<string>> = {
     "sort",
     "direction",
     "page",
+    "dueFrom",
+    "dueTo",
   ]),
 };
 const createView = z.object({

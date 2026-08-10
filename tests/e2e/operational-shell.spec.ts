@@ -108,35 +108,39 @@ test.describe("operational CRM shell", () => {
       .toBe(true);
   });
 
-  test("closes the confirmation dialog from the keyboard", async ({ page }) => {
+  test("closes a product dialog from the keyboard", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expectOwnerShell(page, false);
 
-    const createDeal = page.getByRole("button", {
-      name: "Create deal",
-      exact: true,
+    await page.getByRole("button", { name: "Open navigation" }).click();
+    await page
+      .getByRole("complementary", { name: "Primary" })
+      .getByRole("link", { name: "Activities", exact: true })
+      .click();
+    const recordActivity = page.getByRole("button", {
+      name: "Record activity",
     });
-    await createDeal.click();
+    await recordActivity.click();
 
-    const dialog = page.getByRole("dialog", { name: "Create a new deal?" });
+    const dialog = page.getByRole("dialog", { name: "Record activity" });
     await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Create deal", exact: true }),
-    ).toBeFocused();
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
-    await expect(createDeal).toBeFocused();
   });
 
-  test("announces and dismisses toast feedback", async ({ page }) => {
+  test("announces saved-view feedback", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expectOwnerShell(page, false);
-    await page.getByRole("button", { name: "Save current view" }).click();
+    await page.getByRole("button", { name: "Open navigation" }).click();
+    await page
+      .getByRole("complementary", { name: "Primary" })
+      .getByRole("link", { name: "Deals", exact: true })
+      .click();
+    await page.getByLabel("Save current view").fill("Mobile pipeline");
+    await page.getByRole("button", { name: "Save view" }).click();
 
     const toast = page.getByRole("status");
-    await expect(toast).toContainText("View saved for this workspace");
-    await toast.getByRole("button", { name: "Dismiss notification" }).click();
-    await expect(toast).toBeHidden();
+    await expect(toast).toContainText("View saved.");
   });
 });

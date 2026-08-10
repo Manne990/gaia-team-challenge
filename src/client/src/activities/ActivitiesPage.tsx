@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { UserRole } from "../shell/navigation";
 import { StatePanel } from "../ui/StatePanel";
+import { readListState, writeListState } from "../search/urlState";
 
 type Activity = {
   id: string;
@@ -24,13 +25,14 @@ type List = {
 const activityTypes = ["call", "email", "meeting", "note", "status_change"];
 
 export function ActivitiesPage({ role }: { role: UserRole }) {
+  const initial = readListState("activities");
   const [list, setList] = useState<List | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
-    [type, setType] = useState(""),
-    [author, setAuthor] = useState(""),
-    [from, setFrom] = useState(""),
-    [to, setTo] = useState(""),
+    [type, setType] = useState(initial.type ?? ""),
+    [author, setAuthor] = useState(initial.authorId ?? ""),
+    [from, setFrom] = useState(initial.from ?? ""),
+    [to, setTo] = useState(initial.to ?? ""),
     [page, setPage] = useState(1),
     [composing, setComposing] = useState(false),
     [selected, setSelected] = useState<Activity | null>(null);
@@ -61,6 +63,15 @@ export function ActivitiesPage({ role }: { role: UserRole }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch lifecycle owns loading state
     void load();
   }, [load]);
+  useEffect(() => {
+    writeListState("activities", {
+      type,
+      authorId: author,
+      from: from ? new Date(from).toISOString() : "",
+      to: to ? new Date(to).toISOString() : "",
+      page: String(page),
+    });
+  }, [author, from, page, to, type]);
   if (error && !list)
     return (
       <StatePanel
@@ -123,16 +134,16 @@ export function ActivitiesPage({ role }: { role: UserRole }) {
           From
           <input
             type="datetime-local"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            value={localDateTime(from)}
+            onChange={(e) => setFrom(toIso(e.target.value))}
           />
         </label>
         <label>
           To
           <input
             type="datetime-local"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
+            value={localDateTime(to)}
+            onChange={(e) => setTo(toIso(e.target.value))}
           />
         </label>
         <button type="submit">Apply</button>
@@ -210,6 +221,20 @@ export function ActivitiesPage({ role }: { role: UserRole }) {
       )}
     </section>
   );
+}
+
+function localDateTime(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toIso(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
 function ActivityComposer({

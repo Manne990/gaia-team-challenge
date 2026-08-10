@@ -147,6 +147,14 @@ export class CompanyService {
       const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`;
       params.push(pattern, pattern, pattern);
     }
+    const staleBefore = query.get("staleBefore");
+    if (staleBefore) {
+      clauses.push(`NOT EXISTS (SELECT 1 FROM activities a
+        WHERE a.organization_id=c.organization_id AND a.company_id=c.id
+          AND a.occurred_at>=? ${query.get("staleThrough") ? "AND a.occurred_at<=?" : ""})`);
+      params.push(staleBefore);
+      if (query.get("staleThrough")) params.push(query.get("staleThrough"));
+    }
     const tag = query.get("tag")?.trim().toLowerCase();
     if (tag) {
       clauses.push(

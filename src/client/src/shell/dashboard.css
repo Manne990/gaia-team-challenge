@@ -1,0 +1,125 @@
+.dashboard-page {
+  min-width: 0;
+}
+.dashboard-header {
+  align-items: flex-start;
+}
+.dashboard-header h1 {
+  margin-bottom: 0.35rem;
+}
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.dashboard-metric {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.dashboard-metric a {
+  display: grid;
+  gap: 0.35rem;
+  height: 100%;
+  padding: 1rem;
+  text-decoration: none;
+}
+.dashboard-metric span,
+.dashboard-metric small,
+.money-list {
+  color: var(--muted);
+}
+.dashboard-metric strong {
+  color: var(--ink);
+  font-size: 1.8rem;
+}
+.dashboard-metric .money-list {
+  font-size: 0.85rem;
+}
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.dashboard-card {
+  min-width: 0;
+  padding: 1.25rem;
+}
+.dashboard-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dashboard-list li {
+  min-width: 0;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+.dashboard-list li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.stage-list a,
+.attention-list a {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  text-decoration: none;
+}
+.trend-list li,
+.outcome-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.outcome-links a {
+  white-space: nowrap;
+}
+.stage-list strong,
+.trend-list strong,
+.attention-list strong {
+  color: var(--ink);
+}
+.money-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+}
+.activity-list li {
+  display: grid;
+  gap: 0.15rem;
+}
+.activity-list small {
+  color: var(--muted);
+}
+.activity-type {
+  color: var(--green-dark);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.dashboard-empty {
+  margin: 0;
+  color: var(--muted);
+}
+.dashboard-inline-error {
+  color: var(--danger);
+}
+@media (max-width: 800px) {
+  .dashboard-metrics,
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .dashboard-metrics,
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}

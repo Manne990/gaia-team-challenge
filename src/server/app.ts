@@ -17,6 +17,7 @@ import { registerActivityRoutes } from "./activities/index.js";
 import { registerDuplicateRoutes } from "./duplicates/index.js";
 import { withRequestContext } from "./request-context.js";
 import { registerGovernanceRoutes } from "./governance/index.js";
+import { registerDashboardRoutes } from "./dashboard/index.js";
 
 export function createApp(
   databaseOrRoutes?: Database.Database | ((app: Express) => void),
@@ -82,6 +83,7 @@ export function createApp(
   if (database) registerImportRoutes(app, database);
   if (database) registerDuplicateRoutes(app, database);
   if (database) registerGovernanceRoutes(app, database);
+  if (database) registerDashboardRoutes(app, database);
   configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {

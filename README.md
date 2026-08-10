@@ -57,6 +57,8 @@ The complete challenge requires all issue, CI, clean-checkout, review, and exter
 
 See [`docs/testing.md`](docs/testing.md) for the deterministic fixtures,
 isolated test lifecycle, CI policy, and failure-reproduction commands.
+Dashboard inclusion windows, currency handling, and list reconciliation are
+defined in [`docs/dashboard.md`](docs/dashboard.md).
 
 ## CSV data movement
 
