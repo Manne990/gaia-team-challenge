@@ -145,6 +145,7 @@ export function GlobalSearch() {
                                 : undefined
                             }
                             onMouseEnter={() => setActive(index)}
+                            onClick={() => setDismissed(true)}
                           >
                             <strong>{item.title}</strong>
                             <span>{item.context}</span>

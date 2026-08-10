@@ -29,11 +29,22 @@ test("global search and personal shareable saved views work end to end", async (
   ).toHaveCount(0);
 
   await page.getByRole("link", { name: "Companies" }).click();
+  await search.fill("Northstar Company 3");
+  await page
+    .getByRole("listbox", { name: "Search results" })
+    .getByRole("option")
+    .first()
+    .click();
+  await expect(
+    page.getByRole("searchbox", { name: "Search companies" }),
+  ).toHaveValue(/Northstar Company/);
+  await expect(page).toHaveURL(/#companies\?q=Northstar/);
+
   const lifecycle = page
     .locator('[aria-label="Company filters"] select')
     .first();
   await lifecycle.selectOption("customer");
-  await expect(page).toHaveURL(/#companies\?lifecycle=customer/);
+  await expect(page).toHaveURL(/[?&]lifecycle=customer/);
   await page.getByLabel("Save current view").fill("Customer accounts");
   await page.getByRole("button", { name: "Save view" }).click();
   await expect(

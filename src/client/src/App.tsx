@@ -102,17 +102,21 @@ export function App() {
 }
 
 function WorkspacePage({ user }: { user: SessionUser }) {
-  const [hash, setHash] = useState(routeFromHash);
+  const [location, setLocation] = useState(() => window.location.hash);
+  const hash = routeFromHash();
   useEffect(() => {
-    const onHashChange = () => setHash(routeFromHash());
+    const onHashChange = () => setLocation(window.location.hash);
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
-  if (hash === "companies") return <CompaniesPage role={user.role} />;
-  if (hash === "contacts") return <ContactsPage role={user.role} />;
+  if (hash === "companies")
+    return <CompaniesPage key={location} role={user.role} />;
+  if (hash === "contacts")
+    return <ContactsPage key={location} role={user.role} />;
   if (hash === "deals" || hash.startsWith("deals/"))
     return (
       <DealsPage
+        key={location}
         role={user.role}
         initialDealId={hash.startsWith("deals/") ? hash.slice(6) : undefined}
       />
@@ -120,6 +124,7 @@ function WorkspacePage({ user }: { user: SessionUser }) {
   if (hash === "tasks" || hash.startsWith("tasks/"))
     return (
       <TasksPage
+        key={location}
         role={user.role}
         initialTaskId={hash.startsWith("tasks/") ? hash.slice(6) : undefined}
       />
