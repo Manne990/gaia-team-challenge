@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import AxeBuilder from '@axe-core/playwright';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -136,6 +137,57 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     ]);
     expect(restoreResponse.status()).toBe(200);
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
+  } finally {
+    child.kill();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('contacts and deals fit the viewport without contrast failures', async ({ page }) => {
+  const directory = mkdtempSync(join(tmpdir(), 'northstar-responsive-browser-'));
+  const databasePath = join(directory, 'crm.sqlite');
+  const port = await freePort();
+  const environment = { ...process.env, CRM_DB_PATH: databasePath, NODE_ENV: 'test' };
+  expect(spawnSync('npx', ['tsx', 'scripts/db.ts', 'reset'], { env: environment }).status).toBe(0);
+  expect(spawnSync('npx', ['tsx', 'scripts/db.ts', 'seed'], { env: environment }).status).toBe(0);
+  const child = spawn(
+    'npx',
+    [
+      'tsx',
+      'src/server/index.ts',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--db-path',
+      databasePath,
+    ],
+    { env: environment, stdio: 'ignore' },
+  );
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    // The configured tablet project is 1024px; exercise the reviewed 834px regression
+    // while retaining the configured 1440px desktop and 390px mobile coverage.
+    if (page.viewportSize()?.width === 1024)
+      await page.setViewportSize({ width: 834, height: 900 });
+    await waitForHealth(url);
+    await page.goto(url);
+    await page.getByLabel('Email').fill('owner@northstar.test');
+    await page.getByLabel('Password').fill('OwnerPass!2026');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    for (const destination of ['Contacts', 'Deals']) {
+      await navigateTo(page, destination);
+      await expect(page.getByRole('heading', { name: destination })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        page.viewportSize().width,
+      );
+      expect(
+        (await new AxeBuilder({ page }).analyze()).violations.filter(
+          (violation) => violation.id === 'color-contrast',
+        ),
+      ).toEqual([]);
+    }
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });

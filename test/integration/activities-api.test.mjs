@@ -123,6 +123,17 @@ describe('activities API', () => {
       ),
     );
     expect(concurrent.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(
+      (
+        await fetch(`${url}/api/activities/${activity.id}`, {
+          method: 'DELETE',
+          headers: { cookie: member },
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (await fetch(`${url}/api/activities/${activity.id}`, { headers: { cookie: member } })).status,
+    ).toBe(404);
 
     const firstPage = await fetch(`${url}/api/activities?pageSize=1`, {
       headers: { cookie: member },

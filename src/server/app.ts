@@ -244,7 +244,7 @@ export function createApp(config: AppConfig) {
   const createNotification = (
     organizationId: string,
     userId: string | null,
-    type: 'task_due' | 'task_overdue',
+    type: 'task_assigned' | 'task_due' | 'task_overdue',
     dedupeKey: string,
     payload: unknown,
     createdAt: string,
@@ -572,12 +572,11 @@ export function createApp(config: AppConfig) {
       return response.json(auth.authenticate(cookieToken(request.headers.cookie)));
     } catch (error) {
       const expired = error instanceof AuthError && error.code === 'SESSION_EXPIRED';
+      if (!expired) return response.json(null);
       return response.status(401).json({
         error: {
-          code: expired ? 'SESSION_EXPIRED' : 'UNAUTHENTICATED',
-          message: expired
-            ? 'Your session has expired. Please sign in again.'
-            : 'Please sign in to continue.',
+          code: 'SESSION_EXPIRED',
+          message: 'Your session has expired. Please sign in again.',
         },
       });
     }
@@ -1618,6 +1617,15 @@ export function createApp(config: AppConfig) {
             now,
           );
         auditTask(s.organizationId, s.userId, 'task.created', id, { title: input.title });
+        if (input.assigneeId && input.assigneeId !== s.userId)
+          createNotification(
+            s.organizationId,
+            input.assigneeId,
+            'task_assigned',
+            `${id}:assigned:${input.assigneeId}`,
+            { recordType: 'task', recordId: id, title: input.title },
+            now,
+          );
       });
       return response
         .status(201)
@@ -2459,6 +2467,36 @@ export function createApp(config: AppConfig) {
           .prepare(`SELECT ${activityFields} FROM activities WHERE id = ?`)
           .get(request.params.id),
       );
+    } catch (error) {
+      return sendActivityError(error, response);
+    }
+  });
+
+  app.delete('/api/activities/:id', (request, response) => {
+    try {
+      const session = auth.requireRole(activitySession(request), ['owner', 'member']);
+      const activity = database
+        .prepare(
+          'SELECT id, creator_id AS creatorId, created_at AS createdAt FROM activities WHERE id = ? AND organization_id = ?',
+        )
+        .get(request.params.id, session.organizationId);
+      if (!activity)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This activity was not found.' } });
+      const withinEditWindow = Date.now() - Date.parse(activity.createdAt) <= 15 * 60 * 1000;
+      if ((session.role !== 'owner' && activity.creatorId !== session.userId) || !withinEditWindow)
+        return response.status(403).json({
+          error: {
+            code: 'FORBIDDEN',
+            message:
+              'Activities may only be deleted by their creator or an owner within 15 minutes.',
+          },
+        });
+      database
+        .prepare('DELETE FROM activities WHERE id = ? AND organization_id = ?')
+        .run(activity.id, session.organizationId);
+      return response.status(204).end();
     } catch (error) {
       return sendActivityError(error, response);
     }
