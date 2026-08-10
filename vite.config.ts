@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   root: "src/client",
+  server: { hmr: process.env.NORTHSTAR_TEST_MODE === "1" ? false : undefined },
   build: { outDir: "../../dist/client", emptyOutDir: true },
   test: {
     root: process.cwd(),

@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
-import express, { type ErrorRequestHandler } from "express";
 import type Database from "better-sqlite3";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 import { AuthService, createAuthHttpHandler } from "./auth/index.js";
 
-export function createApp(database?: Database.Database) {
+export function createApp(
+  databaseOrRoutes?: Database.Database | ((app: Express) => void),
+) {
+  const database =
+    typeof databaseOrRoutes === "function" ? undefined : databaseOrRoutes;
+  const configureRoutes =
+    typeof databaseOrRoutes === "function" ? databaseOrRoutes : undefined;
   const app = express();
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
@@ -33,6 +39,7 @@ export function createApp(database?: Database.Database) {
     };
     response.json(payload);
   });
+  configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {
       error: {
