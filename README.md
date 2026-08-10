@@ -54,3 +54,6 @@ Production startup fails clearly if configuration is invalid or the client build
 - `npm start` — run an existing production build.
 
 The complete challenge requires all issue, CI, clean-checkout, review, and external acceptance gates; a passing foundation alone is not product completion.
+
+See [`docs/testing.md`](docs/testing.md) for the deterministic fixtures,
+isolated test lifecycle, CI policy, and failure-reproduction commands.

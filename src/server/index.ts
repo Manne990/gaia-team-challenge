@@ -31,7 +31,10 @@ async function start() {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       root: resolve(process.cwd(), "src/client"),
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.NORTHSTAR_TEST_MODE === "1" ? false : undefined,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
