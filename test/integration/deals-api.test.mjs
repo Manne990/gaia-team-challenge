@@ -100,6 +100,17 @@ describe('deals API', () => {
     });
     expect(moved.status).toBe(200);
     const movedDeal = await moved.json();
+    const notifications = await fetch(`${url}/api/notifications?unread=true`, {
+      headers: { cookie },
+    });
+    expect((await notifications.json()).items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'deal_changed',
+          payloadJson: expect.stringContaining(deal.id),
+        }),
+      ]),
+    );
     expect(
       (
         await fetch(`${url}/api/deals/${deal.id}`, {

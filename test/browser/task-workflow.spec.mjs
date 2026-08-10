@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 const port = () =>
@@ -63,6 +64,11 @@ test('actual task workspace creates, completes, reopens, archives, and keeps vie
     await page.getByRole('button', { name: 'Sign in' }).click();
     await navigate(page, 'Tasks');
     await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+    expect(
+      (await new AxeBuilder({ page }).analyze()).violations.filter((violation) =>
+        ['page-has-heading-one', 'heading-order'].includes(violation.id),
+      ),
+    ).toEqual([]);
     const create = page.getByRole('form', { name: 'Create task' });
     await create.getByLabel('Title').fill('Browser task');
     await create.getByLabel('Description').fill('A durable task workflow.');
@@ -85,6 +91,11 @@ test('actual task workspace creates, completes, reopens, archives, and keeps vie
     await expect(taskRow).toContainText('open');
     await taskRow.getByRole('button', { name: 'Archive task' }).click();
     await expect(page.getByText('Task archived.')).toBeVisible();
+    await navigate(page, 'Deals');
+    await page.evaluate(() => history.replaceState(null, '', '?sort=name&direction=desc&page=1'));
+    await navigate(page, 'Tasks');
+    await expect(page.getByRole('list', { name: 'Task results' })).not.toBeEmpty();
+    await expect(page).toHaveURL(/sort=dueAt/);
     const account = page.getByRole('button', { name: /Northstar Owner owner/ });
     await account.focus();
     await page.keyboard.press('Enter');

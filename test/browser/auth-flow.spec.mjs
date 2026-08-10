@@ -105,6 +105,22 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await page.getByRole('button', { name: 'Sign in' }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    for (const workspace of [
+      'Companies',
+      'Activities',
+      'Deals',
+      'Imports',
+      'Audit',
+      'Administration',
+    ]) {
+      await navigateTo(page, workspace);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      expect(
+        (await new AxeBuilder({ page }).analyze()).violations.filter((violation) =>
+          ['page-has-heading-one', 'heading-order'].includes(violation.id),
+        ),
+      ).toEqual([]);
+    }
     expect(
       await page.locator('html').evaluate((element) => element.scrollWidth === element.clientWidth),
     ).toBe(true);
