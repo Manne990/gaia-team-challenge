@@ -51,6 +51,7 @@ describe("SQLite database lifecycle", () => {
       { name: "003_company_archival.sql" },
       { name: "003_contact_management.sql" },
       { name: "003_task_archive.sql" },
+      { name: "004_activity_timeline.sql" },
       { name: "004_deal_management.sql" },
     ]);
     expect(database.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -64,7 +65,7 @@ describe("SQLite database lifecycle", () => {
     expect(() => migrate(database)).not.toThrow();
     expect(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get(),
-    ).toEqual({ count: 6 });
+    ).toEqual({ count: 7 });
     database.close();
   });
 

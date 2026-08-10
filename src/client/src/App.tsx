@@ -17,6 +17,7 @@ import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
 import { CompaniesPage } from "./companies/CompaniesPage";
 import { TasksPage } from "./tasks/TasksPage";
+import { ActivitiesPage } from "./activities/ActivitiesPage";
 
 interface SessionUser {
   id: string;
@@ -108,6 +109,7 @@ function WorkspacePage({ user }: { user: SessionUser }) {
   if (hash === "#contacts") return <ContactsPage role={user.role} />;
   if (hash === "#deals") return <DealsPage role={user.role} />;
   if (hash === "#tasks") return <TasksPage role={user.role} />;
+  if (hash === "#activities") return <ActivitiesPage role={user.role} />;
   return <DashboardPage userName={user.displayName} />;
 }
 
