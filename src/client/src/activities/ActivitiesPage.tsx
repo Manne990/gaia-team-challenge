@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { UserRole } from "../shell/navigation";
 import { StatePanel } from "../ui/StatePanel";
 
@@ -220,6 +220,14 @@ function ActivityComposer({
   onCreated: () => void;
 }) {
   const [message, setMessage] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  const close = () => {
+    dialog.current?.close();
+    onClose();
+  };
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -258,7 +266,14 @@ function ActivityComposer({
     }
   }
   return (
-    <dialog open aria-labelledby="activity-form-title">
+    <dialog
+      ref={dialog}
+      aria-labelledby="activity-form-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+    >
       <form className="dialog-body form-grid" onSubmit={(e) => void submit(e)}>
         <h2 id="activity-form-title">Record activity</h2>
         <label>
@@ -330,7 +345,7 @@ function ActivityComposer({
         </fieldset>
         {message && <p role="alert">{message}</p>}
         <div className="dialog-actions">
-          <button type="button" className="button-secondary" onClick={onClose}>
+          <button type="button" className="button-secondary" onClick={close}>
             Cancel
           </button>
           <button type="submit">Save activity</button>
@@ -346,8 +361,23 @@ function ActivityDialog({
   activity: Activity;
   onClose: () => void;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  const close = () => {
+    dialog.current?.close();
+    onClose();
+  };
   return (
-    <dialog open aria-labelledby="activity-detail-title">
+    <dialog
+      ref={dialog}
+      aria-labelledby="activity-detail-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+    >
       <article className="dialog-body">
         <p className="eyebrow">{activity.type.replace("_", " ")}</p>
         <h2 id="activity-detail-title">{activity.subject}</h2>
@@ -364,7 +394,7 @@ function ActivityDialog({
             </>
           )}
         </dl>
-        <button onClick={onClose}>Close</button>
+        <button onClick={close}>Close</button>
       </article>
     </dialog>
   );

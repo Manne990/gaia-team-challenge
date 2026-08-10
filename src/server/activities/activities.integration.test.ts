@@ -2,14 +2,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- compact HTTP boundary fixture decoding */
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { migrate, openDatabase, type CrmDatabase } from "../../db/database.js";
 import { seedDatabase } from "../../db/seed.js";
 import { createApp } from "../app.js";
 
-let database: CrmDatabase, server: Server, baseUrl: string;
+let database: CrmDatabase,
+  server: Server,
+  baseUrl: string,
+  directory: string,
+  databasePath: string;
 beforeEach(async () => {
-  database = openDatabase(":memory:");
+  directory = mkdtempSync(join(tmpdir(), "northstar-activities-"));
+  databasePath = join(directory, "crm.sqlite");
+  database = openDatabase(databasePath);
   migrate(database);
   seedDatabase(database);
   server = createApp(database).listen(0, "127.0.0.1");
@@ -19,6 +28,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   database.close();
+  rmSync(directory, { recursive: true, force: true });
 });
 async function signIn(email: string, password: string) {
   const response = await fetch(`${baseUrl}/api/auth/sign-in`, {
@@ -154,22 +164,17 @@ describe.sequential("activity timeline HTTP boundary", () => {
       participantContactIds: [],
       version: created.activity.version,
     };
-    expect(
-      (
-        await request(`/api/activities/${created.activity.id}`, member, {
-          method: "PATCH",
-          body: JSON.stringify(edit),
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await request(`/api/activities/${created.activity.id}`, member, {
-          method: "PATCH",
-          body: JSON.stringify(edit),
-        })
-      ).status,
-    ).toBe(409);
+    const concurrent = await Promise.all([
+      request(`/api/activities/${created.activity.id}`, member, {
+        method: "PATCH",
+        body: JSON.stringify({ ...edit, subject: "Concurrent correction A" }),
+      }),
+      request(`/api/activities/${created.activity.id}`, member, {
+        method: "PATCH",
+        body: JSON.stringify({ ...edit, subject: "Concurrent correction B" }),
+      }),
+    ]);
+    expect(concurrent.map(({ status }) => status).sort()).toEqual([200, 409]);
   });
   it("retains safe creator and related labels after later changes and a database restart", async () => {
     const member = await signIn("member@northstar.test", "MemberPass!2026");
@@ -187,8 +192,19 @@ describe.sequential("activity timeline HTTP boundary", () => {
         "UPDATE companies SET name='Renamed company', archived_at='2026-08-10T12:00:00.000Z' WHERE id='company_northstar_01'",
       )
       .run();
+    await new Promise<void>((r) => server.close(() => r()));
+    database.close();
+    database = openDatabase(databasePath);
+    migrate(database);
+    server = createApp(database).listen(0, "127.0.0.1");
+    await new Promise<void>((r) => server.once("listening", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const restartedMember = await signIn(
+      "member@northstar.test",
+      "MemberPass!2026",
+    );
     const retained = (await (
-      await request(`/api/activities/${activity.id}`, member)
+      await request(`/api/activities/${activity.id}`, restartedMember)
     ).json()) as { activity: any };
     expect(retained.activity.creatorLabel).toBe("Northstar Member");
     expect(retained.activity.companyLabel).not.toBe("Renamed company");
