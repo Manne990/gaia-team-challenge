@@ -78,7 +78,10 @@ export class ContactsService {
     };
     const sort = allowedSorts[query.sort ?? "name"] ?? allowedSorts.name;
     const direction = query.order === "desc" ? "DESC" : "ASC";
-    const clauses = ["c.organization_id = ?"];
+    const clauses = [
+      "c.organization_id = ?",
+      "NOT EXISTS (SELECT 1 FROM merge_redirects mr WHERE mr.organization_id=c.organization_id AND mr.entity_type='contact' AND mr.source_id=c.id)",
+    ];
     const values: unknown[] = [identity.organizationId];
     if (query.includeArchived !== "true") clauses.push("c.archived_at IS NULL");
     for (const [value, sql] of [
@@ -148,6 +151,13 @@ export class ContactsService {
   }
 
   get(identity: SessionIdentity, id: string) {
+    const requestedId = id;
+    const redirect = this.db
+      .prepare(
+        "SELECT target_id AS targetId FROM merge_redirects WHERE organization_id=? AND entity_type='contact' AND source_id=?",
+      )
+      .get(identity.organizationId, id) as { targetId: string } | undefined;
+    if (redirect) id = redirect.targetId;
     const contact = this.find(identity, id);
     const parameters = [identity.organizationId, id];
     const company = contact.companyId
@@ -193,6 +203,7 @@ export class ContactsService {
     }>;
     return {
       ...this.present(contact),
+      redirect: redirect ? { from: requestedId, to: id } : undefined,
       company,
       activities,
       deals,
@@ -253,6 +264,7 @@ export class ContactsService {
 
   update(identity: SessionIdentity, id: string, raw: unknown) {
     this.auth.requireRole(identity, "member");
+    this.assertNotMerged(identity, id);
     const input = contactInputSchema.parse(raw);
     if (!input.version)
       throw new ContactConflictError("A record version is required.");
@@ -304,6 +316,7 @@ export class ContactsService {
 
   setArchived(identity: SessionIdentity, id: string, archived: boolean) {
     this.auth.requireRole(identity, "member");
+    this.assertNotMerged(identity, id);
     this.find(identity, id);
     const timestamp = this.now().toISOString();
     this.db
@@ -336,6 +349,19 @@ export class ContactsService {
     if (!row)
       throw new ContactNotFoundError("The requested contact was not found.");
     return row;
+  }
+
+  private assertNotMerged(identity: SessionIdentity, id: string) {
+    if (
+      this.db
+        .prepare(
+          "SELECT 1 FROM merge_redirects WHERE organization_id=? AND entity_type='contact' AND source_id=?",
+        )
+        .get(identity.organizationId, id)
+    )
+      throw new ContactConflictError(
+        "This contact was merged. Open its surviving record instead.",
+      );
   }
 
   private present(row: ContactRow) {

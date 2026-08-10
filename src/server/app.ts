@@ -13,6 +13,7 @@ import {
 } from "./notifications/index.js";
 import { createTaskHttpHandler, TaskService } from "./tasks/index.js";
 import { registerActivityRoutes } from "./activities/index.js";
+import { registerDuplicateRoutes } from "./duplicates/index.js";
 
 export function createApp(
   databaseOrRoutes?: Database.Database | ((app: Express) => void),
@@ -74,6 +75,7 @@ export function createApp(
   if (database) registerDealRoutes(app, database);
   if (database) registerActivityRoutes(app, database);
   if (database) registerImportRoutes(app, database);
+  if (database) registerDuplicateRoutes(app, database);
   configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {
