@@ -4,7 +4,9 @@
   "private": true,
   "description": "Northstar CRM",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "db:reset": "tsx src/server/database/cli.ts reset",
     "db:seed": "tsx src/server/database/cli.ts seed",

@@ -21,10 +21,11 @@ npm run test:browser -- --grep "critical-path"
 ```
 
 Tests use operating-system temporary directories and dynamically allocated
-ports. `DATABASE_PATH` identifies the per-run database. The browser runner
-handles `SIGINT` and `SIGTERM`, terminates its child server, and removes the
-temporary directory. Never point a test at the development or production
-database.
+ports. `NORTHSTAR_DATABASE_PATH` identifies the per-run database. The browser
+runner launches the real root `npm run dev` product command with those isolated
+values. It handles `SIGINT` and `SIGTERM`, terminates its child server, and
+removes the temporary directory. Never point a test at the development or
+production database.
 
 The shared fixture anchor is `2026-01-15T12:00:00.000Z`. Add scenarios relative
 to that anchor rather than the wall clock. Fixture IDs and labels are stable;

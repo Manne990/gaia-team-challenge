@@ -14,5 +14,7 @@ data/
 .env.*
 !.env.example
 coverage/
+playwright-report/
+test-results/
 *.log
 .DS_Store
