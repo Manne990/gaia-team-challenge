@@ -334,7 +334,7 @@ function Companies({ canWrite }: { canWrite: boolean }) {
   const companyExportHref = `/api/exports/companies.csv${exportQuery.size ? `?${exportQuery}` : ''}`;
   return (
     <section aria-labelledby="companies-heading">
-      <h2 id="companies-heading">Companies</h2>
+      <h1 id="companies-heading">Companies</h1>
       {canWrite && (
         <button
           type="button"
@@ -1059,7 +1059,7 @@ function Activities({ canWrite }: { canWrite: boolean }) {
   });
   return (
     <section aria-labelledby="activities-heading">
-      <h2 id="activities-heading">Activities</h2>
+      <h1 id="activities-heading">Activities</h1>
       <p className="subtle">
         Activity facts and links are permanent. Creators and owners can amend descriptive notes for
         15 minutes after recording.
@@ -1351,7 +1351,7 @@ function Imports({ canWrite }: { canWrite: boolean }) {
   };
   return (
     <section aria-labelledby="imports-heading">
-      <h2 id="imports-heading">Imports and exports</h2>
+      <h1 id="imports-heading">Imports and exports</h1>
       <p>Preview CSV rows before committing. Existing records are never merged automatically.</p>
       <label>
         Record type{' '}
@@ -1442,7 +1442,12 @@ function Tasks({ canWrite }: { canWrite: boolean }) {
     return kind && id ? `${kind}:${id}` : '';
   });
   const [page, setPage] = useState(() => Math.max(1, Number(initialQuery.get('page')) || 1));
-  const [sort, setSort] = useState(() => initialQuery.get('sort') || 'dueAt');
+  const [sort, setSort] = useState(() => {
+    const candidate = initialQuery.get('sort');
+    return ['dueAt', 'createdAt', 'updatedAt', 'priority'].includes(candidate || '')
+      ? candidate!
+      : 'dueAt';
+  });
   const [direction, setDirection] = useState(() =>
     initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
   );
@@ -1808,7 +1813,7 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
   }, [deals, selectedRecord]);
   return (
     <section aria-labelledby="deals-heading">
-      <h2 id="deals-heading">Deals</h2>
+      <h1 id="deals-heading">Deals</h1>
       {error && <p role="alert">{error}</p>}
       {canWrite && (
         <form
@@ -2428,7 +2433,7 @@ function Audit() {
   }, []);
   return (
     <section aria-labelledby="audit-heading">
-      <h2 id="audit-heading">Audit log</h2>
+      <h1 id="audit-heading">Audit log</h1>
       <ul>
         {items.map((item) => (
           <li key={item.id}>
@@ -2452,7 +2457,7 @@ function Administration() {
   }, []);
   return (
     <section aria-labelledby="administration-heading">
-      <h2 id="administration-heading">Administration</h2>
+      <h1 id="administration-heading">Administration</h1>
       <form
         aria-label="Add member"
         onSubmit={async (event) => {

@@ -244,7 +244,7 @@ export function createApp(config: AppConfig) {
   const createNotification = (
     organizationId: string,
     userId: string | null,
-    type: 'task_assigned' | 'task_due' | 'task_overdue',
+    type: 'task_assigned' | 'task_due' | 'task_overdue' | 'deal_changed',
     dedupeKey: string,
     payload: unknown,
     createdAt: string,
@@ -3055,7 +3055,7 @@ export function createApp(config: AppConfig) {
       const changed = transaction(() => {
         const current = database
           .prepare(
-            'SELECT stage_id AS stageId, status, version FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
+            'SELECT stage_id AS stageId, status, version, owner_id AS ownerId, name FROM deals WHERE id = ? AND organization_id = ? AND archived_at IS NULL',
           )
           .get(request.params.id, s.organizationId);
         const target = database
@@ -3110,6 +3110,19 @@ export function createApp(config: AppConfig) {
             JSON.stringify({ fromStageId: current.stageId, toStageId: input.stageId }),
             now,
           );
+        createNotification(
+          s.organizationId,
+          current.ownerId,
+          'deal_changed',
+          `${request.params.id}:stage:${input.stageId}:v${input.version + 1}`,
+          {
+            recordType: 'deal',
+            recordId: request.params.id,
+            title: current.name,
+            stageId: input.stageId,
+          },
+          now,
+        );
         return true;
       });
       return changed
