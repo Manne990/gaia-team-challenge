@@ -21,6 +21,7 @@ import { routeFromHash } from "./search/urlState";
 import { ActivitiesPage } from "./activities/ActivitiesPage";
 import { ImportsPage } from "./imports/ImportsPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
+import { DuplicateReviewPage } from "./duplicates/DuplicateReviewPage";
 
 interface SessionUser {
   id: string;
@@ -132,6 +133,7 @@ function WorkspacePage({ user }: { user: SessionUser }) {
   if (hash === "notifications") return <NotificationsPage />;
   if (hash === "activities") return <ActivitiesPage role={user.role} />;
   if (hash === "imports") return <ImportsPage role={user.role} />;
+  if (hash === "duplicates") return <DuplicateReviewPage role={user.role} />;
   return <DashboardPage userName={user.displayName} />;
 }
 

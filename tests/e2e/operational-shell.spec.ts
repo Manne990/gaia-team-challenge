@@ -9,6 +9,7 @@ const ownerNavigation = [
   "Tasks",
   "Notifications",
   "Imports",
+  "Duplicates",
   "Audit",
   "Administration",
 ];
