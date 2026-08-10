@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { StatePanel } from "../ui/StatePanel";
+import { SavedViewsControl } from "../search/SavedViewsControl";
+import { readListState, writeListState } from "../search/urlState";
 import "./deals.css";
 
 export type DealRole = "owner" | "member" | "viewer";
@@ -137,15 +139,18 @@ const formFrom = (d: Deal): FormValues => ({
 });
 
 export function DealsPage({ role }: { role: DealRole }) {
+  const initial = readListState("deals");
   const canEdit = role !== "viewer";
   const [list, setList] = useState<DealList | null>(null);
-  const [query, setQuery] = useState("");
-  const [stageId, setStageId] = useState("all");
-  const [ownerId, setOwnerId] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [status, setStatus] = useState("all");
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(initial.q ?? "");
+  const [stageId, setStageId] = useState(initial.stageId ?? "all");
+  const [ownerId, setOwnerId] = useState(initial.ownerId ?? "");
+  const [companyId, setCompanyId] = useState(initial.companyId ?? "");
+  const [status, setStatus] = useState(initial.status ?? "all");
+  const [includeArchived, setIncludeArchived] = useState(
+    initial.includeArchived === "true",
+  );
+  const [page, setPage] = useState(Math.max(1, Number(initial.page) || 1));
   const [view, setView] = useState<"table" | "pipeline">("table");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -184,6 +189,17 @@ export function DealsPage({ role }: { role: DealRole }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+  useEffect(() => {
+    writeListState("deals", {
+      q: query,
+      stageId,
+      ownerId,
+      companyId,
+      status,
+      includeArchived: String(includeArchived),
+      page: String(page),
+    });
+  }, [companyId, includeArchived, ownerId, page, query, stageId, status]);
   const open = async (id: string) => {
     setSelected(null);
     setSaveError(null);
@@ -295,6 +311,27 @@ export function DealsPage({ role }: { role: DealRole }) {
         </div>
         {canEdit && <button onClick={create}>Create deal</button>}
       </header>
+      <SavedViewsControl
+        resource="deals"
+        state={{
+          q: query,
+          stageId,
+          ownerId,
+          companyId,
+          status,
+          includeArchived: String(includeArchived),
+          page: String(page),
+        }}
+        onApply={(next) => {
+          setQuery(next.q ?? "");
+          setStageId(next.stageId ?? "all");
+          setOwnerId(next.ownerId ?? "");
+          setCompanyId(next.companyId ?? "");
+          setStatus(next.status ?? "all");
+          setIncludeArchived(next.includeArchived === "true");
+          setPage(Math.max(1, Number(next.page) || 1));
+        }}
+      />
       <section className="surface deals-panel">
         <div className="filter-bar" aria-label="Deal filters">
           <label>

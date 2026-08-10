@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { StatePanel } from "../ui/StatePanel";
+import { SavedViewsControl } from "../search/SavedViewsControl";
+import { readListState, writeListState } from "../search/urlState";
 import "./contacts.css";
 
 export type ContactRole = "owner" | "member" | "viewer";
@@ -118,14 +120,17 @@ const toForm = (contact: Contact): FormValues => ({
 });
 
 export function ContactsPage({ role }: { role: ContactRole }) {
+  const initial = readListState("contacts");
   const canEdit = role !== "viewer";
   const [list, setList] = useState<ListResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Contact | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(initial.q ?? "");
+  const [status, setStatus] = useState(initial.status ?? "all");
+  const [includeArchived, setIncludeArchived] = useState(
+    initial.includeArchived === "true",
+  );
+  const [page, setPage] = useState(Math.max(1, Number(initial.page) || 1));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [detailError, setDetailError] = useState<unknown>(null);
@@ -158,6 +163,14 @@ export function ContactsPage({ role }: { role: ContactRole }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+  useEffect(() => {
+    writeListState("contacts", {
+      q: query,
+      status,
+      includeArchived: String(includeArchived),
+      page: String(page),
+    });
+  }, [includeArchived, page, query, status]);
 
   const openContact = async (id: string) => {
     setSelectedId(id);
@@ -263,6 +276,21 @@ export function ContactsPage({ role }: { role: ContactRole }) {
         </div>
         {canEdit && <button onClick={startCreate}>Create contact</button>}
       </header>
+      <SavedViewsControl
+        resource="contacts"
+        state={{
+          q: query,
+          status,
+          includeArchived: String(includeArchived),
+          page: String(page),
+        }}
+        onApply={(next) => {
+          setQuery(next.q ?? "");
+          setStatus(next.status ?? "all");
+          setIncludeArchived(next.includeArchived === "true");
+          setPage(Math.max(1, Number(next.page) || 1));
+        }}
+      />
       <section className="surface contacts-panel">
         <div className="filter-bar" aria-label="Contact filters">
           <label>

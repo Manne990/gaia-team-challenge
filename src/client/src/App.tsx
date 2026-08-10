@@ -17,6 +17,7 @@ import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
 import { CompaniesPage } from "./companies/CompaniesPage";
 import { TasksPage } from "./tasks/TasksPage";
+import { routeFromHash } from "./search/urlState";
 
 interface SessionUser {
   id: string;
@@ -98,16 +99,16 @@ export function App() {
 }
 
 function WorkspacePage({ user }: { user: SessionUser }) {
-  const [hash, setHash] = useState(() => window.location.hash || "#dashboard");
+  const [hash, setHash] = useState(routeFromHash);
   useEffect(() => {
-    const onHashChange = () => setHash(window.location.hash || "#dashboard");
+    const onHashChange = () => setHash(routeFromHash());
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
-  if (hash === "#companies") return <CompaniesPage role={user.role} />;
-  if (hash === "#contacts") return <ContactsPage role={user.role} />;
-  if (hash === "#deals") return <DealsPage role={user.role} />;
-  if (hash === "#tasks") return <TasksPage role={user.role} />;
+  if (hash === "companies") return <CompaniesPage role={user.role} />;
+  if (hash === "contacts") return <ContactsPage role={user.role} />;
+  if (hash === "deals") return <DealsPage role={user.role} />;
+  if (hash === "tasks") return <TasksPage role={user.role} />;
   return <DashboardPage userName={user.displayName} />;
 }
 
