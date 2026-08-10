@@ -1,21 +1,14 @@
 name: CI
-
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-
 permissions:
   contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  verify:
+  ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,4 +19,3 @@ jobs:
       - run: npm run db:reset
       - run: npm run db:seed
       - run: npm run ci
-      - run: npm run build

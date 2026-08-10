@@ -1,22 +1,56 @@
-# Northstar CRM Challenge
+# Northstar CRM
 
-Build the CRM described in [`docs/product-contract.md`](docs/product-contract.md).
-The GitHub issue queue is the authoritative work breakdown.
+Northstar is the browser CRM described in [`docs/product-contract.md`](docs/product-contract.md). The architecture and extension points are summarized in [`docs/architecture.md`](docs/architecture.md).
 
-This repository begins from a deliberately minimal, green baseline. The
-baseline scripts prove only that the challenge repository is installable; they
-are not product implementation or product acceptance.
+## Local setup
 
-## Required Final Commands
+Use Node.js 22 or newer. No paid service, private API, or secret is required.
 
 ```bash
 npm ci
 npm run db:reset
 npm run db:seed
 npm run ci
-npm run build
+```
+
+The default SQLite file is `./data/northstar.sqlite`. Reset removes that database and its WAL files before recreating the foundation metadata; seed is idempotent. Override the path with `NORTHSTAR_DATABASE_PATH` or `--database-path`:
+
+```bash
+npm run db:seed -- --database-path /tmp/northstar.sqlite
+```
+
+## Development
+
+The root development command starts the API and Vite-powered React client on one address:
+
+```bash
 npm run dev -- --host 127.0.0.1 --port 4173
 ```
 
-The complete product must run locally without paid services or private secrets.
-Reality, CI, and external acceptance determine completion.
+Host, port, and database path can also be supplied through `NORTHSTAR_HOST`, `NORTHSTAR_PORT`, and `NORTHSTAR_DATABASE_PATH`; explicit CLI flags take precedence. Copy `.env.example` as a reference, but environment files and local databases are ignored by Git.
+
+## Production
+
+Build and start the compiled server and client:
+
+```bash
+npm run build
+NODE_ENV=production npm start -- --host 127.0.0.1 --port 4173
+```
+
+Production startup fails clearly if configuration is invalid or the client build is missing. Client-side routes fall back to the React entry point, while `/api/health` and `/api/bootstrap` expose the server foundation.
+
+## Root commands
+
+- `npm run db:reset` — recreate the configured local database.
+- `npm run db:seed` — idempotently apply foundation seed metadata.
+- `npm run format` — check formatting.
+- `npm run lint` — run static lint checks.
+- `npm run typecheck` — type-check browser and server boundaries.
+- `npm test` — run deterministic Vitest suites.
+- `npm run ci` — run formatting, lint, types, tests, and build.
+- `npm run build` — build the React client and compile the Node server.
+- `npm run dev` — run the complete product in development.
+- `npm start` — run an existing production build.
+
+The complete challenge requires all issue, CI, clean-checkout, review, and external acceptance gates; a passing foundation alone is not product completion.
