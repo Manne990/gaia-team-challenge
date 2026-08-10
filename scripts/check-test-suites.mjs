@@ -5,6 +5,7 @@ const roots = ["tests/unit", "tests/integration", "tests/e2e", "test", "src"];
 const forbidden =
   /\b(?:describe|it|test)(?:\s*\.\s*\w+)*\s*\.\s*(?:only|skip|skipIf|runIf|todo|fixme)\b|\b(?:xit|xdescribe)\s*\(/;
 let testFiles = 0;
+const executableTest = /\b(?:it|test)\s*(?:\.\s*each\s*\([^;]*?\))?\s*\(/s;
 
 async function scan(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -14,7 +15,11 @@ async function scan(directory) {
       const source = await readFile(path, "utf8");
       if (forbidden.test(source))
         throw new Error(`Focused or skipped test is forbidden: ${path}`);
-      if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(path)) testFiles += 1;
+      if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(path)) {
+        testFiles += 1;
+        if (!executableTest.test(source))
+          throw new Error(`Empty test suite is forbidden: ${path}`);
+      }
     }
   }
 }
