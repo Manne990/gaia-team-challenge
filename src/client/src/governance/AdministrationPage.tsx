@@ -97,14 +97,36 @@ export function AdministrationPage() {
         }),
       });
   };
-  const createMember = (event: FormEvent) => {
+  const createMember = async (event: FormEvent) => {
     event.preventDefault();
-    void mutate("create", "/api/admin/members", {
-      method: "POST",
-      body: JSON.stringify(member),
-    }).then(() =>
-      setMember({ email: "", displayName: "", password: "", role: "member" }),
-    );
+    setBusy("create");
+    setError(null);
+    try {
+      const created = await request<{ member: Member }>("/api/admin/members", {
+        method: "POST",
+        body: JSON.stringify(member),
+      });
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              members: [...current.members, created.member].sort(
+                (left, right) =>
+                  left.displayName.localeCompare(right.displayName),
+              ),
+            }
+          : current,
+      );
+      setMember({ email: "", displayName: "", password: "", role: "member" });
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "The request could not be completed.",
+      );
+    } finally {
+      setBusy(null);
+    }
   };
   const changeRole = (userId: string, role: Role) =>
     void mutate(

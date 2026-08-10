@@ -26,6 +26,13 @@ const data = {
     },
   ],
 };
+const createdMember = {
+  membershipId: "m-2",
+  userId: "u-2",
+  email: "new@example.com",
+  displayName: "New User",
+  role: "member" as const,
+};
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 afterEach(() => {
   cleanup();
@@ -52,8 +59,7 @@ describe.sequential("AdministrationPage", () => {
       .mockResolvedValueOnce(ok(data))
       .mockResolvedValueOnce(ok({}))
       .mockResolvedValueOnce(ok(data))
-      .mockResolvedValueOnce(ok({}))
-      .mockResolvedValueOnce(ok(data));
+      .mockResolvedValueOnce(ok({ member: createdMember }));
     vi.stubGlobal("fetch", fetchMock);
     render(<AdministrationPage />);
     await screen.findByDisplayValue("Northstar");
@@ -89,6 +95,7 @@ describe.sequential("AdministrationPage", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
+    expect(await screen.findByText("New User")).toBeInTheDocument();
   });
   it("confirms revoke and shows retry after an error", async () => {
     const fetchMock = vi
