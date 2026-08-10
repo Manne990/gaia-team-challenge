@@ -59,8 +59,13 @@ describe('administration API', () => {
     expect(audit.items[0].summaryJson).not.toContain('NewPass');
     const outside = await signIn('other-owner@outside.test', 'OutsidePass!2026');
     expect(
-      (await (await fetch(`${url}/api/audit-events?action=membership.created`, { headers: { cookie: outside } })).json())
-        .total,
+      (
+        await (
+          await fetch(`${url}/api/audit-events?action=membership.created`, {
+            headers: { cookie: outside },
+          })
+        ).json()
+      ).total,
     ).toBe(0);
   });
 });
