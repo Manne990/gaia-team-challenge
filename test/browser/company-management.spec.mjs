@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import AxeBuilder from '@axe-core/playwright';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -101,6 +102,18 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await edit.getByLabel('Description').fill('Updated safely.');
     await edit.getByRole('button', { name: 'Save company' }).click();
     await expect(page.getByRole('button', { name: 'Archive company' })).toBeVisible();
+    for (const destination of ['Contacts', 'Deals']) {
+      await navigateTo(page, destination);
+      await expect(page.getByRole('heading', { name: destination })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        page.viewportSize().width,
+      );
+      expect(
+        (await new AxeBuilder({ page }).analyze()).violations.filter((violation) =>
+          ['color-contrast', 'serious', 'critical'].includes(violation.impact || violation.id),
+        ),
+      ).toEqual([]);
+    }
     const archive = await page.request.post(`${url}/api/companies/${created.id}/archive`, {
       headers: { cookie: ownerCookie },
     });

@@ -255,7 +255,7 @@ select {
   background: #f7f9fc;
   border: 1px solid #dfe5ed;
   border-radius: 7px;
-  color: #718096;
+  color: #4c5d73;
   display: flex;
   gap: 8px;
   padding: 0 10px;
@@ -338,7 +338,10 @@ kbd {
 main {
   margin: 0 auto;
   max-width: 1440px;
+  min-width: 0;
+  overflow-x: clip;
   padding: 34px 40px 52px;
+  width: 100%;
 }
 .page-heading {
   align-items: flex-end;
@@ -348,7 +351,7 @@ main {
   margin-bottom: 28px;
 }
 .eyebrow {
-  color: #63718a;
+  color: #4c5d73;
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.07em;
@@ -430,7 +433,7 @@ h1 {
   padding: 18px;
 }
 .metric p {
-  color: #5e6d83;
+  color: #4c5d73;
   font-size: 13px;
   font-weight: 650;
   margin: 0 0 12px;
@@ -442,7 +445,7 @@ h1 {
   letter-spacing: -0.025em;
 }
 .metric small {
-  color: #60798e;
+  color: #4c5d73;
   display: block;
   font-size: 12px;
   margin-top: 9px;
@@ -539,7 +542,7 @@ h2 {
   color: #a15c00;
 }
 .upcoming {
-  color: #63718a;
+  color: #4c5d73;
 }
 .activity {
   align-items: flex-start;
@@ -586,7 +589,10 @@ h2 {
   margin-left: auto;
 }
 .table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  width: 100%;
 }
 .pipeline {
   display: grid;
@@ -655,7 +661,7 @@ th:last-child {
 .pagination {
   align-items: center;
   border-top: 1px solid #e7ebf0;
-  color: #718096;
+  color: #4c5d73;
   display: flex;
   font-size: 12px;
   justify-content: space-between;
@@ -738,7 +744,7 @@ th:last-child {
   justify-content: space-between;
 }
 .dialog > p {
-  color: #63718a;
+  color: #4c5d73;
   font-size: 14px;
 }
 .dialog-actions {
@@ -760,6 +766,15 @@ th:last-child {
   top: 12px;
 }
 @media (max-width: 1024px) {
+  table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+  th,
+  td {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
   .sidebar {
     flex-basis: 216px;
   }
