@@ -11,6 +11,19 @@
     "db:seed": "node scripts/baseline.mjs db-seed",
     "ci": "node scripts/baseline.mjs ci",
     "build": "node scripts/baseline.mjs build",
-    "dev": "node scripts/baseline.mjs dev"
+    "dev": "node scripts/baseline.mjs dev",
+    "test:auth": "tsx --test test/auth.test.ts",
+    "typecheck:auth": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "better-sqlite3": "^13.0.3",
+    "cookie": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }
