@@ -85,12 +85,16 @@ export function createAuthHttpHandler(auth: AuthService) {
           },
         });
       } catch (error) {
-        json(response, error instanceof AuthenticationError ? 401 : 400, {
-          error:
-            error instanceof AuthenticationError
-              ? error.message
-              : "Unable to sign in.",
-        });
+        if (error instanceof AuthenticationError) {
+          json(response, 401, { error: error.message });
+        } else if (
+          error instanceof SyntaxError ||
+          (error instanceof Error && error.message === "Request is too large.")
+        ) {
+          json(response, 400, { error: "Unable to sign in." });
+        } else {
+          throw error;
+        }
       }
       return true;
     }
@@ -120,6 +124,7 @@ export function createAuthHttpHandler(auth: AuthService) {
           },
         });
       } catch (error) {
+        if (!(error instanceof AuthenticationError)) throw error;
         json(
           response,
           401,
@@ -157,6 +162,16 @@ export function createAuthHttpHandler(auth: AuthService) {
           return true;
         }
       } catch (error) {
+        if (error instanceof SyntaxError) {
+          json(response, 400, { error: "Invalid JSON request." });
+          return true;
+        }
+        if (
+          !(error instanceof AuthenticationError) &&
+          !(error instanceof AuthorizationError) &&
+          !(error instanceof MembershipConflictError)
+        )
+          throw error;
         const status =
           error instanceof AuthenticationError
             ? 401
@@ -167,7 +182,7 @@ export function createAuthHttpHandler(auth: AuthService) {
                 ? 404
                 : 403;
         json(response, status, {
-          error: error instanceof Error ? error.message : "Request denied.",
+          error: error.message,
         });
         return true;
       }
