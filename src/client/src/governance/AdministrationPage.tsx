@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import "./governance.css";
 
 type Role = "owner" | "member" | "viewer";
@@ -46,6 +46,7 @@ export function AdministrationPage() {
     role: "member" as Role,
   });
   const [busy, setBusy] = useState<string | null>(null);
+  const mutationQueue = useRef<Promise<void>>(Promise.resolve());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,21 +71,25 @@ export function AdministrationPage() {
     void load();
   }, [load]);
 
-  const mutate = async (key: string, url: string, init: RequestInit) => {
-    setBusy(key);
-    setError(null);
-    try {
-      await request(url, init);
-      await load();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The request could not be completed.",
-      );
-    } finally {
-      setBusy(null);
-    }
+  const mutate = (key: string, url: string, init: RequestInit) => {
+    const operation = mutationQueue.current.then(async () => {
+      setBusy(key);
+      setError(null);
+      try {
+        await request(url, init);
+        await load();
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "The request could not be completed.",
+        );
+      } finally {
+        setBusy(null);
+      }
+    });
+    mutationQueue.current = operation.catch(() => undefined);
+    return operation;
   };
   const saveName = (event: FormEvent) => {
     event.preventDefault();
@@ -164,10 +169,7 @@ export function AdministrationPage() {
                   required
                 />
               </label>
-              <button
-                type="submit"
-                disabled={busy === "organization" || !name.trim()}
-              >
+              <button type="submit" disabled={busy !== null || !name.trim()}>
                 {busy === "organization" ? "Saving…" : "Save name"}
               </button>
             </form>
@@ -228,7 +230,7 @@ export function AdministrationPage() {
                   <option value="owner">Owner</option>
                 </select>
               </label>
-              <button type="submit" disabled={busy === "create"}>
+              <button type="submit" disabled={busy !== null}>
                 {busy === "create" ? "Adding…" : "Add member"}
               </button>
             </form>
@@ -269,7 +271,7 @@ export function AdministrationPage() {
                                 event.target.value as Role,
                               )
                             }
-                            disabled={busy === `role:${person.userId}`}
+                            disabled={busy !== null}
                           >
                             <option value="owner">Owner</option>
                             <option value="member">Member</option>
@@ -281,7 +283,7 @@ export function AdministrationPage() {
                         <button
                           type="button"
                           onClick={() => revoke(person)}
-                          disabled={busy === `revoke:${person.userId}`}
+                          disabled={busy !== null}
                         >
                           {busy === `revoke:${person.userId}`
                             ? "Revoking…"

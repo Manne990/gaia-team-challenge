@@ -70,6 +70,9 @@ describe.sequential("AdministrationPage", () => {
         }),
       ),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add member" })).toBeEnabled(),
+    );
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "new@example.com" },
     });
@@ -86,6 +89,68 @@ describe.sequential("AdministrationPage", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
+  });
+  it("serializes rapid mutations and keeps the newest refreshed members", async () => {
+    let releaseOrganization!: () => void;
+    const organizationSaved = new Promise<void>((resolve) => {
+      releaseOrganization = resolve;
+    });
+    const withNewMember = {
+      ...data,
+      members: [
+        ...data.members,
+        {
+          membershipId: "m-2",
+          userId: "u-2",
+          email: "new@example.com",
+          displayName: "New User",
+          role: "member" as const,
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(ok(data))
+      .mockImplementationOnce(async () => {
+        await organizationSaved;
+        return ok({});
+      })
+      .mockResolvedValueOnce(ok(data))
+      .mockResolvedValueOnce(ok({}))
+      .mockResolvedValueOnce(ok(withNewMember));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AdministrationPage />);
+    await screen.findByDisplayValue("Northstar");
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "New name" },
+    });
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "New User" },
+    });
+    fireEvent.change(screen.getByLabelText("Temporary password"), {
+      target: { value: "LongPassword!2026" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add member" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/admin/members",
+      expect.anything(),
+    );
+
+    releaseOrganization();
+    expect(await screen.findByText("New User")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/admin/organization",
+      "/api/admin/organization",
+      "/api/admin/organization",
+      "/api/admin/members",
+      "/api/admin/organization",
+    ]);
   });
   it("confirms revoke and shows retry after an error", async () => {
     const fetchMock = vi
