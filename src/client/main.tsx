@@ -90,7 +90,7 @@ function SavedViews({
   };
   return (
     <div aria-label={`Manage saved views for ${resource}`}>
-      <h3>Saved views</h3>
+          <h2>Saved views</h2>
       <label>
         New saved view name
         <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} />
@@ -1144,7 +1144,7 @@ function Activities({ canWrite }: { canWrite: boolean }) {
             await load(1, null, '');
           }}
         >
-          <h3>Log activity</h3>
+          <h2>Log activity</h2>
           <label>
             Type
             <select name="type" defaultValue="call">
@@ -1842,7 +1842,7 @@ function Deals({ canWrite, canConfigure }: { canWrite: boolean; canConfigure: bo
             void load();
           }}
         >
-          <h3>New deal</h3>
+          <h2>New deal</h2>
           <label>
             Name
             <input name="name" required />
