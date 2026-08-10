@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { z } from "zod";
 import { AuthService, type SessionIdentity } from "../auth/service.js";
+import { currentCorrelationId } from "../request-context.js";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_ROWS = 2_000;
@@ -241,7 +242,7 @@ export class ImportExportService {
           .run(timestamp, identity.organizationId, id);
         this.db
           .prepare(
-            `INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at) VALUES (?, ?, ?, 'import.committed', 'import', ?, ?, ?)`,
+            `INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at, correlation_id) VALUES (?, ?, ?, 'import.committed', 'import', ?, ?, ?, ?)`,
           )
           .run(
             `audit_${randomUUID()}`,
@@ -250,6 +251,7 @@ export class ImportExportService {
             id,
             JSON.stringify(preview.summary),
             timestamp,
+            currentCorrelationId(),
           );
       })
       .immediate();

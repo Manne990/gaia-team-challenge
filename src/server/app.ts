@@ -15,6 +15,8 @@ import { createTaskHttpHandler, TaskService } from "./tasks/index.js";
 import { registerSearchRoutes } from "./search/index.js";
 import { registerActivityRoutes } from "./activities/index.js";
 import { registerDuplicateRoutes } from "./duplicates/index.js";
+import { withRequestContext } from "./request-context.js";
+import { registerGovernanceRoutes } from "./governance/index.js";
 
 export function createApp(
   databaseOrRoutes?: Database.Database | ((app: Express) => void),
@@ -26,9 +28,10 @@ export function createApp(
   const app = express();
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
-    response.locals.requestId = randomUUID();
-    response.setHeader("x-request-id", response.locals.requestId as string);
-    next();
+    const requestId = randomUUID();
+    response.locals.requestId = requestId;
+    response.setHeader("x-request-id", requestId);
+    withRequestContext(requestId, next);
   });
   if (database) {
     const auth = new AuthService(database);
@@ -78,6 +81,7 @@ export function createApp(
   if (database) registerActivityRoutes(app, database);
   if (database) registerImportRoutes(app, database);
   if (database) registerDuplicateRoutes(app, database);
+  if (database) registerGovernanceRoutes(app, database);
   configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {

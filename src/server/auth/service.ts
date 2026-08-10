@@ -7,6 +7,7 @@ import {
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
+import { currentCorrelationId } from "../request-context.js";
 
 export type Role = "owner" | "member" | "viewer";
 
@@ -15,6 +16,7 @@ export interface SessionIdentity {
   userId: string;
   membershipId: string;
   organizationId: string;
+  organizationName?: string;
   role: Role;
   email: string;
   displayName: string;
@@ -109,48 +111,59 @@ export class AuthService {
     const membership = this.db
       .prepare(
         `
-      SELECT id AS membershipId, organization_id AS organizationId, role FROM memberships
-      WHERE user_id = ? AND removed_at IS NULL AND (? IS NULL OR organization_id = ?)
-      ORDER BY organization_id LIMIT 1
+      SELECT m.id AS membershipId, m.organization_id AS organizationId,
+      m.role,o.name AS organizationName FROM memberships m
+      JOIN organizations o ON o.id=m.organization_id
+      WHERE m.user_id = ? AND m.removed_at IS NULL AND (? IS NULL OR m.organization_id = ?)
+      ORDER BY m.organization_id LIMIT 1
     `,
       )
       .get(user.id, organizationId ?? null, organizationId ?? null) as
-      { membershipId: string; organizationId: string; role: Role } | undefined;
+      | {
+          membershipId: string;
+          organizationId: string;
+          organizationName: string;
+          role: Role;
+        }
+      | undefined;
     if (!membership) throw new AuthenticationError(GENERIC_SIGN_IN_ERROR);
 
     const token = randomBytes(32).toString("base64url");
     const createdAt = this.now();
     const expiresAt = new Date(createdAt.getTime() + this.sessionLifetimeMs);
-    this.db
-      .prepare(
-        `
-      INSERT INTO sessions (id, token_hash, user_id, organization_id, created_at, expires_at, last_seen_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
-      )
-      .run(
-        newOpaqueId(),
-        digest(token),
-        user.id,
-        membership.organizationId,
-        iso(createdAt),
-        iso(expiresAt),
-        iso(createdAt),
-      );
-
-    return {
-      token,
-      identity: {
-        sessionHash: digest(token),
-        userId: user.id,
-        membershipId: membership.membershipId,
-        organizationId: membership.organizationId,
-        role: membership.role,
-        email: user.email,
-        displayName: user.displayName,
-        expiresAt: iso(expiresAt),
-      },
+    const identity: SessionIdentity = {
+      sessionHash: digest(token),
+      userId: user.id,
+      membershipId: membership.membershipId,
+      organizationId: membership.organizationId,
+      organizationName: membership.organizationName,
+      role: membership.role,
+      email: user.email,
+      displayName: user.displayName,
+      expiresAt: iso(expiresAt),
     };
+    this.db
+      .transaction(() => {
+        this.db
+          .prepare(
+            `INSERT INTO sessions
+            (id,token_hash,user_id,organization_id,created_at,expires_at,last_seen_at)
+            VALUES (?,?,?,?,?,?,?)`,
+          )
+          .run(
+            newOpaqueId(),
+            identity.sessionHash,
+            user.id,
+            membership.organizationId,
+            iso(createdAt),
+            iso(expiresAt),
+            iso(createdAt),
+          );
+        this.audit(identity, "authentication.signed_in", user.id, {}, "user");
+      })
+      .immediate();
+
+    return { token, identity };
   }
 
   authenticate(token: string | undefined): SessionIdentity {
@@ -161,10 +174,11 @@ export class AuthService {
         `
       SELECT s.token_hash AS sessionHash, s.user_id AS userId, m.id AS membershipId,
              s.organization_id AS organizationId, s.expires_at AS expiresAt, m.role,
-             u.email, u.display_name AS displayName
+             u.email, u.display_name AS displayName,o.name AS organizationName
       FROM sessions s
       JOIN memberships m ON m.organization_id = s.organization_id AND m.user_id = s.user_id
       JOIN users u ON u.id = s.user_id
+      JOIN organizations o ON o.id = s.organization_id
       WHERE s.token_hash = ? AND s.revoked_at IS NULL AND m.removed_at IS NULL
     `,
       )
@@ -179,11 +193,34 @@ export class AuthService {
 
   logout(token: string | undefined): void {
     if (!token || token.length > 128) return;
+    const tokenHash = digest(token);
     this.db
-      .prepare(
-        "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE token_hash = ?",
-      )
-      .run(iso(this.now()), digest(token));
+      .transaction(() => {
+        const actor = this.db
+          .prepare(
+            `SELECT s.user_id AS userId,m.id AS membershipId,
+            s.organization_id AS organizationId FROM sessions s
+            JOIN memberships m ON m.organization_id=s.organization_id AND m.user_id=s.user_id
+            WHERE s.token_hash=? AND s.revoked_at IS NULL`,
+          )
+          .get(tokenHash) as
+          | Pick<SessionIdentity, "userId" | "membershipId" | "organizationId">
+          | undefined;
+        this.db
+          .prepare(
+            "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE token_hash = ?",
+          )
+          .run(iso(this.now()), tokenHash);
+        if (actor)
+          this.audit(
+            actor,
+            "authentication.signed_out",
+            actor.userId,
+            {},
+            "user",
+          );
+      })
+      .immediate();
   }
 
   revokeUserSessions(actor: SessionIdentity, userId: string): void {
@@ -216,24 +253,156 @@ export class AuthService {
     }
   }
 
-  listMemberships(
-    actor: SessionIdentity,
-  ): Array<{ userId: string; email: string; displayName: string; role: Role }> {
+  listMemberships(actor: SessionIdentity): Array<{
+    membershipId: string;
+    userId: string;
+    email: string;
+    displayName: string;
+    role: Role;
+  }> {
     this.requireRole(actor, "owner");
     return this.db
       .prepare(
         `
-      SELECT m.user_id AS userId, u.email, u.display_name AS displayName, m.role
+      SELECT m.id AS membershipId, m.user_id AS userId, u.email, u.display_name AS displayName, m.role
       FROM memberships m JOIN users u ON u.id = m.user_id
       WHERE m.organization_id = ? AND m.removed_at IS NULL ORDER BY u.email
     `,
       )
       .all(actor.organizationId) as Array<{
+      membershipId: string;
       userId: string;
       email: string;
       displayName: string;
       role: Role;
     }>;
+  }
+
+  organization(actor: SessionIdentity) {
+    this.requireRole(actor, "owner");
+    const organization = this.db
+      .prepare(
+        "SELECT id,name,slug,version,updated_at AS updatedAt FROM organizations WHERE id=?",
+      )
+      .get(actor.organizationId);
+    return { organization, members: this.listMemberships(actor) };
+  }
+
+  async createMember(
+    actor: SessionIdentity,
+    input: {
+      email: string;
+      displayName: string;
+      password: string;
+      role: Exclude<Role, "owner"> | "owner";
+    },
+  ) {
+    this.requireRole(actor, "owner");
+    const email = input.email.trim().toLowerCase();
+    const displayName = input.displayName.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254)
+      throw new MembershipConflictError("Provide a valid email address.");
+    if (!displayName || displayName.length > 100)
+      throw new MembershipConflictError("Provide a display name.");
+    let passwordHash: string;
+    try {
+      passwordHash = await hashPassword(input.password);
+    } catch {
+      throw new MembershipConflictError(
+        "Passwords must contain between 12 and 256 characters.",
+      );
+    }
+    const timestamp = iso(this.now());
+    const userId = `user_${newOpaqueId()}`;
+    const membershipId = `membership_${newOpaqueId()}`;
+    try {
+      this.db
+        .transaction(() => {
+          this.db
+            .prepare(
+              `INSERT INTO users
+              (id,email,password_hash,display_name,created_at,updated_at)
+              VALUES (?,?,?,?,?,?)`,
+            )
+            .run(
+              userId,
+              email,
+              passwordHash,
+              displayName,
+              timestamp,
+              timestamp,
+            );
+          this.db
+            .prepare(
+              `INSERT INTO memberships
+              (id,organization_id,user_id,role,created_at,updated_at)
+              VALUES (?,?,?,?,?,?)`,
+            )
+            .run(
+              membershipId,
+              actor.organizationId,
+              userId,
+              input.role,
+              timestamp,
+              timestamp,
+            );
+          this.audit(actor, "membership.created", userId, {
+            role: input.role,
+            displayName,
+          });
+        })
+        .immediate();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("UNIQUE constraint"))
+        throw new MembershipConflictError(
+          "A member with those account details already exists.",
+        );
+      throw error;
+    }
+    return this.listMemberships(actor).find((item) => item.userId === userId)!;
+  }
+
+  updateOrganization(
+    actor: SessionIdentity,
+    value: { name: string; version: number },
+  ) {
+    this.requireRole(actor, "owner");
+    const name = value.name.trim();
+    if (!name || name.length > 120)
+      throw new MembershipConflictError(
+        "Organization name must contain between 1 and 120 characters.",
+      );
+    if (!Number.isInteger(value.version) || value.version < 1)
+      throw new MembershipConflictError(
+        "Organization version is required. Refresh and try again.",
+      );
+    this.db
+      .transaction(() => {
+        const current = this.db
+          .prepare("SELECT name,version FROM organizations WHERE id=?")
+          .get(actor.organizationId) as { name: string; version: number };
+        if (current.version !== value.version)
+          throw new MembershipConflictError(
+            "Organization settings changed. Refresh and try again.",
+          );
+        this.db
+          .prepare(
+            "UPDATE organizations SET name=?,updated_at=?,version=version+1 WHERE id=? AND version=?",
+          )
+          .run(name, iso(this.now()), actor.organizationId, value.version);
+        this.audit(
+          actor,
+          "organization.updated",
+          actor.organizationId,
+          {
+            previousName: current.name,
+            name,
+          },
+          "organization",
+        );
+      })
+      .immediate();
+    return this.organization(actor).organization;
   }
 
   addMembership(
@@ -345,16 +514,17 @@ export class AuthService {
   }
 
   private audit(
-    actor: SessionIdentity,
+    actor: Pick<SessionIdentity, "organizationId" | "membershipId">,
     action: string,
     entityId: string,
     summary: Record<string, unknown>,
+    entityType = "membership",
   ): void {
     this.db
       .prepare(
         `
-      INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at)
-      VALUES (?, ?, ?, ?, 'membership', ?, ?, ?)
+      INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at, correlation_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       )
       .run(
@@ -362,9 +532,11 @@ export class AuthService {
         actor.organizationId,
         actor.membershipId,
         action,
+        entityType,
         entityId,
         JSON.stringify(summary),
         iso(this.now()),
+        currentCorrelationId(),
       );
   }
 }

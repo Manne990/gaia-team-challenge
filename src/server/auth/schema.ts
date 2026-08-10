@@ -62,6 +62,7 @@ export function migrateAuthSchema(db: Database.Database): void {
       entity_id TEXT NOT NULL,
       summary_json TEXT NOT NULL CHECK (json_valid(summary_json) AND json_type(summary_json) = 'object'),
       occurred_at TEXT NOT NULL,
+      correlation_id TEXT NOT NULL DEFAULT 'system',
       FOREIGN KEY (actor_membership_id, organization_id) REFERENCES memberships(id, organization_id)
     ) STRICT;
   `);

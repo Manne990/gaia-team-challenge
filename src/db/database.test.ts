@@ -55,6 +55,7 @@ describe("SQLite database lifecycle", () => {
       { name: "004_deal_management.sql" },
       { name: "004_import_preview.sql" },
       { name: "005_duplicate_merge.sql" },
+      { name: "006_audit_governance.sql" },
     ]);
     expect(database.pragma("foreign_keys", { simple: true })).toBe(1);
     database.close();
@@ -67,7 +68,7 @@ describe("SQLite database lifecycle", () => {
     expect(() => migrate(database)).not.toThrow();
     expect(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get(),
-    ).toEqual({ count: 9 });
+    ).toEqual({ count: 10 });
     database.close();
   });
 

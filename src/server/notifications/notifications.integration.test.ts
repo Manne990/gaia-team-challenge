@@ -45,7 +45,6 @@ function database(path = ":memory:") {
   migrate(db);
   seedDatabase(db);
   db.prepare("DELETE FROM notifications").run();
-  db.prepare("DELETE FROM audit_events").run();
   db.prepare("UPDATE tasks SET due_at='2030-01-01T00:00:00.000Z'").run();
   return db;
 }

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { z } from "zod";
 import { AuthService, type SessionIdentity } from "../auth/service.js";
+import { currentCorrelationId } from "../request-context.js";
 
 const entityType = z.enum(["company", "contact"]);
 const nullable = z.string().trim().max(1000).nullable();
@@ -492,7 +493,7 @@ export class DuplicateMergeService {
   ) {
     this.db
       .prepare(
-        "INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,summary_json,occurred_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,summary_json,occurred_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?)",
       )
       .run(
         `audit_${randomUUID()}`,
@@ -503,6 +504,7 @@ export class DuplicateMergeService {
         id,
         JSON.stringify(summary),
         this.now().toISOString(),
+        currentCorrelationId(),
       );
   }
 }

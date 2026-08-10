@@ -6,6 +6,7 @@ import {
   AuthorizationError,
   type SessionIdentity,
 } from "../auth/service.js";
+import { currentCorrelationId } from "../request-context.js";
 
 const types = ["call", "email", "meeting", "note", "status_change"] as const;
 const priorities = ["low", "medium", "high", "urgent"] as const;
@@ -349,7 +350,7 @@ export class ActivitiesService {
   ) {
     this.db
       .prepare(
-        "INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,summary_json,occurred_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,summary_json,occurred_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?)",
       )
       .run(
         `audit_${randomUUID()}`,
@@ -360,6 +361,7 @@ export class ActivitiesService {
         id,
         JSON.stringify(summary),
         this.now().toISOString(),
+        currentCorrelationId(),
       );
   }
 }

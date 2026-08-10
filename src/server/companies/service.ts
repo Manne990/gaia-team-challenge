@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { SessionIdentity } from "../auth/index.js";
+import { currentCorrelationId } from "../request-context.js";
 
 const lifecycle = z.enum(["lead", "prospect", "customer", "former_customer"]);
 const optionalText = z.string().trim().max(500).optional().nullable();
@@ -450,8 +451,8 @@ export class CompanyService {
     this.db
       .prepare(
         `INSERT INTO audit_events
-      (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at)
-      VALUES (?, ?, ?, ?, 'company', ?, ?, ?)`,
+      (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at, correlation_id)
+      VALUES (?, ?, ?, ?, 'company', ?, ?, ?, ?)`,
       )
       .run(
         `audit_${randomUUID()}`,
@@ -461,6 +462,7 @@ export class CompanyService {
         entityId,
         JSON.stringify(summary),
         this.now().toISOString(),
+        currentCorrelationId(),
       );
   }
 

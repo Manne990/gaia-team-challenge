@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { SessionIdentity } from "../auth/index.js";
+import { currentCorrelationId } from "../request-context.js";
 
 const priority = z.enum(["low", "medium", "high", "urgent"]);
 const status = z.enum(["open", "in_progress", "completed", "cancelled"]);
@@ -419,7 +420,7 @@ export class TaskService {
   ) {
     this.db
       .prepare(
-        "INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at) VALUES (?, ?, ?, ?, 'task', ?, ?, ?)",
+        "INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at, correlation_id) VALUES (?, ?, ?, ?, 'task', ?, ?, ?, ?)",
       )
       .run(
         `audit_${randomUUID()}`,
@@ -429,6 +430,7 @@ export class TaskService {
         entityId,
         JSON.stringify(summary),
         this.now().toISOString(),
+        currentCorrelationId(),
       );
   }
 }

@@ -22,12 +22,15 @@ import { ActivitiesPage } from "./activities/ActivitiesPage";
 import { ImportsPage } from "./imports/ImportsPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
 import { DuplicateReviewPage } from "./duplicates/DuplicateReviewPage";
+import { AdministrationPage } from "./governance/AdministrationPage";
+import { AuditPage } from "./governance/AuditPage";
 
 interface SessionUser {
   id: string;
   email: string;
   displayName: string;
   role: UserRole;
+  organizationName?: string;
 }
 
 type AppState =
@@ -89,7 +92,7 @@ export function App() {
       user={{
         name: state.user.displayName,
         role: state.user.role,
-        organization: "Northstar Demo",
+        organization: state.user.organizationName ?? "Northstar Demo",
       }}
       accountAction={
         <LogoutButton
@@ -134,6 +137,8 @@ function WorkspacePage({ user }: { user: SessionUser }) {
   if (hash === "activities") return <ActivitiesPage role={user.role} />;
   if (hash === "imports") return <ImportsPage role={user.role} />;
   if (hash === "duplicates") return <DuplicateReviewPage role={user.role} />;
+  if (hash === "audit") return <AuditPage />;
+  if (hash === "administration") return <AdministrationPage />;
   return <DashboardPage userName={user.displayName} />;
 }
 
