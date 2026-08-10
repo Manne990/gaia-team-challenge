@@ -95,7 +95,7 @@ export class ContactsService {
       clauses.push(
         "EXISTS (SELECT 1 FROM json_each(c.tags_json) WHERE value = ?)",
       );
-      values.push(query.tag);
+      values.push(query.tag.trim().toLocaleLowerCase());
     }
     if (query.q?.trim()) {
       clauses.push(

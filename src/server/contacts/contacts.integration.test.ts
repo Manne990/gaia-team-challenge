@@ -105,6 +105,13 @@ describe.sequential("contact HTTP boundary", () => {
       tags: ["nordic", "priority"],
       duplicateWarning: false,
     });
+    const tagFiltered = (await (
+      await request(
+        `/api/contacts?tag=${encodeURIComponent("Priority")}`,
+        member,
+      )
+    ).json()) as { items: Array<{ id: string }> };
+    expect(tagFiltered.items.map(({ id }) => id)).toContain(first.contact.id);
 
     const secondResponse = await request("/api/contacts", member, {
       method: "POST",
