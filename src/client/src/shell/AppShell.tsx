@@ -19,7 +19,9 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeHref, setActiveHref] = useState("#dashboard");
+  const [activeHref, setActiveHref] = useState(
+    () => window.location.hash || "#dashboard",
+  );
   const menuButton = useRef<HTMLButtonElement>(null);
   const firstLink = useRef<HTMLAnchorElement>(null);
   const items = navigationForRole(user.role);
@@ -33,6 +35,13 @@ export function AppShell({
   useEffect(() => {
     if (menuOpen) firstLink.current?.focus();
   }, [menuOpen]);
+
+  useEffect(() => {
+    const updateActiveHref = () =>
+      setActiveHref(window.location.hash || "#dashboard");
+    window.addEventListener("hashchange", updateActiveHref);
+    return () => window.removeEventListener("hashchange", updateActiveHref);
+  }, []);
 
   function closeMenu() {
     setMenuOpen(false);

@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import express, { type ErrorRequestHandler, type Express } from "express";
 import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 import { AuthService, createAuthHttpHandler } from "./auth/index.js";
+import { registerContactRoutes } from "./contacts/index.js";
 
 export function createApp(
   databaseOrRoutes?: Database.Database | ((app: Express) => void),
@@ -39,6 +40,7 @@ export function createApp(
     };
     response.json(payload);
   });
+  if (database) registerContactRoutes(app, database);
   configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {

@@ -11,6 +11,7 @@ import { LogoutButton, SignInPage } from "../auth/SignInPage";
 import "../auth/auth.css";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./shell/DashboardPage";
+import { ContactsPage } from "./contacts/ContactsPage";
 import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
 
@@ -29,6 +30,9 @@ type AppState =
 
 export function App() {
   const [state, setState] = useState<AppState>({ kind: "loading" });
+  const [route, setRoute] = useState(
+    () => window.location.hash || "#dashboard",
+  );
   const loadSession = useCallback(() => {
     const controller = new AbortController();
     fetch("/api/auth/session", { signal: controller.signal })
@@ -55,6 +59,11 @@ export function App() {
   }, []);
 
   useEffect(() => loadSession(), [loadSession]);
+  useEffect(() => {
+    const updateRoute = () => setRoute(window.location.hash || "#dashboard");
+    window.addEventListener("hashchange", updateRoute);
+    return () => window.removeEventListener("hashchange", updateRoute);
+  }, []);
 
   if (state.kind === "loading") {
     return <StatePanel kind="loading" title="Loading your workspace" />;
@@ -88,7 +97,11 @@ export function App() {
         />
       }
     >
-      <DashboardPage userName={state.user.displayName} />
+      {route === "#contacts" ? (
+        <ContactsPage role={state.user.role} />
+      ) : (
+        <DashboardPage userName={state.user.displayName} />
+      )}
     </AppShell>
   );
 }
