@@ -6,14 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scryptSync } from "node:crypto";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { createServer } from "node:http";
+import { createApp } from "../src/server/app.js";
 import {
   AuthenticationError,
   AuthorizationError,
   AuthService,
   MembershipConflictError,
   SessionExpiredError,
-  createAuthHttpHandler,
   migrateAuthSchema,
   type SessionIdentity,
 } from "../src/server/auth/index.js";
@@ -320,13 +319,8 @@ describe("authorization and tenant isolation", () => {
 
 describe("authentication HTTP boundary", () => {
   it("sets an HTTP-only cookie and revokes it through logout", async () => {
-    const handler = createAuthHttpHandler(auth);
-    const server = createServer(
-      (request, response) => void handler(request, response),
-    );
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
+    const server = createApp(db).listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => server.once("listening", resolve));
     try {
       const address = server.address();
       assert(address && typeof address === "object");
@@ -364,13 +358,8 @@ describe("authentication HTTP boundary", () => {
   });
 
   it("rejects cross-origin state changes before credentials are processed", async () => {
-    const handler = createAuthHttpHandler(auth);
-    const server = createServer(
-      (request, response) => void handler(request, response),
-    );
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
+    const server = createApp(db).listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => server.once("listening", resolve));
     try {
       const address = server.address();
       assert(address && typeof address === "object");
