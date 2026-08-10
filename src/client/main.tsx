@@ -272,7 +272,9 @@ function Companies({ canWrite }: { canWrite: boolean }) {
     size: initialQuery.get('size') || '',
     tag: initialQuery.get('tag') || '',
     staleBefore: initialQuery.get('staleBefore') || '',
-    sort: initialQuery.get('sort') || 'name',
+    sort: ['name', 'createdAt', 'updatedAt', 'lifecycle'].includes(initialQuery.get('sort') || '')
+      ? initialQuery.get('sort')!
+      : 'name',
     direction: initialQuery.get('direction') === 'desc' ? 'desc' : 'asc',
     includeArchived: initialQuery.get('includeArchived') === 'true',
     page: Math.max(1, Number(initialQuery.get('page')) || 1),

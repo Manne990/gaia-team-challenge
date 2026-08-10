@@ -67,6 +67,19 @@ test('actual company workspace creates, filters, updates, archives, restores, an
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
+    await navigateTo(page, 'Deals');
+    const dealFilters = page.getByRole('form', { name: 'Deal filters' });
+    await dealFilters.getByLabel('Sort').selectOption('expectedCloseDate');
+    await dealFilters.getByLabel('Direction').selectOption('desc');
+    await dealFilters.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page).toHaveURL(/sort=expectedCloseDate&direction=desc/);
+    await navigateTo(page, 'Companies');
+    await expect(page.getByRole('list', { name: 'Company results' })).not.toBeEmpty();
+    await expect(page).toHaveURL(/sort=name&direction=desc/);
+    await page
+      .getByRole('form', { name: 'Company filters' })
+      .getByRole('button', { name: 'Clear company filters' })
+      .click();
     const create = page.getByRole('form', { name: 'Create company' });
     await create.getByLabel('Name').fill('Browser Test Company');
     await create.getByLabel('External reference').fill('BROWSER-83');
