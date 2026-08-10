@@ -10,7 +10,7 @@ test("browser test exercises the product process and health boundary accessibly"
   expect(await health.json()).toEqual({ status: "ok" });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Your customer workspace is ready." }),
+    page.getByRole("heading", { name: "Good morning, Alex" }),
   ).toBeVisible();
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);

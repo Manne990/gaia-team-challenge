@@ -10,6 +10,6 @@ export default defineConfig({
     root: process.cwd(),
     environment: "jsdom",
     setupFiles: "./src/client/test/setup.ts",
-    exclude: ["dist/**", "node_modules/**"],
+    exclude: ["dist/**", "e2e/**", "node_modules/**", "tests/e2e/**"],
   },
 });
