@@ -11,6 +11,7 @@ import { LogoutButton, SignInPage } from "../auth/SignInPage";
 import "../auth/auth.css";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./shell/DashboardPage";
+import { ContactsPage } from "./contacts/ContactsPage";
 import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
 import { CompaniesPage } from "./companies/CompaniesPage";
@@ -101,11 +102,9 @@ function WorkspacePage({ user }: { user: SessionUser }) {
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
-  return hash === "#companies" ? (
-    <CompaniesPage role={user.role} />
-  ) : (
-    <DashboardPage userName={user.displayName} />
-  );
+  if (hash === "#companies") return <CompaniesPage role={user.role} />;
+  if (hash === "#contacts") return <ContactsPage role={user.role} />;
+  return <DashboardPage userName={user.displayName} />;
 }
 
 interface ErrorBoundaryState {
