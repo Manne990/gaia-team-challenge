@@ -271,5 +271,16 @@ describe.sequential("CSV import and export", () => {
       ).count;
       expect(filtered.trimEnd().split("\r\n")).toHaveLength(expected + 1);
     }
+
+    database
+      .prepare(
+        "UPDATE contacts SET phone = '+46709998877' WHERE id = 'contact_northstar_01'",
+      )
+      .run();
+    const phoneFiltered = await (
+      await request("/api/exports/contacts.csv?q=709998877", viewer)
+    ).text();
+    expect(phoneFiltered.trimEnd().split("\r\n")).toHaveLength(2);
+    expect(phoneFiltered).toContain("contact01@northstar.test");
   });
 });

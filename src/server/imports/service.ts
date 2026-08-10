@@ -294,9 +294,11 @@ export class ImportExportService {
     addExactFilter(query, clauses, values, "ownerId", "owner_membership_id");
     addTagFilter(query, clauses, values);
     if (query.get("q")?.trim()) {
-      clauses.push("(first_name || ' ' || last_name LIKE ? OR email LIKE ?)");
+      clauses.push(
+        "(first_name || ' ' || last_name LIKE ? OR email LIKE ? OR phone LIKE ?)",
+      );
       const q = `%${query.get("q")!.trim()}%`;
-      values.push(q, q);
+      values.push(q, q, q);
     }
     const rows = this.db
       .prepare(
