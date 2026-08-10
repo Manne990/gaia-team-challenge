@@ -116,4 +116,15 @@ test.describe("operational CRM shell", () => {
     await expect(dialog).toBeHidden();
     await expect(createDeal).toBeFocused();
   });
+
+  test("announces and dismisses toast feedback", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Save current view" }).click();
+
+    const toast = page.getByRole("status");
+    await expect(toast).toContainText("View saved for this workspace");
+    await toast.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(toast).toBeHidden();
+  });
 });

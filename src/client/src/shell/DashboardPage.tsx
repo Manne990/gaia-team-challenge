@@ -220,7 +220,12 @@ export function DashboardPage() {
           </section>
         </aside>
       </div>
-      {toast && <Toast message="View saved for this workspace" />}
+      {toast && (
+        <Toast
+          message="View saved for this workspace"
+          onDismiss={() => setToast(false)}
+        />
+      )}
       <ConfirmationDialog
         open={dialogOpen}
         title="Create a new deal?"
