@@ -540,6 +540,20 @@ export function createApp(config: AppConfig) {
       });
     try {
       const session = auth.signIn(parsed.data);
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.user.id,
+          'authentication.signed_in',
+          'session',
+          session.user.id,
+          '{}',
+          new Date().toISOString(),
+        );
       response.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
       return response.status(200).json({
         user: session.user,
@@ -569,7 +583,22 @@ export function createApp(config: AppConfig) {
     }
   });
   app.post('/api/auth/logout', (request, response) => {
+    const session = auth.authenticate(cookieToken(request.headers.cookie));
     auth.logout(cookieToken(request.headers.cookie));
+    database
+      .prepare(
+        'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        `aud_${randomUUID()}`,
+        session.organizationId,
+        session.userId,
+        'authentication.signed_out',
+        'session',
+        session.sessionId,
+        '{}',
+        new Date().toISOString(),
+      );
     response.setHeader(
       'Set-Cookie',
       'northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
