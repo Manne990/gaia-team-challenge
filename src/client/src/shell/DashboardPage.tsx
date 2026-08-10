@@ -38,7 +38,11 @@ const deals = [
   },
 ];
 
-export function DashboardPage() {
+export function DashboardPage({
+  userName = "Alex Morgan",
+}: {
+  userName?: string;
+}) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toast, setToast] = useState(false);
   return (
@@ -46,7 +50,7 @@ export function DashboardPage() {
       <header className="page-header">
         <div>
           <p className="eyebrow">Monday, 10 August</p>
-          <h1>Good morning, Alex</h1>
+          <h1>Good morning, {userName.split(" ")[0]}</h1>
           <p className="page-summary">
             Here is what needs attention across your sales workspace.
           </p>

@@ -16,16 +16,20 @@
     "check:test-suites": "node scripts/check-test-suites.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
-    "test": "vitest run --coverage",
+    "test": "vitest run --coverage && npm run test:auth",
     "test:browser": "node scripts/run-browser-tests.mjs",
     "ci": "npm run format && npm run check:test-suites && npm run lint && npm run typecheck && npm test && npm run test:browser && npm run build",
     "build": "vite build && tsc -p tsconfig.server.json && node scripts/copy-database-assets.mjs",
     "dev": "tsx watch src/server/index.ts",
-    "start": "node dist/server/server/index.js"
+    "start": "node dist/server/server/index.js",
+    "test:auth": "tsx --test test/auth*.test.ts*",
+    "typecheck:auth": "npm run typecheck"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.5",
+    "@node-rs/argon2": "^2.0.2",
     "better-sqlite3": "^13.0.3",
+    "cookie": "^1.0.2",
     "express": "^5.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

@@ -10,7 +10,7 @@ async function start() {
   const config = loadConfig();
   const database = openDatabase(config.databasePath);
   migrate(database);
-  const app = createApp();
+  const app = createApp(database);
   if (config.environment === "production") {
     const clientDirectory = resolve(
       dirname(fileURLToPath(import.meta.url)),

@@ -17,8 +17,13 @@ async function expectOwnerShell(
   checkOverflow = true,
 ) {
   await page.goto("/");
+  if (await page.getByRole("heading", { name: "Welcome back" }).isVisible()) {
+    await page.getByLabel("Email address").fill("owner@northstar.test");
+    await page.getByLabel("Password").fill("OwnerPass!2026");
+    await page.getByRole("button", { name: "Sign in" }).click();
+  }
   await expect(
-    page.getByRole("heading", { name: "Good morning, Alex" }),
+    page.getByRole("heading", { name: "Good morning, Northstar" }),
   ).toBeVisible();
 
   const navigation = page.getByRole("complementary", { name: "Primary" });
@@ -119,7 +124,7 @@ test.describe("operational CRM shell", () => {
 
   test("announces and dismisses toast feedback", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/");
+    await expectOwnerShell(page, false);
     await page.getByRole("button", { name: "Save current view" }).click();
 
     const toast = page.getByRole("status");

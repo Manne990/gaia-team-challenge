@@ -2,31 +2,50 @@ import {
   Component,
   type ErrorInfo,
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
-import type { BootstrapResponse } from "../../shared/api";
+import { LogoutButton, SignInPage } from "../auth/SignInPage";
+import "../auth/auth.css";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./shell/DashboardPage";
+import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
+
+interface SessionUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+}
 
 type AppState =
   | { kind: "loading" }
-  | { kind: "ready"; data: BootstrapResponse }
+  | { kind: "signed-out"; expired: boolean }
+  | { kind: "ready"; user: SessionUser }
   | { kind: "unavailable" };
 
 export function App() {
   const [state, setState] = useState<AppState>({ kind: "loading" });
-  useEffect(() => {
+  const loadSession = useCallback(() => {
     const controller = new AbortController();
-    fetch("/api/bootstrap", { signal: controller.signal })
+    fetch("/api/auth/session", { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error("bootstrap unavailable");
-        setState({
-          kind: "ready",
-          data: (await response.json()) as BootstrapResponse,
-        });
+        const body = (await response.json()) as {
+          code?: string;
+          user?: SessionUser;
+        };
+        if (response.status === 401) {
+          setState({
+            kind: "signed-out",
+            expired: body.code === "SESSION_EXPIRED",
+          });
+          return;
+        }
+        if (!response.ok || !body.user) throw new Error("session unavailable");
+        setState({ kind: "ready", user: body.user });
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError"))
@@ -34,6 +53,8 @@ export function App() {
       });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => loadSession(), [loadSession]);
 
   if (state.kind === "loading") {
     return <StatePanel kind="loading" title="Loading your workspace" />;
@@ -50,16 +71,24 @@ export function App() {
       />
     );
   }
+  if (state.kind === "signed-out") {
+    return <SignInPage expired={state.expired} onSignedIn={loadSession} />;
+  }
   return (
     <AppShell
-      productName={state.data.product}
+      productName="Northstar CRM"
       user={{
-        name: "Alex Morgan",
-        role: "owner",
+        name: state.user.displayName,
+        role: state.user.role,
         organization: "Northstar Demo",
       }}
+      accountAction={
+        <LogoutButton
+          onLoggedOut={() => setState({ kind: "signed-out", expired: false })}
+        />
+      }
     >
-      <DashboardPage />
+      <DashboardPage userName={state.user.displayName} />
     </AppShell>
   );
 }

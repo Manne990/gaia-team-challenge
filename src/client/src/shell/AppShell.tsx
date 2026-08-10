@@ -10,10 +10,12 @@ export interface ShellUser {
 export function AppShell({
   productName,
   user,
+  accountAction,
   children,
 }: {
   productName: string;
   user: ShellUser;
+  accountAction?: ReactNode;
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -21,6 +23,12 @@ export function AppShell({
   const menuButton = useRef<HTMLButtonElement>(null);
   const firstLink = useRef<HTMLAnchorElement>(null);
   const items = navigationForRole(user.role);
+  const initials = user.name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   useEffect(() => {
     if (menuOpen) firstLink.current?.focus();
@@ -49,7 +57,7 @@ export function AppShell({
         </button>
         <strong>{productName}</strong>
         <span className="avatar" aria-label={`Signed in as ${user.name}`}>
-          AM
+          {initials}
         </span>
       </header>
       {menuOpen && (
@@ -102,7 +110,7 @@ export function AppShell({
         </nav>
         <div className="profile">
           <span className="avatar" aria-hidden="true">
-            AM
+            {initials}
           </span>
           <span className="profile-copy">
             <strong>{user.name}</strong>
@@ -110,9 +118,11 @@ export function AppShell({
               {user.organization} · {user.role}
             </small>
           </span>
-          <button className="icon-button" aria-label="Open account menu">
-            ⋯
-          </button>
+          {accountAction ?? (
+            <button className="icon-button" aria-label="Open account menu">
+              ⋯
+            </button>
+          )}
         </div>
       </aside>
       <main id="main-content" className="main-content" tabIndex={-1}>

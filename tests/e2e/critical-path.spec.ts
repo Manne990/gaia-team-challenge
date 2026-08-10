@@ -10,8 +10,35 @@ test("browser test exercises the product process and health boundary accessibly"
   expect(await health.json()).toEqual({ status: "ok" });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Good morning, Alex" }),
+    page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();
-  const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations).toEqual([]);
+  await expect(page.getByLabel("Email address")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await page.getByLabel("Email address").focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Password")).toBeFocused();
+  await page.getByLabel("Email address").fill("owner@northstar.test");
+  await page.getByLabel("Password").fill("incorrect-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("alert")).toContainText("Unable to sign in");
+
+  await page.getByLabel("Password").fill("OwnerPass!2026");
+  await page.route("**/api/auth/sign-in", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(
+    page.getByRole("button", { name: "Signing in…" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("heading", { name: "Good morning, Northstar" }),
+  ).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
