@@ -112,7 +112,6 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
     await navigateTo(page, 'Companies');
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Companies' })).toBeVisible();
-    expect(runtimeErrors).toEqual([]);
     await navigateTo(page, 'Contacts');
     await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Contacts list' })).toBeVisible();
@@ -287,6 +286,7 @@ test('actual product signs in by keyboard, rejects invalid credentials, restores
         })
         .then((response) => response.status()),
     ).resolves.toBe(404);
+    expect(runtimeErrors).toEqual([]);
   } finally {
     child.kill();
     rmSync(directory, { recursive: true, force: true });
