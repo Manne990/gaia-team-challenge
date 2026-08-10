@@ -53,6 +53,7 @@ describe("SQLite database lifecycle", () => {
       { name: "003_task_archive.sql" },
       { name: "004_activity_timeline.sql" },
       { name: "004_deal_management.sql" },
+      { name: "004_import_preview.sql" },
     ]);
     expect(database.pragma("foreign_keys", { simple: true })).toBe(1);
     database.close();

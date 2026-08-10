@@ -670,6 +670,104 @@ tbody th small {
 .state-panel-compact h1 {
   font-size: 0.95rem;
 }
+.imports-export,
+.import-workspace,
+.import-preview {
+  margin-bottom: 1rem;
+}
+.import-controls,
+.import-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.8rem;
+  padding: 1rem 1.3rem;
+}
+.import-controls label,
+.import-form > label,
+.mapping-grid label {
+  display: grid;
+  gap: 0.28rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.import-form fieldset {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+}
+.import-form legend {
+  padding-inline: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.7rem;
+}
+.field-help,
+.viewer-note,
+.empty-state {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.import-form .field-help {
+  order: 3;
+}
+.import-form button {
+  margin-left: auto;
+}
+.import-preview .metrics {
+  margin: 1rem;
+}
+.import-value {
+  display: block;
+  max-width: 28rem;
+  overflow-wrap: anywhere;
+}
+.import-status-warning {
+  color: #7d4b10;
+  background: #fff1d8;
+}
+.import-status-error {
+  color: #8d2525;
+  background: #ffe8e8;
+}
+.empty-state {
+  padding: 1rem 0;
+}
+.viewer-note {
+  margin-bottom: 1rem;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 700px) {
+  .import-controls,
+  .import-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .import-controls label,
+  .import-form > label,
+  .import-form button {
+    width: 100%;
+    margin-left: 0;
+  }
+}
 .state-symbol {
   display: grid;
   place-items: center;
