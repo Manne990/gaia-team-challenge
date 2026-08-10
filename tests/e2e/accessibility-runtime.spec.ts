@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { AxeBuilder } from "@axe-core/playwright";
 
 const viewports = [
   { width: 1440, height: 900 },
@@ -113,4 +114,21 @@ test.describe("browser accessibility and runtime health", () => {
     await expect(dialog).toBeHidden();
     await expect(record).toBeFocused();
   });
+
+  for (const viewport of [
+    { width: 834, height: 1112 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`has no full-page accessibility violations at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page);
+      await page.goto("/#administration");
+      await expect(
+        page.getByRole("heading", { name: "Organization administration" }),
+      ).toBeVisible();
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    });
+  }
 });
