@@ -9,9 +9,14 @@ type Activity = {
   subject: string;
   body: string;
   occurredAt: string;
+  creatorMembershipId: string;
+  createdAt: string;
   creatorLabel: string;
+  companyId: string | null;
   companyLabel: string | null;
+  contactId: string | null;
   contactLabel: string | null;
+  dealId: string | null;
   followUpTitle: string | null;
   version: number;
   participants: Array<{ id: string; label: string }>;
@@ -225,6 +230,10 @@ export function ActivitiesPage({ role }: { role: UserRole }) {
             setSelected(null);
             void load();
           }}
+          onUpdated={(activity) => {
+            setSelected(activity);
+            void load();
+          }}
         />
       )}
     </section>
@@ -392,14 +401,18 @@ function ActivityDialog({
   role,
   onClose,
   onDeleted,
+  onUpdated,
 }: {
   activity: Activity;
   role: UserRole;
   onClose: () => void;
   onDeleted: () => void;
+  onUpdated: (activity: Activity) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
     dialog.current?.showModal();
@@ -434,6 +447,45 @@ function ActivityDialog({
       setDeleting(false);
     }
   };
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await fetch(`/api/activities/${activity.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: String(data.get("type")),
+          subject: String(data.get("subject")),
+          body: String(data.get("body")),
+          occurredAt: new Date(String(data.get("occurredAt"))).toISOString(),
+          companyId: activity.companyId,
+          contactId: activity.contactId,
+          dealId: activity.dealId,
+          participantContactIds: activity.participants.map(({ id }) => id),
+          version: activity.version,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        activity?: Activity;
+        message?: string;
+      };
+      if (!response.ok || !body.activity)
+        throw new Error(body.message || "The activity could not be updated.");
+      setEditing(false);
+      onUpdated(body.activity);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The activity could not be updated.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <dialog
       ref={dialog}
@@ -445,36 +497,96 @@ function ActivityDialog({
     >
       <article className="dialog-body">
         <p className="eyebrow">{activity.type.replace("_", " ")}</p>
-        <h2 id="activity-detail-title">{activity.subject}</h2>
-        <p>{activity.body || "No summary provided."}</p>
-        <dl>
-          <dt>Creator</dt>
-          <dd>{activity.creatorLabel}</dd>
-          <dt>Occurred</dt>
-          <dd>{new Date(activity.occurredAt).toLocaleString()}</dd>
-          {activity.followUpTitle && (
-            <>
-              <dt>Follow-up</dt>
-              <dd>{activity.followUpTitle}</dd>
-            </>
-          )}
-        </dl>
-        {message && <p role="alert">{message}</p>}
-        <div className="dialog-actions">
-          {role !== "viewer" && (
-            <button
-              type="button"
-              className="button-danger"
-              disabled={deleting}
-              onClick={() => void remove()}
-            >
-              {deleting ? "Deleting…" : "Delete activity"}
+        <h2 id="activity-detail-title">
+          {editing ? "Edit activity" : activity.subject}
+        </h2>
+        {editing ? (
+          <form onSubmit={(event) => void save(event)}>
+            <label>
+              Type
+              <select name="type" defaultValue={activity.type}>
+                {activityTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Subject
+              <input name="subject" defaultValue={activity.subject} required />
+            </label>
+            <label>
+              Summary
+              <textarea name="body" defaultValue={activity.body} />
+            </label>
+            <label>
+              Occurred at
+              <input
+                name="occurredAt"
+                type="datetime-local"
+                defaultValue={localDateTime(activity.occurredAt)}
+                required
+              />
+            </label>
+            {message && <p role="alert">{message}</p>}
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="button-secondary"
+                disabled={saving}
+                onClick={() => {
+                  setEditing(false);
+                  setMessage("");
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p>{activity.body || "No summary provided."}</p>
+        )}
+        {!editing && (
+          <dl>
+            <dt>Creator</dt>
+            <dd>{activity.creatorLabel}</dd>
+            <dt>Occurred</dt>
+            <dd>{new Date(activity.occurredAt).toLocaleString()}</dd>
+            {activity.followUpTitle && (
+              <>
+                <dt>Follow-up</dt>
+                <dd>{activity.followUpTitle}</dd>
+              </>
+            )}
+          </dl>
+        )}
+        {!editing && message && <p role="alert">{message}</p>}
+        {!editing && (
+          <div className="dialog-actions">
+            {role !== "viewer" && (
+              <button type="button" onClick={() => setEditing(true)}>
+                Edit activity
+              </button>
+            )}
+            {role !== "viewer" && (
+              <button
+                type="button"
+                className="button-danger"
+                disabled={deleting}
+                onClick={() => void remove()}
+              >
+                {deleting ? "Deleting…" : "Delete activity"}
+              </button>
+            )}
+            <button type="button" onClick={close} disabled={deleting}>
+              Close
             </button>
-          )}
-          <button type="button" onClick={close} disabled={deleting}>
-            Close
-          </button>
-        </div>
+          </div>
+        )}
       </article>
     </dialog>
   );
