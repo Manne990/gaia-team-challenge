@@ -91,6 +91,14 @@ test('actual task workspace creates, completes, reopens, archives, and keeps vie
     await expect(taskRow).toContainText('open');
     await taskRow.getByRole('button', { name: 'Archive task' }).click();
     await expect(page.getByText('Task archived.')).toBeVisible();
+    const taskViews = page.getByRole('form', { name: 'Task views' });
+    await taskViews.getByLabel('Sort').selectOption('dueAt');
+    await taskViews.getByLabel('Direction').selectOption('desc');
+    await taskViews.getByRole('button', { name: 'Apply view' }).click();
+    await expect(page).toHaveURL(/sort=dueAt&direction=desc/);
+    await navigate(page, 'Deals');
+    await expect(page.locator('tbody tr')).not.toHaveCount(0);
+    await expect(page).toHaveURL(/sort=updatedAt&direction=desc/);
     await navigate(page, 'Deals');
     await page.evaluate(() => history.replaceState(null, '', '?sort=name&direction=desc&page=1'));
     await navigate(page, 'Tasks');
