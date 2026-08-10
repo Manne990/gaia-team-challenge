@@ -14,6 +14,7 @@ export const navigation: NavigationItem[] = [
   { label: "Activities", href: "#activities", short: "AC" },
   { label: "Deals", href: "#deals", short: "DE" },
   { label: "Tasks", href: "#tasks", short: "TA" },
+  { label: "Notifications", href: "#notifications", short: "NO" },
   { label: "Imports", href: "#imports", short: "IM" },
   { label: "Audit", href: "#audit", short: "AU" },
   {

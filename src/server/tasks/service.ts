@@ -268,6 +268,10 @@ export class TaskService {
       this.audit(identity, "task.updated", id, {
         fromVersion: current.version,
         toVersion: current.version + 1,
+        assignmentChanged:
+          current.assigneeMembershipId !== input.assigneeMembershipId,
+        fromAssigneeMembershipId: current.assigneeMembershipId,
+        toAssigneeMembershipId: input.assigneeMembershipId,
       });
     });
   }
@@ -334,7 +338,12 @@ export class TaskService {
     id: string,
     version: number,
     mutate: (
-      current: { version: number; status: string; archivedAt: string | null },
+      current: {
+        version: number;
+        status: string;
+        archivedAt: string | null;
+        assigneeMembershipId: string;
+      },
       timestamp: string,
     ) => void,
   ) {
@@ -342,10 +351,15 @@ export class TaskService {
       .transaction(() => {
         const current = this.db
           .prepare(
-            "SELECT version, status, archived_at AS archivedAt FROM tasks WHERE organization_id = ? AND id = ?",
+            "SELECT version, status, archived_at AS archivedAt, assignee_membership_id AS assigneeMembershipId FROM tasks WHERE organization_id = ? AND id = ?",
           )
           .get(identity.organizationId, id) as
-          | { version: number; status: string; archivedAt: string | null }
+          | {
+              version: number;
+              status: string;
+              archivedAt: string | null;
+              assigneeMembershipId: string;
+            }
           | undefined;
         if (!current) throw new TaskNotFoundError("Task not found.");
         if (current.version !== version)
