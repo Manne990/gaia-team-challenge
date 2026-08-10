@@ -13,10 +13,9 @@ describe("App", () => {
       }),
     );
     render(<App />);
-    expect(screen.getByText("Loading your workspace…")).toBeInTheDocument();
-    expect(
-      await screen.findByText("Your customer workspace is ready."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Loading your workspace")).toBeInTheDocument();
+    expect(await screen.findByText("Good morning, Alex")).toBeInTheDocument();
+    expect(screen.getByRole("navigation")).toBeInTheDocument();
   });
   it("shows an actionable unavailable state", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
