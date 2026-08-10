@@ -137,6 +137,15 @@ export class AuthService {
     }
   }
 
+  listMemberships(actor: SessionIdentity): Array<{ userId: string; email: string; displayName: string; role: Role }> {
+    this.requireRole(actor, "owner");
+    return this.db.prepare(`
+      SELECT m.user_id AS userId, u.email, u.display_name AS displayName, m.role
+      FROM memberships m JOIN users u ON u.id = m.user_id
+      WHERE m.organization_id = ? ORDER BY u.email
+    `).all(actor.organizationId) as Array<{ userId: string; email: string; displayName: string; role: Role }>;
+  }
+
   addMembership(actor: SessionIdentity, input: { userId: string; role: Role }): void {
     this.requireRole(actor, "owner");
     const timestamp = iso(this.now());

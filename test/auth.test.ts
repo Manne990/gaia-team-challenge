@@ -114,6 +114,12 @@ describe("authorization and tenant isolation", () => {
     assert.throws(() => auth.addMembership({ ...owner, role: "viewer" }, { userId: "user-outside", role: "viewer" }), AuthorizationError);
   });
 
+  it("lists only the authenticated owner's organization members", () => {
+    const members = auth.listMemberships(owner);
+    assert.equal(members.length, 3);
+    assert(!members.some((member) => member.email === "other-owner@outside.test"));
+  });
+
   it("prevents removal or demotion of the last owner transactionally", () => {
     assert.throws(() => auth.removeMembership(owner, "user-owner"), MembershipConflictError);
     assert.throws(() => auth.updateMembership(owner, "user-owner", "member"), MembershipConflictError);

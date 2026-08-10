@@ -1,6 +1,8 @@
 import { parse, serialize } from "cookie";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { AuthService, AuthenticationError } from "./service.js";
+import {
+  AuthService, AuthenticationError, AuthorizationError, MembershipConflictError, type Role,
+} from "./service.js";
 
 const COOKIE = "northstar_session";
 
@@ -27,6 +29,16 @@ export function sessionToken(request: IncomingMessage): string | undefined {
 export function createAuthHttpHandler(auth: AuthService) {
   return async (request: IncomingMessage, response: ServerResponse): Promise<boolean> => {
     const path = new URL(request.url ?? "/", "http://local").pathname;
+    const origin = request.headers.origin;
+    const host = request.headers.host;
+    if (request.method !== "GET" && origin && host) {
+      let sameOrigin = false;
+      try { sameOrigin = new URL(origin).host === host; } catch { /* malformed origins are denied */ }
+      if (!sameOrigin) {
+        json(response, 403, { error: "Request origin is not allowed." });
+        return true;
+      }
+    }
     if (request.method === "POST" && path === "/api/auth/sign-in") {
       try {
         const body = await readJson(request) as Record<string, unknown>;
@@ -55,6 +67,38 @@ export function createAuthHttpHandler(auth: AuthService) {
         json(response, 401, { error: "Authentication required." });
       }
       return true;
+    }
+    const memberMatch = path.match(/^\/api\/admin\/members(?:\/([^/]+))?$/);
+    if (memberMatch) {
+      try {
+        const identity = auth.authenticate(sessionToken(request));
+        if (request.method === "GET" && !memberMatch[1]) {
+          json(response, 200, { members: auth.listMemberships(identity) });
+          return true;
+        }
+        const userId = memberMatch[1] && decodeURIComponent(memberMatch[1]);
+        if (request.method === "PATCH" && userId) {
+          const body = await readJson(request) as { role?: unknown };
+          if (!(["owner", "member", "viewer"] as unknown[]).includes(body.role)) {
+            json(response, 400, { error: "Choose a valid role." });
+            return true;
+          }
+          auth.updateMembership(identity, userId, body.role as Role);
+          json(response, 200, { ok: true });
+          return true;
+        }
+        if (request.method === "DELETE" && userId) {
+          auth.removeMembership(identity, userId);
+          json(response, 200, { ok: true });
+          return true;
+        }
+      } catch (error) {
+        const status = error instanceof AuthenticationError ? 401
+          : error instanceof MembershipConflictError ? 409
+          : error instanceof AuthorizationError && error.message.includes("not found") ? 404 : 403;
+        json(response, status, { error: error instanceof Error ? error.message : "Request denied." });
+        return true;
+      }
     }
     return false;
   };
