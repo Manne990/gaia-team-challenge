@@ -7,17 +7,40 @@ describe.sequential("App", () => {
   it("shows loading then the ready workspace", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          user: {
-            id: "user_owner",
-            email: "owner@northstar.test",
-            displayName: "Northstar Owner",
-            role: "owner",
-          },
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          ok: true,
+          json: async () =>
+            url === "/api/dashboard"
+              ? {
+                  asOf: "2026-08-10T12:00:00.000Z",
+                  semantics: {
+                    recentFrom: "",
+                    upcomingTo: "",
+                    closeFrom: "",
+                    closeTo: "",
+                    staleBefore: "",
+                    trendFrom: "",
+                    trendTo: "",
+                  },
+                  openPipeline: { count: 0, totals: [] },
+                  stageDistribution: [],
+                  outcomeTrend: [],
+                  recentActivity: { count: 0, items: [] },
+                  tasks: { overdue: 0, upcoming: 0 },
+                  closingSoon: { count: 0, totals: [] },
+                  staleAccounts: { count: 0 },
+                }
+              : {
+                  user: {
+                    id: "user_owner",
+                    email: "owner@northstar.test",
+                    displayName: "Northstar Owner",
+                    role: "owner",
+                  },
+                },
         }),
-      }),
+      ),
     );
     render(<App />);
     expect(screen.getByText("Loading your workspace")).toBeInTheDocument();

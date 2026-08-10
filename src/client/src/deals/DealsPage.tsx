@@ -153,6 +153,10 @@ export function DealsPage({
   const [ownerId, setOwnerId] = useState(initial.ownerId ?? "");
   const [companyId, setCompanyId] = useState(initial.companyId ?? "");
   const [status, setStatus] = useState(initial.status ?? "all");
+  const [closeFrom] = useState(initial.closeFrom ?? "");
+  const [closeTo] = useState(initial.closeTo ?? "");
+  const [outcomeFrom] = useState(initial.outcomeFrom ?? "");
+  const [outcomeTo] = useState(initial.outcomeTo ?? "");
   const [sort, setSort] = useState(initial.sort ?? "updated");
   const [order, setOrder] = useState(initial.order === "asc" ? "asc" : "desc");
   const [includeArchived, setIncludeArchived] = useState(
@@ -184,6 +188,10 @@ export function DealsPage({
     if (ownerId.trim()) p.set("ownerId", ownerId.trim());
     if (companyId.trim()) p.set("companyId", companyId.trim());
     if (status !== "all") p.set("status", status);
+    if (closeFrom) p.set("closeFrom", closeFrom);
+    if (closeTo) p.set("closeTo", closeTo);
+    if (outcomeFrom) p.set("outcomeFrom", outcomeFrom);
+    if (outcomeTo) p.set("outcomeTo", outcomeTo);
     try {
       setList(await request<DealList>(`/api/deals?${p}`));
     } catch (e) {
@@ -201,6 +209,10 @@ export function DealsPage({
     sort,
     stageId,
     status,
+    closeFrom,
+    closeTo,
+    outcomeFrom,
+    outcomeTo,
   ]);
   useEffect(() => {
     // Fetching is the external synchronization owned by this effect.
@@ -214,6 +226,10 @@ export function DealsPage({
       ownerId,
       companyId,
       status,
+      closeFrom,
+      closeTo,
+      outcomeFrom,
+      outcomeTo,
       sort,
       order,
       includeArchived: String(includeArchived),
@@ -229,6 +245,10 @@ export function DealsPage({
     sort,
     stageId,
     status,
+    closeFrom,
+    closeTo,
+    outcomeFrom,
+    outcomeTo,
   ]);
   const open = async (id: string) => {
     setSelected(null);
@@ -378,6 +398,12 @@ export function DealsPage({
         }}
       />
       <section className="surface deals-panel">
+        {(closeFrom || closeTo || outcomeFrom || outcomeTo) && (
+          <p className="dashboard-filter-note" role="status">
+            Dashboard date window applied. Clear it by opening Deals from the
+            primary navigation.
+          </p>
+        )}
         <div className="filter-bar" aria-label="Deal filters">
           <label>
             <span className="sr-only">Search deals</span>

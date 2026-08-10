@@ -5,7 +5,8 @@ import { readListState, writeListState } from "../search/urlState";
 import "./tasks.css";
 
 type Role = "owner" | "member" | "viewer";
-type View = "assigned_to_me" | "overdue" | "today" | "upcoming" | "completed";
+type View =
+  "assigned_to_me" | "overdue" | "today" | "upcoming" | "completed" | "window";
 type Task = {
   id: string;
   title: string;
@@ -112,6 +113,8 @@ export function TasksPage({
   const [view, setView] = useState<View>(
     (initial.view as View) || "assigned_to_me",
   );
+  const [dueFrom] = useState(initial.dueFrom ?? "");
+  const [dueTo] = useState(initial.dueTo ?? "");
   const [query, setQuery] = useState(initial.q ?? "");
   const [priority, setPriority] = useState(initial.priority ?? "all");
   const [status, setStatus] = useState(initial.status ?? "all");
@@ -150,6 +153,8 @@ export function TasksPage({
       if (priority !== "all") params.set("priority", priority);
       if (status !== "all") params.set("status", status);
       if (includeArchived) params.set("archived", "include");
+      if (dueFrom) params.set("dueFrom", dueFrom);
+      if (dueTo) params.set("dueTo", dueTo);
       const result = await request<{
         items: Task[];
         assignees: Assignee[];
@@ -164,7 +169,18 @@ export function TasksPage({
       setState(reason.status === 403 ? "forbidden" : "error");
       setMessage(reason.message);
     }
-  }, [direction, includeArchived, page, priority, query, sort, status, view]);
+  }, [
+    direction,
+    dueFrom,
+    dueTo,
+    includeArchived,
+    page,
+    priority,
+    query,
+    sort,
+    status,
+    view,
+  ]);
 
   useEffect(() => {
     // Synchronize the list with the selected server-side view.
@@ -181,8 +197,21 @@ export function TasksPage({
       direction,
       archived: includeArchived ? "include" : "",
       page: String(page),
+      dueFrom,
+      dueTo,
     });
-  }, [direction, includeArchived, page, priority, query, sort, status, view]);
+  }, [
+    direction,
+    dueFrom,
+    dueTo,
+    includeArchived,
+    page,
+    priority,
+    query,
+    sort,
+    status,
+    view,
+  ]);
 
   const showError = (error: unknown) => {
     const reason = error as ApiError;
@@ -364,6 +393,7 @@ export function TasksPage({
             onChange={(event) => setView(event.target.value as View)}
           >
             <option value="assigned_to_me">Assigned to me</option>
+            <option value="window">Dashboard date window</option>
             <option value="overdue">Overdue</option>
             <option value="today">Today</option>
             <option value="upcoming">Upcoming</option>

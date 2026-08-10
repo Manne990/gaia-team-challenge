@@ -1,289 +1,465 @@
-import { useState } from "react";
-import { ConfirmationDialog } from "../App";
+import { useCallback, useEffect, useState } from "react";
 import { StatePanel } from "../ui/StatePanel";
-import { Toast } from "../ui/Toast";
+import "./dashboard.css";
 
-const deals = [
-  {
-    name: "Acme renewal",
-    company: "Acme AB",
-    stage: "Proposal",
-    value: "$48,000",
-    close: "Aug 18",
-    owner: "Alex M.",
-  },
-  {
-    name: "Northwind rollout",
-    company: "Northwind",
-    stage: "Discovery",
-    value: "$31,500",
-    close: "Aug 24",
-    owner: "Sam K.",
-  },
-  {
-    name: "Orbit expansion",
-    company: "Orbit Systems",
-    stage: "Negotiation",
-    value: "$72,000",
-    close: "Sep 02",
-    owner: "Alex M.",
-  },
-  {
-    name: "Harbor onboarding",
-    company: "Harbor Studio",
-    stage: "Qualified",
-    value: "$19,800",
-    close: "Sep 06",
-    owner: "Jamie L.",
-  },
-];
+type Money = { currency: string; amountMinor: string };
+type Dashboard = {
+  asOf: string;
+  semantics: {
+    recentFrom: string;
+    upcomingTo: string;
+    closeFrom: string;
+    closeTo: string;
+    staleBefore: string;
+    trendFrom: string;
+    trendTo: string;
+  };
+  openPipeline: { count: number; totals: Money[] };
+  stageDistribution: Array<{
+    id: string;
+    name: string;
+    count: number;
+    totals: Money[];
+  }>;
+  outcomeTrend: Array<{
+    month: string;
+    from: string;
+    to: string;
+    won: number;
+    lost: number;
+  }>;
+  recentActivity: {
+    count: number;
+    items: Array<{
+      id: string;
+      type: string;
+      subject: string;
+      occurredAt: string;
+      creatorLabel: string;
+      companyLabel: string | null;
+    }>;
+  };
+  tasks: { overdue: number; upcoming: number };
+  closingSoon: { count: number; totals: Money[] };
+  staleAccounts: { count: number };
+};
 
-export function DashboardPage({
-  userName = "Alex Morgan",
-}: {
-  userName?: string;
-}) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [toast, setToast] = useState(false);
+const emptyDashboard: Dashboard = {
+  asOf: new Date(0).toISOString(),
+  semantics: {
+    recentFrom: "",
+    upcomingTo: "",
+    closeFrom: "",
+    closeTo: "",
+    staleBefore: "",
+    trendFrom: "",
+    trendTo: "",
+  },
+  openPipeline: { count: 0, totals: [] },
+  stageDistribution: [],
+  outcomeTrend: [],
+  recentActivity: { count: 0, items: [] },
+  tasks: { overdue: 0, upcoming: 0 },
+  closingSoon: { count: 0, totals: [] },
+  staleAccounts: { count: 0 },
+};
+
+export function DashboardPage({ userName = "" }: { userName?: string }) {
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/dashboard", { signal });
+      const body = (await response.json().catch(() => null)) as
+        Dashboard | { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(
+          body && "error" in body && body.error
+            ? body.error
+            : "The dashboard could not be loaded.",
+        );
+      }
+      if (!isDashboard(body))
+        throw new Error("The dashboard response was incomplete.");
+      setDashboard(body);
+    } catch (reason) {
+      if (reason instanceof DOMException && reason.name === "AbortError")
+        return;
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "The dashboard could not be loaded.",
+      );
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    // Fetching is the external synchronization owned by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  if (error && !dashboard) {
+    return (
+      <StatePanel
+        kind="error"
+        title="Could not load your dashboard"
+        detail={error}
+        action={<button onClick={() => void load()}>Try again</button>}
+      />
+    );
+  }
+  if (loading && !dashboard) {
+    return <StatePanel kind="loading" title="Loading your dashboard" />;
+  }
+
+  const data = dashboard ?? emptyDashboard;
+  const firstName = userName.trim().split(/\s+/)[0];
+  const asOf = data.asOf ? new Date(data.asOf) : new Date();
   return (
-    <>
-      <header className="page-header">
+    <div className="dashboard-page">
+      <header className="page-header dashboard-header">
         <div>
-          <p className="eyebrow">Monday, 10 August</p>
-          <h1>Good morning, {userName.split(" ")[0]}</h1>
+          <p className="eyebrow">
+            {asOf.toLocaleDateString(undefined, { dateStyle: "full" })}
+          </p>
+          <h1>{firstName ? `Good morning, ${firstName}` : "Dashboard"}</h1>
           <p className="page-summary">
-            Here is what needs attention across your sales workspace.
+            A current view of your sales workspace.
           </p>
         </div>
-        <div className="header-actions">
-          <button className="button-secondary">Import</button>
-          <button onClick={() => setDialogOpen(true)}>Create deal</button>
-        </div>
+        <button
+          className="button-secondary"
+          onClick={() => void load()}
+          disabled={loading}
+          aria-busy={loading}
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
       </header>
 
-      <section className="metrics" aria-label="Sales overview">
-        <Metric
+      {error && (
+        <p className="dashboard-inline-error" role="alert">
+          {error}
+        </p>
+      )}
+      <section className="dashboard-metrics" aria-label="Sales overview">
+        <MetricLink
           label="Open pipeline"
-          value="$482k"
-          note="12% from last month"
-          tone="positive"
+          href="#deals?status=open"
+          value={data.openPipeline.count}
+          totals={data.openPipeline.totals}
         />
-        <Metric label="Deals closing soon" value="8" note="$126k expected" />
-        <Metric
+        <MetricLink
+          label="Deals closing soon"
+          href={queryLink("deals", {
+            status: "open",
+            closeFrom: data.semantics.closeFrom,
+            closeTo: data.semantics.closeTo,
+          })}
+          value={data.closingSoon.count}
+          totals={data.closingSoon.totals}
+        />
+        <MetricLink
           label="Overdue tasks"
-          value="5"
-          note="2 high priority"
-          tone="warning"
+          href={queryLink("tasks", {
+            view: "window",
+            dueTo: data.asOf,
+          })}
+          value={data.tasks.overdue}
+          note="Needs attention"
         />
-        <Metric
+        <MetricLink
           label="Stale accounts"
-          value="14"
-          note="No activity in 30 days"
+          href={queryLink("companies", {
+            staleBefore: data.semantics.staleBefore,
+            staleThrough: data.asOf,
+          })}
+          value={data.staleAccounts.count}
+          note="No recent activity"
         />
       </section>
 
-      <div className="content-grid">
+      <div className="dashboard-grid">
         <section
-          className="surface pipeline-panel"
+          className="surface dashboard-card"
           aria-labelledby="pipeline-title"
         >
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Pipeline</p>
-              <h2 id="pipeline-title">Deals requiring attention</h2>
-            </div>
-            <a href="#deals">
-              View pipeline <span aria-hidden="true">→</span>
-            </a>
-          </div>
-          <div className="filter-bar" aria-label="Deal filters">
-            <label>
-              <span className="sr-only">Search deals</span>
-              <input type="search" placeholder="Search deals" />
-            </label>
-            <label>
-              <span>Stage</span>
-              <select defaultValue="all">
-                <option value="all">All stages</option>
-                <option>Proposal</option>
-                <option>Negotiation</option>
-              </select>
-            </label>
-            <button className="button-secondary">
-              More filters <span className="count-badge">2</span>
-            </button>
-            <button className="button-quiet">Clear all</button>
-          </div>
-          <div
-            className="table-scroll"
-            tabIndex={0}
-            aria-label="Scrollable deal table"
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">
-                    <input type="checkbox" aria-label="Select all deals" />
-                  </th>
-                  <th scope="col">Deal</th>
-                  <th scope="col">Stage</th>
-                  <th scope="col">Value</th>
-                  <th scope="col">Close date</th>
-                  <th scope="col">Owner</th>
-                  <th scope="col">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {deals.map((deal) => (
-                  <tr key={deal.name}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${deal.name}`}
-                      />
-                    </td>
-                    <th scope="row">
-                      <a href="#deals">{deal.name}</a>
-                      <small>{deal.company}</small>
-                    </th>
-                    <td>
-                      <span className="status-badge">{deal.stage}</span>
-                    </td>
-                    <td className="numeric">{deal.value}</td>
-                    <td>{deal.close}</td>
-                    <td>{deal.owner}</td>
-                    <td>
-                      <button
-                        className="icon-button"
-                        aria-label={`Actions for ${deal.name}`}
-                      >
-                        ⋯
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <footer className="table-footer">
-            <span>Showing 1–4 of 24 deals</span>
-            <div>
-              <button className="button-secondary" disabled>
-                Previous
-              </button>
-              <button className="button-secondary">Next</button>
-            </div>
-          </footer>
+          <SectionHeading
+            eyebrow="Pipeline"
+            title="Open pipeline by stage"
+            linkHref="#deals?status=open"
+            linkLabel="View deals"
+          />
+          {data.stageDistribution.length ? (
+            <ul className="dashboard-list stage-list">
+              {data.stageDistribution.map((stage) => (
+                <li key={stage.id}>
+                  <a
+                    href={queryLink("deals", {
+                      status: "open",
+                      stageId: stage.id,
+                    })}
+                  >
+                    <span>{stage.name}</span>
+                    <strong>{stage.count}</strong>
+                  </a>
+                  <MoneyList totals={stage.totals} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyMessage detail="No open pipeline stages were returned." />
+          )}
         </section>
 
-        <aside className="side-stack">
-          <section className="surface" aria-labelledby="tasks-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Follow-up</p>
-                <h2 id="tasks-title">Today’s tasks</h2>
-              </div>
-              <a href="#tasks">View all</a>
-            </div>
-            <ul className="task-list">
-              <Task
-                title="Call Acme procurement"
-                meta="Due 09:30 · High"
-                urgent
-              />
-              <Task title="Review Orbit proposal" meta="Due 13:00 · Alex M." />
-              <Task title="Prepare Northwind demo" meta="Due 16:30 · Sam K." />
+        <section
+          className="surface dashboard-card"
+          aria-labelledby="trend-title"
+        >
+          <SectionHeading eyebrow="Outcomes" title="Won and lost by month" />
+          {data.outcomeTrend.length ? (
+            <ul className="dashboard-list trend-list">
+              {data.outcomeTrend.map((month) => (
+                <li key={month.month}>
+                  <span>{monthLabel(month.month)}</span>
+                  <span className="outcome-links">
+                    <a
+                      href={queryLink("deals", {
+                        status: "won",
+                        outcomeFrom: month.from,
+                        outcomeTo: month.to,
+                      })}
+                    >
+                      {month.won} won
+                    </a>
+                    <a
+                      href={queryLink("deals", {
+                        status: "lost",
+                        outcomeFrom: month.from,
+                        outcomeTo: month.to,
+                      })}
+                    >
+                      {month.lost} lost
+                    </a>
+                  </span>
+                </li>
+              ))}
             </ul>
-          </section>
-          <section
-            className="surface state-sample"
-            aria-labelledby="states-title"
-          >
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Reusable state</p>
-                <h2 id="states-title">No saved views yet</h2>
-              </div>
-            </div>
-            <StatePanel
-              kind="empty"
-              compact
-              title="Create a saved view"
-              detail="Keep a useful filter combination ready for next time."
-              action={
-                <button
-                  className="button-secondary"
-                  onClick={() => setToast(true)}
-                >
-                  Save current view
-                </button>
-              }
-            />
-          </section>
-        </aside>
+          ) : (
+            <EmptyMessage detail="No outcome history is available yet." />
+          )}
+        </section>
+
+        <section
+          className="surface dashboard-card"
+          aria-labelledby="activity-title"
+        >
+          <SectionHeading
+            eyebrow="Recent activity"
+            title={`${data.recentActivity.count} activities this week`}
+            linkHref={queryLink("activities", {
+              from: data.semantics.recentFrom,
+              to: data.asOf,
+            })}
+            linkLabel="View activities"
+          />
+          {data.recentActivity.items.length ? (
+            <ul className="dashboard-list activity-list">
+              {data.recentActivity.items.map((activity) => (
+                <li key={activity.id}>
+                  <span className="activity-type">{activity.type}</span>
+                  <strong>{activity.subject}</strong>
+                  <small>
+                    {activity.companyLabel ?? "Workspace"} ·{" "}
+                    {activity.creatorLabel} · {formatDate(activity.occurredAt)}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyMessage detail="No activity was recorded in the recent period." />
+          )}
+        </section>
+
+        <section
+          className="surface dashboard-card attention-card"
+          aria-labelledby="attention-title"
+        >
+          <SectionHeading
+            eyebrow="Follow-up"
+            title="Tasks and accounts needing attention"
+          />
+          <ul className="dashboard-list attention-list">
+            <li>
+              <a
+                href={queryLink("tasks", {
+                  view: "window",
+                  dueTo: data.asOf,
+                })}
+              >
+                <span>Overdue tasks</span>
+                <strong>{data.tasks.overdue}</strong>
+              </a>
+            </li>
+            <li>
+              <a
+                href={queryLink("tasks", {
+                  view: "window",
+                  dueFrom: data.asOf,
+                  dueTo: data.semantics.upcomingTo,
+                })}
+              >
+                <span>Upcoming tasks</span>
+                <strong>{data.tasks.upcoming}</strong>
+              </a>
+            </li>
+            <li>
+              <a
+                href={queryLink("deals", {
+                  status: "open",
+                  closeFrom: data.semantics.closeFrom,
+                  closeTo: data.semantics.closeTo,
+                })}
+              >
+                <span>Closing soon</span>
+                <strong>{data.closingSoon.count}</strong>
+                <MoneyList totals={data.closingSoon.totals} />
+              </a>
+            </li>
+            <li>
+              <a
+                href={queryLink("companies", {
+                  staleBefore: data.semantics.staleBefore,
+                  staleThrough: data.asOf,
+                })}
+              >
+                <span>Stale accounts</span>
+                <strong>{data.staleAccounts.count}</strong>
+              </a>
+            </li>
+          </ul>
+        </section>
       </div>
-      {toast && (
-        <Toast
-          message="View saved for this workspace"
-          onDismiss={() => setToast(false)}
-        />
-      )}
-      <ConfirmationDialog
-        open={dialogOpen}
-        title="Create a new deal?"
-        detail="A draft deal will be added to Northstar Demo. You can complete its details next."
-        confirmLabel="Create deal"
-        onCancel={() => setDialogOpen(false)}
-        onConfirm={() => {
-          setDialogOpen(false);
-          setToast(true);
-        }}
-      />
-    </>
+    </div>
   );
 }
 
-function Metric({
+function MetricLink({
   label,
+  href,
   value,
+  totals,
   note,
-  tone,
 }: {
   label: string;
-  value: string;
-  note: string;
-  tone?: "positive" | "warning";
+  href: string;
+  value: number;
+  totals?: Money[];
+  note?: string;
 }) {
   return (
-    <article className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small className={tone ? `tone-${tone}` : undefined}>{note}</small>
+    <article className="dashboard-metric">
+      <a href={href}>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        {totals?.length ? <MoneyList totals={totals} /> : <small>{note}</small>}
+      </a>
     </article>
   );
 }
 
-function Task({
+function SectionHeading({
+  eyebrow,
   title,
-  meta,
-  urgent = false,
+  linkHref,
+  linkLabel,
 }: {
+  eyebrow: string;
   title: string;
-  meta: string;
-  urgent?: boolean;
+  linkHref?: string;
+  linkLabel?: string;
 }) {
   return (
-    <li>
-      <input type="checkbox" aria-label={`Complete ${title}`} />
-      <span>
-        <strong>{title}</strong>
-        <small className={urgent ? "tone-warning" : undefined}>{meta}</small>
-      </span>
-      <button className="icon-button" aria-label={`Actions for ${title}`}>
-        ⋯
-      </button>
-    </li>
+    <div className="section-heading">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2>{title}</h2>
+      </div>
+      {linkHref && linkLabel && <a href={linkHref}>{linkLabel}</a>}
+    </div>
+  );
+}
+
+function MoneyList({ totals }: { totals: Money[] }) {
+  return (
+    <span className="money-list">
+      {totals.map((money) => (
+        <span key={money.currency}>{formatMoney(money)}</span>
+      ))}
+    </span>
+  );
+}
+
+function EmptyMessage({ detail }: { detail: string }) {
+  return <p className="dashboard-empty">{detail}</p>;
+}
+
+function formatMoney(money: Money) {
+  const value = BigInt(money.amountMinor);
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    const whole = value / 100n;
+    const fraction = String(value % 100n).padStart(2, "0");
+    return `${money.currency} ${whole.toLocaleString()}.${fraction}`;
+  }
+  const amount = Number(value) / 100;
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: money.currency,
+  }).format(amount);
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function monthLabel(value: string) {
+  return new Date(`${value}-01T00:00:00Z`).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function queryLink(route: string, values: Record<string, string>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(values))
+    if (value) query.set(key, value);
+  return `#${route}${query.toString() ? `?${query}` : ""}`;
+}
+
+function isDashboard(value: unknown): value is Dashboard {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<Dashboard>;
+  return Boolean(
+    candidate.semantics &&
+    candidate.openPipeline &&
+    candidate.stageDistribution &&
+    candidate.outcomeTrend &&
+    candidate.recentActivity &&
+    candidate.tasks &&
+    candidate.closingSoon &&
+    candidate.staleAccounts,
   );
 }

@@ -111,6 +111,29 @@ export class DealsService {
         params.push(value);
       }
     }
+    const closeFrom = query.get("closeFrom");
+    if (closeFrom) {
+      clauses.push("d.expected_close_date>=?");
+      params.push(closeFrom);
+    }
+    const closeTo = query.get("closeTo");
+    if (closeTo) {
+      clauses.push("d.expected_close_date<?");
+      params.push(closeTo);
+    }
+    const outcomeAt = `coalesce((SELECT max(h.changed_at) FROM deal_stage_history h
+      JOIN pipeline_stages hs ON hs.id=h.to_stage_id AND hs.organization_id=h.organization_id
+      WHERE h.organization_id=d.organization_id AND h.deal_id=d.id AND hs.kind=d.status),d.updated_at)`;
+    const outcomeFrom = query.get("outcomeFrom");
+    if (outcomeFrom) {
+      clauses.push(`${outcomeAt}>=?`);
+      params.push(outcomeFrom);
+    }
+    const outcomeTo = query.get("outcomeTo");
+    if (outcomeTo) {
+      clauses.push(`${outcomeAt}<?`);
+      params.push(outcomeTo);
+    }
     const q = query.get("q")?.trim();
     if (q) {
       clauses.push("(d.name LIKE ? OR c.name LIKE ?)");

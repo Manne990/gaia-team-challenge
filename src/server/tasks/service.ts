@@ -137,6 +137,19 @@ export class TaskService {
       );
       params.push(`${today}T23:59:59.999Z`);
     } else if (view === "completed") clauses.push("t.status = 'completed'");
+    const dueFrom = query.get("dueFrom");
+    const dueTo = query.get("dueTo");
+    if (dueFrom || dueTo) {
+      clauses.push("t.status NOT IN ('completed', 'cancelled')");
+      if (dueFrom) {
+        clauses.push("t.due_at >= ?");
+        params.push(dueFrom);
+      }
+      if (dueTo) {
+        clauses.push("t.due_at < ?");
+        params.push(dueTo);
+      }
+    }
     for (const [parameter, column] of [
       ["assignee", "t.assignee_membership_id"],
       ["priority", "t.priority"],
