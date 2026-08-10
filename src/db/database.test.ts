@@ -156,6 +156,18 @@ describe("SQLite database lifecycle", () => {
             "INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
           )
           .run("org_rollback", "Rollback", "rollback", "now", "now");
+        database
+          .prepare(
+            "INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+          )
+          .run(
+            "user_rollback",
+            "rollback@example.test",
+            "not-a-real-password-hash",
+            "Rollback User",
+            "now",
+            "now",
+          );
         throw new Error("abort transaction");
       })(),
     ).toThrow("abort transaction");
@@ -163,6 +175,13 @@ describe("SQLite database lifecycle", () => {
       database
         .prepare(
           "SELECT COUNT(*) AS count FROM organizations WHERE id = 'org_rollback'",
+        )
+        .get(),
+    ).toEqual({ count: 0 });
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM users WHERE id = 'user_rollback'",
         )
         .get(),
     ).toEqual({ count: 0 });

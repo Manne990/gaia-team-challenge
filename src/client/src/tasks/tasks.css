@@ -3,6 +3,7 @@
 }
 .tasks-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 1rem;
   margin-bottom: 1rem;
