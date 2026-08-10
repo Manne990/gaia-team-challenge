@@ -7,7 +7,10 @@ export function migrateAuthSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS organizations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      slug TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS users (
@@ -16,24 +19,31 @@ export function migrateAuthSchema(db: Database.Database): void {
       password_hash TEXT NOT NULL,
       display_name TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      disabled_at TEXT
+      updated_at TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS memberships (
+      id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       role TEXT NOT NULL CHECK (role IN ('owner', 'member', 'viewer')),
       created_at TEXT NOT NULL,
-      PRIMARY KEY (organization_id, user_id)
+      updated_at TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      UNIQUE (organization_id, user_id),
+      UNIQUE (user_id, organization_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS sessions (
-      id_hash TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
       organization_id TEXT NOT NULL,
-      created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       revoked_at TEXT,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
       FOREIGN KEY (organization_id, user_id)
         REFERENCES memberships(organization_id, user_id) ON DELETE CASCADE
     ) STRICT;

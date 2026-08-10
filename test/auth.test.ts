@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { scryptSync } from "node:crypto";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
   AuthenticationError, AuthorizationError, AuthService, MembershipConflictError, migrateAuthSchema,
@@ -17,6 +18,7 @@ let auth: AuthService;
 
 const owner: SessionIdentity = {
   sessionHash: "", userId: "user-owner", organizationId: "org-a", role: "owner",
+  membershipId: "membership-owner",
   email: "owner@northstar.test", displayName: "Owner", expiresAt: "",
 };
 
@@ -26,19 +28,19 @@ beforeEach(async () => {
   migrateAuthSchema(db);
   clock = new Date("2026-08-10T10:00:00.000Z");
   auth = new AuthService(db, () => clock, 60_000);
-  db.prepare("INSERT INTO organizations VALUES (?, ?, ?)").run("org-a", "Northstar", clock.toISOString());
-  db.prepare("INSERT INTO organizations VALUES (?, ?, ?)").run("org-b", "Outside", clock.toISOString());
+  db.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("org-a", "Northstar", "northstar", clock.toISOString(), clock.toISOString());
+  db.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("org-b", "Outside", "outside", clock.toISOString(), clock.toISOString());
   const passwordHash = await argon2.hash("OwnerPass!2026");
-  const insertUser = db.prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?, NULL)");
-  insertUser.run("user-owner", "owner@northstar.test", passwordHash, "Owner", clock.toISOString());
-  insertUser.run("user-member", "member@northstar.test", passwordHash, "Member", clock.toISOString());
-  insertUser.run("user-viewer", "viewer@northstar.test", passwordHash, "Viewer", clock.toISOString());
-  insertUser.run("user-outside", "other-owner@outside.test", passwordHash, "Outside", clock.toISOString());
-  const insertMembership = db.prepare("INSERT INTO memberships VALUES (?, ?, ?, ?)");
-  insertMembership.run("org-a", "user-owner", "owner", clock.toISOString());
-  insertMembership.run("org-a", "user-member", "member", clock.toISOString());
-  insertMembership.run("org-a", "user-viewer", "viewer", clock.toISOString());
-  insertMembership.run("org-b", "user-outside", "owner", clock.toISOString());
+  const insertUser = db.prepare("INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+  insertUser.run("user-owner", "owner@northstar.test", passwordHash, "Owner", clock.toISOString(), clock.toISOString());
+  insertUser.run("user-member", "member@northstar.test", passwordHash, "Member", clock.toISOString(), clock.toISOString());
+  insertUser.run("user-viewer", "viewer@northstar.test", passwordHash, "Viewer", clock.toISOString(), clock.toISOString());
+  insertUser.run("user-outside", "other-owner@outside.test", passwordHash, "Outside", clock.toISOString(), clock.toISOString());
+  const insertMembership = db.prepare("INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+  insertMembership.run("membership-owner", "org-a", "user-owner", "owner", clock.toISOString(), clock.toISOString());
+  insertMembership.run("membership-member", "org-a", "user-member", "member", clock.toISOString(), clock.toISOString());
+  insertMembership.run("membership-viewer", "org-a", "user-viewer", "viewer", clock.toISOString(), clock.toISOString());
+  insertMembership.run("membership-outside", "org-b", "user-outside", "owner", clock.toISOString(), clock.toISOString());
 });
 
 afterEach(() => {
@@ -47,11 +49,17 @@ afterEach(() => {
 });
 
 describe("authentication", () => {
+  it("accepts deterministic seeded scrypt credentials during the Argon2 transition", async () => {
+    const encoded = `scrypt$16384$8$1$seed-owner-v1$${scryptSync("OwnerPass!2026", "seed-owner-v1", 64).toString("base64")}`;
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(encoded, "user-owner");
+    await assert.doesNotReject(() => auth.signIn("owner@northstar.test", "OwnerPass!2026"));
+  });
+
   it("creates an organization-bound session and stores only its digest", async () => {
     const result = await auth.signIn(" OWNER@NORTHSTAR.TEST ", "OwnerPass!2026");
     assert.equal(result.token.length, 43);
     assert.equal(result.identity.organizationId, "org-a");
-    const persisted = db.prepare("SELECT id_hash AS hash FROM sessions").get() as { hash: string };
+    const persisted = db.prepare("SELECT token_hash AS hash FROM sessions").get() as { hash: string };
     assert.notEqual(persisted.hash, result.token);
     assert.deepEqual(auth.authenticate(result.token).role, "owner");
     assert(!readFileSync(join(directory, "test.sqlite")).includes(Buffer.from(result.token)));
@@ -67,7 +75,7 @@ describe("authentication", () => {
     }
   });
 
-  it("rejects anonymous, expired, revoked, and disabled sessions", async () => {
+  it("rejects anonymous, expired, and revoked sessions", async () => {
     assert.throws(() => auth.authenticate(undefined), AuthenticationError);
     const expired = await auth.signIn("owner@northstar.test", "OwnerPass!2026");
     clock = new Date(clock.getTime() + 60_001);
@@ -76,9 +84,6 @@ describe("authentication", () => {
     const revoked = await auth.signIn("owner@northstar.test", "OwnerPass!2026");
     auth.logout(revoked.token);
     assert.throws(() => auth.authenticate(revoked.token), AuthenticationError);
-    const disabled = await auth.signIn("owner@northstar.test", "OwnerPass!2026");
-    db.prepare("UPDATE users SET disabled_at = ? WHERE id = ?").run(clock.toISOString(), "user-owner");
-    assert.throws(() => auth.authenticate(disabled.token), AuthenticationError);
   });
 });
 
