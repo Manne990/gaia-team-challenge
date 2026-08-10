@@ -27,3 +27,24 @@ jobs:
       - run: npm run db:seed
       - run: npm run ci
       - run: npm run build
+
+  release-checkout:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        clean_checkout: [one, two]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:reset
+      - run: npm run db:seed
+      - run: npm run ci
+      - run: npm run build
+      - run: node scripts/release-smoke.mjs
