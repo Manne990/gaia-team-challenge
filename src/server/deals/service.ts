@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { z } from "zod";
 import type { SessionIdentity } from "../auth/index.js";
+import { currentCorrelationId } from "../request-context.js";
 
 const date = z
   .string()
@@ -630,7 +631,7 @@ export class DealsService {
   ) {
     this.db
       .prepare(
-        "INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,summary_json,occurred_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO audit_events (id,organization_id,actor_membership_id,action,entity_type,entity_id,summary_json,occurred_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?)",
       )
       .run(
         `audit_${randomUUID()}`,
@@ -641,6 +642,7 @@ export class DealsService {
         id,
         JSON.stringify(summary),
         this.now().toISOString(),
+        currentCorrelationId(),
       );
   }
   private makePosition(org: string, position: number, exclude?: string) {

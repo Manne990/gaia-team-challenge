@@ -82,6 +82,7 @@ export function createAuthHttpHandler(auth: AuthService) {
             email: result.identity.email,
             displayName: result.identity.displayName,
             role: result.identity.role,
+            organizationName: result.identity.organizationName,
           },
         });
       } catch (error) {
@@ -121,6 +122,7 @@ export function createAuthHttpHandler(auth: AuthService) {
             email: identity.email,
             displayName: identity.displayName,
             role: identity.role,
+            organizationName: identity.organizationName,
           },
         });
       } catch (error) {
@@ -141,6 +143,28 @@ export function createAuthHttpHandler(auth: AuthService) {
         const identity = auth.authenticate(sessionToken(request));
         if (request.method === "GET" && !memberMatch[1]) {
           json(response, 200, { members: auth.listMemberships(identity) });
+          return true;
+        }
+        if (request.method === "POST" && !memberMatch[1]) {
+          const value = (await readJson(request)) as Record<string, unknown>;
+          if (
+            typeof value.email !== "string" ||
+            typeof value.displayName !== "string" ||
+            typeof value.password !== "string" ||
+            !(["owner", "member", "viewer"] as unknown[]).includes(value.role)
+          ) {
+            json(response, 400, {
+              error: "Complete the member account fields.",
+            });
+            return true;
+          }
+          const member = await auth.createMember(identity, {
+            email: value.email,
+            displayName: value.displayName,
+            password: value.password,
+            role: value.role as Role,
+          });
+          json(response, 201, { member });
           return true;
         }
         const userId = memberMatch[1] && decodeURIComponent(memberMatch[1]);
@@ -184,6 +208,56 @@ export function createAuthHttpHandler(auth: AuthService) {
         json(response, status, {
           error: error.message,
         });
+        return true;
+      }
+    }
+    if (path === "/api/admin/organization") {
+      try {
+        const identity = auth.authenticate(sessionToken(request));
+        if (request.method === "GET") {
+          json(response, 200, auth.organization(identity));
+          return true;
+        }
+        if (request.method === "PATCH") {
+          const value = (await readJson(request)) as Record<string, unknown>;
+          if (
+            typeof value.name !== "string" ||
+            !Number.isInteger(value.version)
+          ) {
+            json(response, 400, {
+              error: "Provide valid organization settings.",
+            });
+            return true;
+          }
+          json(response, 200, {
+            organization: auth.updateOrganization(identity, {
+              name: value.name,
+              version: Number(value.version),
+            }),
+          });
+          return true;
+        }
+        return false;
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          json(response, 400, { error: "Invalid JSON request." });
+          return true;
+        }
+        if (
+          !(error instanceof AuthenticationError) &&
+          !(error instanceof AuthorizationError) &&
+          !(error instanceof MembershipConflictError)
+        )
+          throw error;
+        json(
+          response,
+          error instanceof AuthenticationError
+            ? 401
+            : error instanceof MembershipConflictError
+              ? 409
+              : 403,
+          { error: error.message },
+        );
         return true;
       }
     }

@@ -17,7 +17,7 @@ export const navigation: NavigationItem[] = [
   { label: "Notifications", href: "#notifications", short: "NO" },
   { label: "Imports", href: "#imports", short: "IM" },
   { label: "Duplicates", href: "#duplicates", short: "DQ" },
-  { label: "Audit", href: "#audit", short: "AU" },
+  { label: "Audit", href: "#audit", short: "AU", ownerOnly: true },
   {
     label: "Administration",
     href: "#administration",

@@ -34,7 +34,9 @@ describe("AppShell", () => {
       expect(
         view.queryByRole("link", { name: "Administration" }),
       ).not.toBeInTheDocument();
-      expect(view.getByRole("link", { name: "Audit" })).toBeInTheDocument();
+      expect(
+        view.queryByRole("link", { name: "Audit" }),
+      ).not.toBeInTheDocument();
     },
   );
 });
