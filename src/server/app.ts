@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import express, { type ErrorRequestHandler } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 
-export function createApp() {
+export function createApp(configureRoutes?: (app: Express) => void) {
   const app = express();
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
@@ -21,6 +21,7 @@ export function createApp() {
     };
     response.json(payload);
   });
+  configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {
       error: {
