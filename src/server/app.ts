@@ -14,14 +14,32 @@ const { openDatabase, migrate } = require('../db/database.mjs') as {
   openDatabase(path: string): any;
   migrate(database: any): void;
 };
-const { createAuthService, AuthError } = require('../auth/service.mjs') as {
+const { createAuthService, AuthError, hashPassword } = require('../auth/service.mjs') as {
   createAuthService(database: unknown): any;
   AuthError: new (...args: any[]) => Error & { code: string };
+  hashPassword(password: string): string;
 };
 const credentials = z.object({
   email: z.string().email(),
   password: z.string().min(1),
   organizationId: z.string().optional(),
+});
+const auditQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  action: z.string().trim().max(120).optional(),
+  entityType: z.string().trim().max(80).optional(),
+});
+const memberRoleInput = z.object({ role: z.enum(['owner', 'member', 'viewer']) });
+const memberCreateInput = z.object({
+  email: z.string().trim().email().max(320),
+  displayName: z.string().trim().min(1).max(160),
+  password: z.string().min(8).max(200),
+  role: z.enum(['owner', 'member', 'viewer']).default('member'),
+});
+const organizationSettingsInput = z.object({
+  name: z.string().trim().min(1).max(160),
+  version: z.coerce.number().int().positive(),
 });
 const companyInput = z.object({
   name: z.string().trim().min(1).max(200),
@@ -522,6 +540,20 @@ export function createApp(config: AppConfig) {
       });
     try {
       const session = auth.signIn(parsed.data);
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.user.id,
+          'authentication.signed_in',
+          'session',
+          session.user.id,
+          '{}',
+          new Date().toISOString(),
+        );
       response.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
       return response.status(200).json({
         user: session.user,
@@ -551,12 +583,261 @@ export function createApp(config: AppConfig) {
     }
   });
   app.post('/api/auth/logout', (request, response) => {
+    const session = auth.authenticate(cookieToken(request.headers.cookie));
     auth.logout(cookieToken(request.headers.cookie));
+    database
+      .prepare(
+        'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        `aud_${randomUUID()}`,
+        session.organizationId,
+        session.userId,
+        'authentication.signed_out',
+        'session',
+        session.userId,
+        '{}',
+        new Date().toISOString(),
+      );
     response.setHeader(
       'Set-Cookie',
       'northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
     );
     return response.status(204).end();
+  });
+
+  const administrationSession = (request: express.Request) =>
+    auth.requireRole(auth.authenticate(cookieToken(request.headers.cookie)), ['owner']);
+  const administrationError = (error: unknown, response: express.Response) => {
+    if (error instanceof AuthError) {
+      const status =
+        error.code === 'NOT_FOUND'
+          ? 404
+          : error.code === 'FORBIDDEN'
+            ? 403
+            : error.code === 'UNAUTHENTICATED' || error.code === 'SESSION_EXPIRED'
+              ? 401
+              : 400;
+      return response.status(status).json({
+        error: { code: error.code, message: error.message },
+      });
+    }
+    if (error instanceof z.ZodError)
+      return response
+        .status(400)
+        .json({ error: { code: 'VALIDATION', message: 'Check the request fields.' } });
+    return response
+      .status(500)
+      .json({ error: { code: 'UNEXPECTED_ERROR', message: 'Something went wrong.' } });
+  };
+  app.get('/api/administration/members', (request, response) => {
+    try {
+      return response.json({ items: auth.listMembers(administrationSession(request)) });
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.get('/api/administration/organization', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      return response.json(
+        database
+          .prepare(
+            'SELECT id, name, version, updated_at AS updatedAt FROM organizations WHERE id = ?',
+          )
+          .get(session.organizationId),
+      );
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.patch('/api/administration/organization', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const input = organizationSettingsInput.parse(request.body);
+      const now = new Date().toISOString();
+      const result = database
+        .prepare(
+          'UPDATE organizations SET name = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ?',
+        )
+        .run(input.name, now, session.organizationId, input.version);
+      if (!result.changes)
+        return response.status(409).json({
+          error: {
+            code: 'CONFLICT',
+            message: 'Organization settings changed. Refresh and try again.',
+          },
+        });
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.userId,
+          'organization.updated',
+          'organization',
+          session.organizationId,
+          JSON.stringify({ name: input.name }),
+          now,
+        );
+      return response.json(
+        database
+          .prepare(
+            'SELECT id, name, version, updated_at AS updatedAt FROM organizations WHERE id = ?',
+          )
+          .get(session.organizationId),
+      );
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.post('/api/administration/members', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const input = memberCreateInput.parse(request.body);
+      const now = new Date().toISOString();
+      const membership = transaction(() => {
+        let user = database.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
+        if (!user) {
+          user = { id: `usr_${randomUUID()}` };
+          database
+            .prepare(
+              'INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            )
+            .run(user.id, input.email, hashPassword(input.password), input.displayName, now, now);
+        }
+        if (
+          database
+            .prepare('SELECT 1 FROM memberships WHERE organization_id = ? AND user_id = ?')
+            .get(session.organizationId, user.id)
+        )
+          throw new AuthError('CONFLICT', 'This user already belongs to the organization.');
+        const id = `mem_${randomUUID()}`;
+        database
+          .prepare(
+            'INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(id, session.organizationId, user.id, input.role, now, now);
+        database
+          .prepare(
+            'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            `aud_${randomUUID()}`,
+            session.organizationId,
+            session.userId,
+            'membership.created',
+            'membership',
+            id,
+            JSON.stringify({ role: input.role, email: input.email }),
+            now,
+            `cor_${randomUUID()}`,
+          );
+        return database
+          .prepare(
+            'SELECT memberships.id, memberships.user_id AS userId, memberships.role, users.email, users.display_name AS displayName FROM memberships JOIN users ON users.id = memberships.user_id WHERE memberships.id = ?',
+          )
+          .get(id);
+      });
+      return response.status(201).json(membership);
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.patch('/api/administration/members/:id', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const input = memberRoleInput.parse(request.body);
+      auth.updateMemberRole(session, request.params.id, input.role);
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.userId,
+          'membership.role_updated',
+          'membership',
+          request.params.id,
+          JSON.stringify({ role: input.role }),
+          new Date().toISOString(),
+        );
+      return response.status(204).end();
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.delete('/api/administration/members/:id', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const member = database
+        .prepare('SELECT role FROM memberships WHERE id = ? AND organization_id = ?')
+        .get(request.params.id, session.organizationId);
+      if (!member)
+        return response
+          .status(404)
+          .json({ error: { code: 'NOT_FOUND', message: 'This member was not found.' } });
+      if (
+        member.role === 'owner' &&
+        database
+          .prepare(
+            "SELECT count(*) AS total FROM memberships WHERE organization_id = ? AND role = 'owner'",
+          )
+          .get(session.organizationId).total <= 1
+      )
+        return response.status(400).json({
+          error: { code: 'LAST_OWNER', message: 'An organization must keep at least one owner.' },
+        });
+      database
+        .prepare(
+          'INSERT INTO audit_events (id, organization_id, actor_id, action, entity_type, entity_id, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          `aud_${randomUUID()}`,
+          session.organizationId,
+          session.userId,
+          'membership.revoked',
+          'membership',
+          request.params.id,
+          '{}',
+          new Date().toISOString(),
+        );
+      auth.removeMember(session, request.params.id);
+      return response.status(204).end();
+    } catch (error) {
+      return administrationError(error, response);
+    }
+  });
+  app.get('/api/audit-events', (request, response) => {
+    try {
+      const session = administrationSession(request);
+      const query = auditQuery.parse(request.query);
+      const where = ['organization_id = ?'];
+      const args: unknown[] = [session.organizationId];
+      if (query.action) {
+        where.push('action = ?');
+        args.push(query.action);
+      }
+      if (query.entityType) {
+        where.push('entity_type = ?');
+        args.push(query.entityType);
+      }
+      const clause = where.join(' AND ');
+      const total = database
+        .prepare(`SELECT count(*) AS total FROM audit_events WHERE ${clause}`)
+        .get(...args).total;
+      const items = database
+        .prepare(
+          `SELECT id, actor_id AS actorId, action, entity_type AS entityType, entity_id AS entityId, correlation_id AS correlationId, summary_json AS summaryJson, created_at AS createdAt FROM audit_events WHERE ${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+        )
+        .all(...args, query.pageSize, (query.page - 1) * query.pageSize);
+      return response.json({ items, total, page: query.page, pageSize: query.pageSize });
+    } catch (error) {
+      return administrationError(error, response);
+    }
   });
 
   app.get('/api/duplicates/:resource', (request, response) => {

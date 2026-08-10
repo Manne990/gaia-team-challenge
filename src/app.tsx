@@ -1238,6 +1238,8 @@ export function App({
   dealsContent,
   importsContent,
   tasksContent,
+  auditContent,
+  administrationContent,
   globalSearchContent,
   notificationsContent,
   onSignOut,
@@ -1251,6 +1253,8 @@ export function App({
   dealsContent?: ReactNode;
   importsContent?: ReactNode;
   tasksContent?: ReactNode;
+  auditContent?: ReactNode;
+  administrationContent?: ReactNode;
   globalSearchContent?: ReactNode | ((navigate: (page: Page) => void) => ReactNode);
   notificationsContent?: ReactNode | ((navigate: (page: Page) => void) => ReactNode);
   onSignOut?: () => Promise<void>;
@@ -1294,6 +1298,10 @@ export function App({
       dealsContent
     ) : page === 'Tasks' && tasksContent ? (
       tasksContent
+    ) : page === 'Audit' && auditContent ? (
+      auditContent
+    ) : page === 'Administration' && administrationContent ? (
+      administrationContent
     ) : page === 'Companies' || page === 'Contacts' ? (
       <ListPage page={page} workspace={workspace} user={user} role={role} />
     ) : (
