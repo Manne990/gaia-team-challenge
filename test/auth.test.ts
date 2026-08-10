@@ -6,8 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scryptSync } from "node:crypto";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { createServer } from "node:http";
 import {
-  AuthenticationError, AuthorizationError, AuthService, MembershipConflictError, migrateAuthSchema,
+  AuthenticationError, AuthorizationError, AuthService, MembershipConflictError, createAuthHttpHandler, migrateAuthSchema,
   type SessionIdentity,
 } from "../src/server/auth/index.js";
 
@@ -135,5 +136,52 @@ describe("authorization and tenant isolation", () => {
     const memberSession = await auth.signIn("viewer@northstar.test", "OwnerPass!2026");
     auth.updateMembership(newOwner, "user-viewer", "viewer");
     assert.throws(() => auth.authenticate(memberSession.token), AuthenticationError);
+  });
+});
+
+describe("authentication HTTP boundary", () => {
+  it("sets an HTTP-only cookie and revokes it through logout", async () => {
+    const handler = createAuthHttpHandler(auth);
+    const server = createServer((request, response) => void handler(request, response));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      assert(address && typeof address === "object");
+      const base = `http://127.0.0.1:${address.port}`;
+      const signIn = await fetch(`${base}/api/auth/sign-in`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "owner@northstar.test", password: "OwnerPass!2026" }),
+      });
+      assert.equal(signIn.status, 200);
+      const cookie = signIn.headers.get("set-cookie");
+      assert(cookie?.includes("HttpOnly"));
+      assert(cookie?.includes("SameSite=Lax"));
+      const session = await fetch(`${base}/api/auth/session`, { headers: { cookie: cookie!.split(";")[0]! } });
+      assert.equal(session.status, 200);
+      const logout = await fetch(`${base}/api/auth/logout`, { method: "POST", headers: { cookie: cookie!.split(";")[0]! } });
+      assert.equal(logout.status, 204);
+      const revoked = await fetch(`${base}/api/auth/session`, { headers: { cookie: cookie!.split(";")[0]! } });
+      assert.equal(revoked.status, 401);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("rejects cross-origin state changes before credentials are processed", async () => {
+    const handler = createAuthHttpHandler(auth);
+    const server = createServer((request, response) => void handler(request, response));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      assert(address && typeof address === "object");
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/auth/sign-in`, {
+        method: "POST", headers: { origin: "https://attacker.test", "content-type": "application/json" },
+        body: JSON.stringify({ email: "owner@northstar.test", password: "OwnerPass!2026" }),
+      });
+      assert.equal(response.status, 403);
+      assert.equal((db.prepare("SELECT count(*) AS count FROM sessions").get() as { count: number }).count, 0);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
   });
 });
