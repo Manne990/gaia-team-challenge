@@ -5,6 +5,7 @@ import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 import { AuthService, createAuthHttpHandler } from "./auth/index.js";
 import { registerContactRoutes } from "./contacts/index.js";
 import { CompanyService, createCompanyHttpHandler } from "./companies/index.js";
+import { registerDealRoutes } from "./deals/index.js";
 import { createTaskHttpHandler, TaskService } from "./tasks/index.js";
 
 export function createApp(
@@ -55,6 +56,7 @@ export function createApp(
     response.json(payload);
   });
   if (database) registerContactRoutes(app, database);
+  if (database) registerDealRoutes(app, database);
   configureRoutes?.(app);
   app.use("/api", (_request, response) => {
     const payload: ErrorResponse = {
