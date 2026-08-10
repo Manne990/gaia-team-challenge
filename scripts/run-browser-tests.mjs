@@ -18,6 +18,7 @@ await new Promise((resolve, reject) =>
 const directory = await mkdtemp(join(tmpdir(), "northstar-crm-browser-"));
 const env = {
   ...process.env,
+  NODE_ENV: "production",
   TEST_PORT: String(address.port),
   NORTHSTAR_HOST: "127.0.0.1",
   NORTHSTAR_PORT: String(address.port),
@@ -38,6 +39,7 @@ async function run(command) {
   if (code !== 0) throw new Error(`${command} failed (${code})`);
 }
 
+await run("build");
 await run("db:reset");
 await run("db:seed");
 
@@ -45,7 +47,7 @@ const server = spawn(
   process.platform === "win32" ? "npm.cmd" : "npm",
   [
     "run",
-    "dev",
+    "start",
     "--",
     "--host",
     "127.0.0.1",

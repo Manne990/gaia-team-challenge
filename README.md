@@ -45,6 +45,7 @@ Production startup fails clearly if configuration is invalid or the client build
 - `npm run db:reset` — recreate the configured local database.
 - `npm run db:seed` — idempotently apply foundation seed metadata.
 - `npm run format` — check formatting.
+- `npm run audit` — reject known high or critical dependency findings.
 - `npm run lint` — run static lint checks.
 - `npm run typecheck` — type-check browser and server boundaries.
 - `npm test` — run deterministic Vitest suites.
@@ -59,6 +60,9 @@ See [`docs/testing.md`](docs/testing.md) for the deterministic fixtures,
 isolated test lifecycle, CI policy, and failure-reproduction commands.
 Dashboard inclusion windows, currency handling, and list reconciliation are
 defined in [`docs/dashboard.md`](docs/dashboard.md).
+
+The exact route/role inventory, release commands, known limitations, and
+recovery procedures are in [`docs/release.md`](docs/release.md).
 
 ## CSV data movement
 
