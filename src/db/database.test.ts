@@ -50,6 +50,7 @@ describe("SQLite database lifecycle", () => {
       { name: "002_membership_access_state.sql" },
       { name: "003_company_archival.sql" },
       { name: "003_contact_management.sql" },
+      { name: "004_deal_management.sql" },
     ]);
     expect(database.pragma("foreign_keys", { simple: true })).toBe(1);
     database.close();
@@ -62,7 +63,7 @@ describe("SQLite database lifecycle", () => {
     expect(() => migrate(database)).not.toThrow();
     expect(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get(),
-    ).toEqual({ count: 4 });
+    ).toEqual({ count: 5 });
     database.close();
   });
 

@@ -12,6 +12,7 @@ import "../auth/auth.css";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./shell/DashboardPage";
 import { ContactsPage } from "./contacts/ContactsPage";
+import { DealsPage } from "./deals/DealsPage";
 import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
 import { CompaniesPage } from "./companies/CompaniesPage";
@@ -104,6 +105,7 @@ function WorkspacePage({ user }: { user: SessionUser }) {
   }, []);
   if (hash === "#companies") return <CompaniesPage role={user.role} />;
   if (hash === "#contacts") return <ContactsPage role={user.role} />;
+  if (hash === "#deals") return <DealsPage role={user.role} />;
   return <DashboardPage userName={user.displayName} />;
 }
 
