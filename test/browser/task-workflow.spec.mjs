@@ -85,6 +85,11 @@ test('actual task workspace creates, completes, reopens, archives, and keeps vie
     await expect(taskRow).toContainText('open');
     await taskRow.getByRole('button', { name: 'Archive task' }).click();
     await expect(page.getByText('Task archived.')).toBeVisible();
+    await navigate(page, 'Deals');
+    await page.evaluate(() => history.replaceState(null, '', '?sort=name&direction=desc&page=1'));
+    await navigate(page, 'Tasks');
+    await expect(page.getByRole('list', { name: 'Task results' })).not.toBeEmpty();
+    await expect(page).toHaveURL(/sort=dueAt/);
     const account = page.getByRole('button', { name: /Northstar Owner owner/ });
     await account.focus();
     await page.keyboard.press('Enter');
