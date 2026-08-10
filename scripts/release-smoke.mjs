@@ -13,6 +13,7 @@ function launch() {
   output = '';
   server = spawn(npm, ['run', 'dev', '--', '--host', host, '--port', String(port)], {
     env: process.env,
+    detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   for (const stream of [server.stdout, server.stderr]) {
@@ -25,9 +26,16 @@ function launch() {
 async function stop() {
   if (!server || server.exitCode !== null) return;
   const exited = new Promise((resolve) => server.once('exit', resolve));
-  server.kill('SIGTERM');
+  const signal = (value) => {
+    if (process.platform === 'win32') server.kill(value);
+    else process.kill(-server.pid, value);
+  };
+  signal('SIGTERM');
   await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5_000))]);
-  if (server.exitCode === null) server.kill('SIGKILL');
+  if (server.exitCode === null) {
+    signal('SIGKILL');
+    await exited;
+  }
 }
 
 async function waitForHealth() {
