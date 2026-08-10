@@ -13,6 +13,7 @@ import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./shell/DashboardPage";
 import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
+import { CompaniesPage } from "./companies/CompaniesPage";
 
 interface SessionUser {
   id: string;
@@ -88,8 +89,22 @@ export function App() {
         />
       }
     >
-      <DashboardPage userName={state.user.displayName} />
+      <WorkspacePage user={state.user} />
     </AppShell>
+  );
+}
+
+function WorkspacePage({ user }: { user: SessionUser }) {
+  const [hash, setHash] = useState(() => window.location.hash || "#dashboard");
+  useEffect(() => {
+    const onHashChange = () => setHash(window.location.hash || "#dashboard");
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+  return hash === "#companies" ? (
+    <CompaniesPage role={user.role} />
+  ) : (
+    <DashboardPage userName={user.displayName} />
   );
 }
 
