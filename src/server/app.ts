@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import express, { type ErrorRequestHandler, type Express } from "express";
 import type { BootstrapResponse, ErrorResponse } from "../shared/api.js";
 import { AuthService, createAuthHttpHandler } from "./auth/index.js";
+import { CompanyService, createCompanyHttpHandler } from "./companies/index.js";
 
 export function createApp(
   databaseOrRoutes?: Database.Database | ((app: Express) => void),
@@ -19,11 +20,19 @@ export function createApp(
     next();
   });
   if (database) {
-    const authHandler = createAuthHttpHandler(new AuthService(database));
+    const auth = new AuthService(database);
+    const authHandler = createAuthHttpHandler(auth);
+    const companyHandler = createCompanyHttpHandler(
+      auth,
+      new CompanyService(database),
+    );
     app.use((request, response, next) => {
       void authHandler(request, response)
         .then((handled) => {
-          if (!handled) next();
+          if (handled) return;
+          return companyHandler(request, response).then((companyHandled) => {
+            if (!companyHandled) next();
+          });
         })
         .catch(next);
     });
