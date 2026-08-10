@@ -137,6 +137,10 @@ describe("authorization and tenant isolation", () => {
     const memberSession = await auth.signIn("viewer@northstar.test", "OwnerPass!2026");
     auth.updateMembership(newOwner, "user-viewer", "viewer");
     assert.throws(() => auth.authenticate(memberSession.token), AuthenticationError);
+    const actions = db.prepare("SELECT action FROM audit_events ORDER BY occurred_at, rowid").all() as Array<{ action: string }>;
+    assert(actions.some(({ action }) => action === "membership.removed"));
+    assert(actions.some(({ action }) => action === "membership.role_updated"));
+    assert(actions.some(({ action }) => action === "membership.sessions_revoked"));
   });
 });
 

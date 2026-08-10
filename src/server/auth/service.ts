@@ -122,8 +122,11 @@ export class AuthService {
 
   revokeUserSessions(actor: SessionIdentity, userId: string): void {
     this.requireRole(actor, "owner");
-    this.db.prepare("UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE organization_id = ? AND user_id = ?")
-      .run(iso(this.now()), actor.organizationId, userId);
+    this.db.transaction(() => {
+      this.db.prepare("UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE organization_id = ? AND user_id = ?")
+        .run(iso(this.now()), actor.organizationId, userId);
+      this.audit(actor, "membership.sessions_revoked", userId, {});
+    }).immediate();
   }
 
   requireRole(identity: SessionIdentity, minimum: Role): void {
@@ -151,13 +154,16 @@ export class AuthService {
   addMembership(actor: SessionIdentity, input: { userId: string; role: Role }): void {
     this.requireRole(actor, "owner");
     const timestamp = iso(this.now());
-    this.db.prepare(`
-      INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT (organization_id, user_id) DO UPDATE SET
-        role = excluded.role, removed_at = NULL, updated_at = excluded.updated_at,
-        version = memberships.version + 1
-    `).run(newOpaqueId(), actor.organizationId, input.userId, input.role, timestamp, timestamp);
+    this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO memberships (id, organization_id, user_id, role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET
+          role = excluded.role, removed_at = NULL, updated_at = excluded.updated_at,
+          version = memberships.version + 1
+      `).run(newOpaqueId(), actor.organizationId, input.userId, input.role, timestamp, timestamp);
+      this.audit(actor, "membership.added", input.userId, { role: input.role });
+    }).immediate();
   }
 
   updateMembership(actor: SessionIdentity, userId: string, role: Role): void {
@@ -170,6 +176,7 @@ export class AuthService {
       this.db.prepare("UPDATE memberships SET role = ?, updated_at = ?, version = version + 1 WHERE organization_id = ? AND user_id = ?")
         .run(role, iso(this.now()), actor.organizationId, userId);
       if (role === "viewer") this.revokeUserSessions(actor, userId);
+      this.audit(actor, "membership.role_updated", userId, { previousRole: current.role, role });
     }).immediate();
   }
 
@@ -185,6 +192,7 @@ export class AuthService {
         .run(timestamp, actor.organizationId, userId);
       this.db.prepare("UPDATE memberships SET removed_at = ?, updated_at = ?, version = version + 1 WHERE organization_id = ? AND user_id = ?")
         .run(timestamp, timestamp, actor.organizationId, userId);
+      this.audit(actor, "membership.removed", userId, { previousRole: current.role });
     }).immediate();
   }
 
@@ -193,6 +201,13 @@ export class AuthService {
       SELECT 1 FROM memberships WHERE organization_id = ? AND role = 'owner' AND removed_at IS NULL AND user_id <> ? LIMIT 1
     `).get(organizationId, excludedUserId);
     if (!another) throw new MembershipConflictError("An organization must always have at least one owner.");
+  }
+
+  private audit(actor: SessionIdentity, action: string, entityId: string, summary: Record<string, unknown>): void {
+    this.db.prepare(`
+      INSERT INTO audit_events (id, organization_id, actor_membership_id, action, entity_type, entity_id, summary_json, occurred_at)
+      VALUES (?, ?, ?, ?, 'membership', ?, ?, ?)
+    `).run(newOpaqueId(), actor.organizationId, actor.membershipId, action, entityId, JSON.stringify(summary), iso(this.now()));
   }
 }
 

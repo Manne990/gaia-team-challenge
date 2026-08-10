@@ -33,6 +33,7 @@ export function migrateAuthSchema(db: Database.Database): void {
       version INTEGER NOT NULL DEFAULT 1,
       removed_at TEXT,
       UNIQUE (organization_id, user_id),
+      UNIQUE (id, organization_id),
       UNIQUE (user_id, organization_id)
     ) STRICT;
 
@@ -51,5 +52,17 @@ export function migrateAuthSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS sessions_user_active
       ON sessions(user_id, expires_at) WHERE revoked_at IS NULL;
+
+    CREATE TABLE IF NOT EXISTS audit_events (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      actor_membership_id TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      summary_json TEXT NOT NULL CHECK (json_valid(summary_json) AND json_type(summary_json) = 'object'),
+      occurred_at TEXT NOT NULL,
+      FOREIGN KEY (actor_membership_id, organization_id) REFERENCES memberships(id, organization_id)
+    ) STRICT;
   `);
 }
