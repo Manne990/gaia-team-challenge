@@ -16,6 +16,7 @@ export interface SessionIdentity {
 }
 
 export class AuthenticationError extends Error {}
+export class SessionExpiredError extends AuthenticationError {}
 export class AuthorizationError extends Error {}
 export class MembershipConflictError extends Error {}
 
@@ -106,9 +107,10 @@ export class AuthService {
       FROM sessions s
       JOIN memberships m ON m.organization_id = s.organization_id AND m.user_id = s.user_id
       JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND m.removed_at IS NULL
-    `).get(digest(token), iso(this.now())) as SessionIdentity | undefined;
+      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND m.removed_at IS NULL
+    `).get(digest(token)) as SessionIdentity | undefined;
     if (!row) throw new AuthenticationError("Authentication required.");
+    if (row.expiresAt <= iso(this.now())) throw new SessionExpiredError("Your session expired. Sign in again to continue.");
     return row;
   }
 

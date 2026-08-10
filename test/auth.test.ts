@@ -8,7 +8,7 @@ import { scryptSync } from "node:crypto";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { createServer } from "node:http";
 import {
-  AuthenticationError, AuthorizationError, AuthService, MembershipConflictError, createAuthHttpHandler, migrateAuthSchema,
+  AuthenticationError, AuthorizationError, AuthService, MembershipConflictError, SessionExpiredError, createAuthHttpHandler, migrateAuthSchema,
   type SessionIdentity,
 } from "../src/server/auth/index.js";
 
@@ -80,7 +80,7 @@ describe("authentication", () => {
     assert.throws(() => auth.authenticate(undefined), AuthenticationError);
     const expired = await auth.signIn("owner@northstar.test", "OwnerPass!2026");
     clock = new Date(clock.getTime() + 60_001);
-    assert.throws(() => auth.authenticate(expired.token), AuthenticationError);
+    assert.throws(() => auth.authenticate(expired.token), SessionExpiredError);
     clock = new Date("2026-08-10T10:00:00.000Z");
     const revoked = await auth.signIn("owner@northstar.test", "OwnerPass!2026");
     auth.logout(revoked.token);

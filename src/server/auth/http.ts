@@ -1,7 +1,7 @@
 import { parse, serialize } from "cookie";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
-  AuthService, AuthenticationError, AuthorizationError, MembershipConflictError, type Role,
+  AuthService, AuthenticationError, AuthorizationError, MembershipConflictError, SessionExpiredError, type Role,
 } from "./service.js";
 
 const COOKIE = "northstar_session";
@@ -63,8 +63,10 @@ export function createAuthHttpHandler(auth: AuthService) {
       try {
         const identity = auth.authenticate(sessionToken(request));
         json(response, 200, { user: { id: identity.userId, email: identity.email, displayName: identity.displayName, role: identity.role } });
-      } catch {
-        json(response, 401, { error: "Authentication required." });
+      } catch (error) {
+        json(response, 401, error instanceof SessionExpiredError
+          ? { code: "SESSION_EXPIRED", error: error.message }
+          : { code: "UNAUTHENTICATED", error: "Authentication required." });
       }
       return true;
     }
