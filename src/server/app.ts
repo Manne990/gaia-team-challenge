@@ -572,12 +572,11 @@ export function createApp(config: AppConfig) {
       return response.json(auth.authenticate(cookieToken(request.headers.cookie)));
     } catch (error) {
       const expired = error instanceof AuthError && error.code === 'SESSION_EXPIRED';
+      if (!expired) return response.json(null);
       return response.status(401).json({
         error: {
-          code: expired ? 'SESSION_EXPIRED' : 'UNAUTHENTICATED',
-          message: expired
-            ? 'Your session has expired. Please sign in again.'
-            : 'Please sign in to continue.',
+          code: 'SESSION_EXPIRED',
+          message: 'Your session has expired. Please sign in again.',
         },
       });
     }

@@ -11,6 +11,12 @@
   background: #f6f8fb;
   font-synthesis: none;
 }
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
 * {
   box-sizing: border-box;
 }
@@ -34,7 +40,7 @@ a:focus-visible {
   outline-offset: 2px;
 }
 a {
-  color: #2949b8;
+  color: #1f3f99;
   text-decoration: none;
   font-weight: 650;
 }
@@ -214,6 +220,7 @@ select {
 }
 .main-area {
   min-width: 0;
+  overflow-x: clip;
   flex: 1;
 }
 .topbar {
@@ -545,7 +552,7 @@ h2 {
   margin-top: 13px;
 }
 .activity p {
-  color: #536177;
+  color: #42516a;
   font-size: 13px;
   line-height: 1.45;
   margin: 0;
@@ -554,7 +561,7 @@ h2 {
   color: #334155;
 }
 .activity small {
-  color: #7b8798;
+  color: #4c5d73;
   display: block;
   font-size: 12px;
   margin-top: 3px;
@@ -581,6 +588,18 @@ h2 {
 .table-wrap {
   overflow-x: auto;
 }
+.pipeline {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  min-width: 0;
+}
+.pipeline section,
+.pipeline ul,
+.pipeline li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 table {
   border-collapse: collapse;
   min-width: 710px;
@@ -588,7 +607,7 @@ table {
 }
 th {
   background: #fafbfd;
-  color: #697890;
+  color: #42516a;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.04em;
@@ -598,7 +617,7 @@ th {
 }
 td {
   border-top: 1px solid #edf0f4;
-  color: #526176;
+  color: #42516a;
   font-size: 13px;
   padding: 13px 18px;
   white-space: nowrap;
