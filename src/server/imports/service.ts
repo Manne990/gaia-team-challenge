@@ -290,8 +290,8 @@ export class ImportExportService {
       clauses.push("status = ?");
       values.push(query.get("status"));
     }
-    addExactFilter(query, clauses, values, "company", "company_id");
-    addExactFilter(query, clauses, values, "owner", "owner_membership_id");
+    addExactFilter(query, clauses, values, "companyId", "company_id");
+    addExactFilter(query, clauses, values, "ownerId", "owner_membership_id");
     addTagFilter(query, clauses, values);
     if (query.get("q")?.trim()) {
       clauses.push("(first_name || ' ' || last_name LIKE ? OR email LIKE ?)");

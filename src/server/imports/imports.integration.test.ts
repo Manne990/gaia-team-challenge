@@ -251,5 +251,25 @@ describe.sequential("CSV import and export", () => {
     ).text();
     expect(outsideCsv).toContain("Outside Company");
     expect(outsideCsv).not.toContain("Northstar Company");
+
+    for (const [query, predicate, value] of [
+      ["companyId", "company_id", "company_northstar_01"],
+      ["ownerId", "owner_membership_id", "membership_member"],
+    ] as const) {
+      const filtered = await (
+        await request(
+          `/api/exports/contacts.csv?${query}=${encodeURIComponent(value)}`,
+          viewer,
+        )
+      ).text();
+      const expected = (
+        database
+          .prepare(
+            `SELECT count(*) AS count FROM contacts WHERE organization_id = 'org_northstar' AND archived_at IS NULL AND ${predicate} = ?`,
+          )
+          .get(value) as { count: number }
+      ).count;
+      expect(filtered.trimEnd().split("\r\n")).toHaveLength(expected + 1);
+    }
   });
 });
