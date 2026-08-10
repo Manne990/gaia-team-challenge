@@ -166,6 +166,8 @@ test('contacts and deals fit the viewport without contrast failures', async ({ p
   );
   const url = `http://127.0.0.1:${port}`;
   try {
+    // Regression target from the release review: the tablet layout at 834px.
+    await page.setViewportSize({ width: 834, height: 900 });
     await waitForHealth(url);
     await page.goto(url);
     await page.getByLabel('Email').fill('owner@northstar.test');
