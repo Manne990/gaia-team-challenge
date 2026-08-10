@@ -159,6 +159,15 @@ export class TaskService {
       params.push(escaped, escaped);
     }
     const where = clauses.join(" AND ");
+    const sorts: Record<string, string> = {
+      due: "t.due_at",
+      title: "t.title COLLATE NOCASE",
+      priority:
+        "CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END",
+      status: "t.status",
+    };
+    const sort = sorts[query.get("sort") ?? "due"] ?? sorts.due;
+    const direction = query.get("direction") === "desc" ? "DESC" : "ASC";
     const total = (
       this.db
         .prepare(`SELECT COUNT(*) AS count FROM tasks t WHERE ${where}`)
@@ -166,7 +175,7 @@ export class TaskService {
     ).count;
     const items = this.db
       .prepare(
-        `${selectTask} WHERE ${where} ORDER BY t.due_at ASC, t.id ASC LIMIT ? OFFSET ?`,
+        `${selectTask} WHERE ${where} ORDER BY ${sort} ${direction}, t.id ${direction} LIMIT ? OFFSET ?`,
       )
       .all(...params, pageSize, (page - 1) * pageSize) as TaskRecord[];
     const assignees = this.db

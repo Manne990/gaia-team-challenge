@@ -1,5 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { navigationForRole, type UserRole } from "./navigation";
+import { routeFromHash } from "../search/urlState";
+import { GlobalSearch } from "../search/GlobalSearch";
+import "../search/search.css";
 
 export interface ShellUser {
   name: string;
@@ -19,9 +22,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeHref, setActiveHref] = useState(
-    () => window.location.hash || "#dashboard",
-  );
+  const [activeHref, setActiveHref] = useState(() => `#${routeFromHash()}`);
   const menuButton = useRef<HTMLButtonElement>(null);
   const firstLink = useRef<HTMLAnchorElement>(null);
   const items = navigationForRole(user.role);
@@ -37,7 +38,7 @@ export function AppShell({
   }, [menuOpen]);
 
   useEffect(() => {
-    const syncHash = () => setActiveHref(window.location.hash || "#dashboard");
+    const syncHash = () => setActiveHref(`#${routeFromHash()}`);
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
@@ -144,6 +145,7 @@ export function AppShell({
         </div>
       </aside>
       <main id="main-content" className="main-content" tabIndex={-1}>
+        <GlobalSearch />
         {children}
       </main>
     </div>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UserRole } from "../shell/navigation";
 import { StatePanel } from "../ui/StatePanel";
+import { SavedViewsControl } from "../search/SavedViewsControl";
+import { readListState, writeListState } from "../search/urlState";
 
 type Company = {
   id: string;
@@ -91,11 +93,19 @@ const labels: Record<string, string> = {
 };
 
 export function CompaniesPage({ role }: { role: UserRole }) {
+  const initial = useMemo(() => readListState("companies"), []);
   const canMutate = role !== "viewer";
-  const [filters, setFilters] = useState(emptyFilters);
-  const [sort, setSort] = useState("updatedAt");
-  const [direction, setDirection] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState(() => ({
+    ...emptyFilters,
+    ...initial,
+  }));
+  const [sort, setSort] = useState(initial.sort ?? "updatedAt");
+  const [direction, setDirection] = useState<"asc" | "desc">(
+    initial.direction === "asc" ? "asc" : "desc",
+  );
+  const [page, setPage] = useState(() =>
+    Math.max(1, Number(initial.page) || 1),
+  );
   const [list, setList] = useState<List | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -138,6 +148,14 @@ export function CompaniesPage({ role }: { role: UserRole }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadList();
   }, [loadList]);
+  useEffect(() => {
+    writeListState("companies", {
+      ...filters,
+      sort,
+      direction,
+      page: String(page),
+    });
+  }, [direction, filters, page, sort]);
 
   async function openCompany(id: string) {
     setSelectedId(id);
@@ -272,6 +290,16 @@ export function CompaniesPage({ role }: { role: UserRole }) {
           </button>
         )}
       </header>
+      <SavedViewsControl
+        resource="companies"
+        state={{ ...filters, sort, direction, page: String(page) }}
+        onApply={(next) => {
+          setFilters({ ...emptyFilters, ...next });
+          setSort(next.sort ?? "updatedAt");
+          setDirection(next.direction === "asc" ? "asc" : "desc");
+          setPage(Math.max(1, Number(next.page) || 1));
+        }}
+      />
       <section
         className="surface companies-panel"
         aria-labelledby="company-list-title"

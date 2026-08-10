@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { StatePanel } from "../ui/StatePanel";
+import { SavedViewsControl } from "../search/SavedViewsControl";
+import { readListState, writeListState } from "../search/urlState";
 import "./contacts.css";
 
 export type ContactRole = "owner" | "member" | "viewer";
@@ -118,14 +120,19 @@ const toForm = (contact: Contact): FormValues => ({
 });
 
 export function ContactsPage({ role }: { role: ContactRole }) {
+  const initial = readListState("contacts");
   const canEdit = role !== "viewer";
   const [list, setList] = useState<ListResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Contact | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(initial.q ?? "");
+  const [status, setStatus] = useState(initial.status ?? "all");
+  const [sort, setSort] = useState(initial.sort ?? "name");
+  const [order, setOrder] = useState(initial.order === "desc" ? "desc" : "asc");
+  const [includeArchived, setIncludeArchived] = useState(
+    initial.includeArchived === "true",
+  );
+  const [page, setPage] = useState(Math.max(1, Number(initial.page) || 1));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [detailError, setDetailError] = useState<unknown>(null);
@@ -145,6 +152,8 @@ export function ContactsPage({ role }: { role: ContactRole }) {
     });
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
+    params.set("sort", sort);
+    params.set("order", order);
     try {
       setList(await request<ListResponse>(`/api/contacts?${params}`));
     } catch (reason) {
@@ -152,12 +161,22 @@ export function ContactsPage({ role }: { role: ContactRole }) {
     } finally {
       setLoading(false);
     }
-  }, [includeArchived, page, query, status]);
+  }, [includeArchived, order, page, query, sort, status]);
   useEffect(() => {
     // Fetching is the external synchronization owned by this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+  useEffect(() => {
+    writeListState("contacts", {
+      q: query,
+      status,
+      sort,
+      order,
+      includeArchived: String(includeArchived),
+      page: String(page),
+    });
+  }, [includeArchived, order, page, query, sort, status]);
 
   const openContact = async (id: string) => {
     setSelectedId(id);
@@ -263,6 +282,25 @@ export function ContactsPage({ role }: { role: ContactRole }) {
         </div>
         {canEdit && <button onClick={startCreate}>Create contact</button>}
       </header>
+      <SavedViewsControl
+        resource="contacts"
+        state={{
+          q: query,
+          status,
+          sort,
+          order,
+          includeArchived: String(includeArchived),
+          page: String(page),
+        }}
+        onApply={(next) => {
+          setQuery(next.q ?? "");
+          setStatus(next.status ?? "all");
+          setSort(next.sort ?? "name");
+          setOrder(next.order === "desc" ? "desc" : "asc");
+          setIncludeArchived(next.includeArchived === "true");
+          setPage(Math.max(1, Number(next.page) || 1));
+        }}
+      />
       <section className="surface contacts-panel">
         <div className="filter-bar" aria-label="Contact filters">
           <label>
@@ -277,6 +315,31 @@ export function ContactsPage({ role }: { role: ContactRole }) {
               }}
             />
           </label>
+          <label>
+            Sort
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="name">Name</option>
+              <option value="company">Company</option>
+              <option value="status">Status</option>
+              <option value="updated">Updated</option>
+              <option value="created">Created</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setOrder((value) => (value === "asc" ? "desc" : "asc"));
+              setPage(1);
+            }}
+          >
+            Direction: {order}
+          </button>
           <label>
             <span>Status</span>
             <select
@@ -293,6 +356,19 @@ export function ContactsPage({ role }: { role: ContactRole }) {
               <option value="unqualified">Unqualified</option>
             </select>
           </label>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setStatus("all");
+              setSort("name");
+              setOrder("asc");
+              setIncludeArchived(false);
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </button>
           <label className="archive-toggle">
             <input
               type="checkbox"

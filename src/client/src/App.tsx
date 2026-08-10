@@ -17,6 +17,7 @@ import type { UserRole } from "./shell/navigation";
 import { StatePanel } from "./ui/StatePanel";
 import { CompaniesPage } from "./companies/CompaniesPage";
 import { TasksPage } from "./tasks/TasksPage";
+import { routeFromHash } from "./search/urlState";
 import { ActivitiesPage } from "./activities/ActivitiesPage";
 import { ImportsPage } from "./imports/ImportsPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
@@ -102,32 +103,37 @@ export function App() {
 }
 
 function WorkspacePage({ user }: { user: SessionUser }) {
-  const [hash, setHash] = useState(() => window.location.hash || "#dashboard");
+  const [location, setLocation] = useState(() => window.location.hash);
+  const hash = routeFromHash();
   useEffect(() => {
-    const onHashChange = () => setHash(window.location.hash || "#dashboard");
+    const onHashChange = () => setLocation(window.location.hash);
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
-  if (hash === "#companies") return <CompaniesPage role={user.role} />;
-  if (hash === "#contacts") return <ContactsPage role={user.role} />;
-  if (hash === "#deals" || hash.startsWith("#deals/"))
+  if (hash === "companies")
+    return <CompaniesPage key={location} role={user.role} />;
+  if (hash === "contacts")
+    return <ContactsPage key={location} role={user.role} />;
+  if (hash === "deals" || hash.startsWith("deals/"))
     return (
       <DealsPage
+        key={location}
         role={user.role}
-        initialDealId={hash.startsWith("#deals/") ? hash.slice(7) : undefined}
+        initialDealId={hash.startsWith("deals/") ? hash.slice(6) : undefined}
       />
     );
-  if (hash === "#tasks" || hash.startsWith("#tasks/"))
+  if (hash === "tasks" || hash.startsWith("tasks/"))
     return (
       <TasksPage
+        key={location}
         role={user.role}
-        initialTaskId={hash.startsWith("#tasks/") ? hash.slice(7) : undefined}
+        initialTaskId={hash.startsWith("tasks/") ? hash.slice(6) : undefined}
       />
     );
-  if (hash === "#notifications") return <NotificationsPage />;
-  if (hash === "#activities") return <ActivitiesPage role={user.role} />;
-  if (hash === "#imports") return <ImportsPage role={user.role} />;
-  if (hash === "#duplicates") return <DuplicateReviewPage role={user.role} />;
+  if (hash === "notifications") return <NotificationsPage />;
+  if (hash === "activities") return <ActivitiesPage role={user.role} />;
+  if (hash === "imports") return <ImportsPage role={user.role} />;
+  if (hash === "duplicates") return <DuplicateReviewPage role={user.role} />;
   return <DashboardPage userName={user.displayName} />;
 }
 

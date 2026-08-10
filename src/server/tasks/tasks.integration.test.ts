@@ -212,6 +212,15 @@ describe.sequential("task API", () => {
           (task) => task.assigneeMembershipId === "membership_member",
         ),
     ).toBe(true);
+    const sorted = service.list(
+      identity,
+      new URLSearchParams("sort=title&direction=desc&page=1&pageSize=2"),
+    );
+    expect(sorted.items).toHaveLength(2);
+    expect(sorted.totalPages).toBeGreaterThan(1);
+    expect(sorted.items.map((task) => task.title)).toEqual(
+      [...sorted.items.map((task) => task.title)].sort().reverse(),
+    );
     expect(
       service
         .list(

@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { StatePanel } from "../ui/StatePanel";
+import { SavedViewsControl } from "../search/SavedViewsControl";
+import { readListState, writeListState } from "../search/urlState";
 import "./tasks.css";
 
 type Role = "owner" | "member" | "viewer";
@@ -105,10 +107,24 @@ export function TasksPage({
   role: Role;
   initialTaskId?: string;
 }) {
+  const initial = readListState("tasks");
   const canMutate = role !== "viewer";
-  const [view, setView] = useState<View>("assigned_to_me");
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const [view, setView] = useState<View>(
+    (initial.view as View) || "assigned_to_me",
+  );
+  const [query, setQuery] = useState(initial.q ?? "");
+  const [priority, setPriority] = useState(initial.priority ?? "all");
+  const [status, setStatus] = useState(initial.status ?? "all");
+  const [sort, setSort] = useState(initial.sort ?? "due");
+  const [direction, setDirection] = useState(
+    initial.direction === "desc" ? "desc" : "asc",
+  );
+  const [includeArchived, setIncludeArchived] = useState(
+    initial.archived === "include",
+  );
+  const [page, setPage] = useState(Math.max(1, Number(initial.page) || 1));
   const [items, setItems] = useState<Task[] | null>(null);
+  const [totalPages, setTotalPages] = useState(1);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [selected, setSelected] = useState<Task | null>(null);
   const [form, setForm] = useState<FormValues>(blankForm);
@@ -123,10 +139,24 @@ export function TasksPage({
     setState("loading");
     setMessage("");
     try {
-      const result = await request<{ items: Task[]; assignees: Assignee[] }>(
-        `/api/tasks?view=${view}&page=1&pageSize=25${includeArchived ? "&archived=include" : ""}`,
-      );
+      const params = new URLSearchParams({
+        view,
+        page: String(page),
+        pageSize: "25",
+        sort,
+        direction,
+      });
+      if (query.trim()) params.set("q", query.trim());
+      if (priority !== "all") params.set("priority", priority);
+      if (status !== "all") params.set("status", status);
+      if (includeArchived) params.set("archived", "include");
+      const result = await request<{
+        items: Task[];
+        assignees: Assignee[];
+        totalPages?: number;
+      }>(`/api/tasks?${params}`);
       setItems(result.items);
+      setTotalPages(Math.max(1, result.totalPages ?? 1));
       setAssignees(result.assignees ?? []);
       setState(null);
     } catch (error) {
@@ -134,13 +164,25 @@ export function TasksPage({
       setState(reason.status === 403 ? "forbidden" : "error");
       setMessage(reason.message);
     }
-  }, [includeArchived, view]);
+  }, [direction, includeArchived, page, priority, query, sort, status, view]);
 
   useEffect(() => {
     // Synchronize the list with the selected server-side view.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+  useEffect(() => {
+    writeListState("tasks", {
+      view,
+      q: query,
+      priority,
+      status,
+      sort,
+      direction,
+      archived: includeArchived ? "include" : "",
+      page: String(page),
+    });
+  }, [direction, includeArchived, page, priority, query, sort, status, view]);
 
   const showError = (error: unknown) => {
     const reason = error as ApiError;
@@ -255,7 +297,65 @@ export function TasksPage({
         </div>
         {canMutate && <button onClick={beginCreate}>Create task</button>}
       </header>
+      <SavedViewsControl
+        resource="tasks"
+        state={{
+          view,
+          q: query,
+          priority,
+          status,
+          sort,
+          direction,
+          archived: includeArchived ? "include" : "",
+          page: String(page),
+        }}
+        onApply={(next) => {
+          setView((next.view as View) || "assigned_to_me");
+          setQuery(next.q ?? "");
+          setPriority(next.priority ?? "all");
+          setStatus(next.status ?? "all");
+          setSort(next.sort ?? "due");
+          setDirection(next.direction === "desc" ? "desc" : "asc");
+          setIncludeArchived(next.archived === "include");
+          setPage(Math.max(1, Number(next.page) || 1));
+        }}
+      />
       <div className="tasks-toolbar">
+        <label>
+          Search
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <label>
+          Sort
+          <select
+            value={sort}
+            onChange={(event) => {
+              setSort(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="due">Due date</option>
+            <option value="title">Title</option>
+            <option value="priority">Priority</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setDirection((value) => (value === "asc" ? "desc" : "asc"));
+            setPage(1);
+          }}
+        >
+          Direction: {direction}
+        </button>
         <label>
           View
           <select
@@ -270,6 +370,38 @@ export function TasksPage({
             <option value="completed">Completed</option>
           </select>
         </label>
+        <label>
+          Priority
+          <select
+            value={priority}
+            onChange={(event) => {
+              setPriority(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All priorities</option>
+            <option value="urgent">Urgent</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All statuses</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
         <span className="utc-note">Due times shown in UTC</span>
         <label>
           <input
@@ -279,6 +411,20 @@ export function TasksPage({
           />
           Include archived tasks
         </label>
+        <button
+          type="button"
+          onClick={() => {
+            setQuery("");
+            setPriority("all");
+            setStatus("all");
+            setSort("due");
+            setDirection("asc");
+            setIncludeArchived(false);
+            setPage(1);
+          }}
+        >
+          Clear filters
+        </button>
       </div>
       {state === "error" && items && (
         <p className="tasks-inline-error" role="alert">
@@ -314,6 +460,25 @@ export function TasksPage({
             </li>
           ))}
         </ul>
+      )}
+      {totalPages > 1 && (
+        <nav className="pagination" aria-label="Task pages">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            Previous
+          </button>
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Next
+          </button>
+        </nav>
       )}
       {(selected || editing) && (
         <section className="task-detail" aria-labelledby="task-detail-title">

@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { StatePanel } from "../ui/StatePanel";
+import { SavedViewsControl } from "../search/SavedViewsControl";
+import { readListState, writeListState } from "../search/urlState";
 import "./deals.css";
 
 export type DealRole = "owner" | "member" | "viewer";
@@ -143,15 +145,20 @@ export function DealsPage({
   role: DealRole;
   initialDealId?: string;
 }) {
+  const initial = readListState("deals");
   const canEdit = role !== "viewer";
   const [list, setList] = useState<DealList | null>(null);
-  const [query, setQuery] = useState("");
-  const [stageId, setStageId] = useState("all");
-  const [ownerId, setOwnerId] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [status, setStatus] = useState("all");
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(initial.q ?? "");
+  const [stageId, setStageId] = useState(initial.stageId ?? "all");
+  const [ownerId, setOwnerId] = useState(initial.ownerId ?? "");
+  const [companyId, setCompanyId] = useState(initial.companyId ?? "");
+  const [status, setStatus] = useState(initial.status ?? "all");
+  const [sort, setSort] = useState(initial.sort ?? "updated");
+  const [order, setOrder] = useState(initial.order === "asc" ? "asc" : "desc");
+  const [includeArchived, setIncludeArchived] = useState(
+    initial.includeArchived === "true",
+  );
+  const [page, setPage] = useState(Math.max(1, Number(initial.page) || 1));
   const [view, setView] = useState<"table" | "pipeline">("table");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -169,8 +176,8 @@ export function DealsPage({
       page: String(page),
       pageSize: "20",
       includeArchived: String(includeArchived),
-      sort: "expectedCloseDate",
-      order: "asc",
+      sort,
+      order,
     });
     if (query.trim()) p.set("q", query.trim());
     if (stageId !== "all") p.set("stageId", stageId);
@@ -184,12 +191,45 @@ export function DealsPage({
     } finally {
       setLoading(false);
     }
-  }, [companyId, includeArchived, ownerId, page, query, stageId, status]);
+  }, [
+    companyId,
+    includeArchived,
+    order,
+    ownerId,
+    page,
+    query,
+    sort,
+    stageId,
+    status,
+  ]);
   useEffect(() => {
     // Fetching is the external synchronization owned by this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+  useEffect(() => {
+    writeListState("deals", {
+      q: query,
+      stageId,
+      ownerId,
+      companyId,
+      status,
+      sort,
+      order,
+      includeArchived: String(includeArchived),
+      page: String(page),
+    });
+  }, [
+    companyId,
+    includeArchived,
+    order,
+    ownerId,
+    page,
+    query,
+    sort,
+    stageId,
+    status,
+  ]);
   const open = async (id: string) => {
     setSelected(null);
     setSaveError(null);
@@ -312,6 +352,31 @@ export function DealsPage({
         </div>
         {canEdit && <button onClick={create}>Create deal</button>}
       </header>
+      <SavedViewsControl
+        resource="deals"
+        state={{
+          q: query,
+          stageId,
+          ownerId,
+          companyId,
+          status,
+          sort,
+          order,
+          includeArchived: String(includeArchived),
+          page: String(page),
+        }}
+        onApply={(next) => {
+          setQuery(next.q ?? "");
+          setStageId(next.stageId ?? "all");
+          setOwnerId(next.ownerId ?? "");
+          setCompanyId(next.companyId ?? "");
+          setStatus(next.status ?? "all");
+          setSort(next.sort ?? "updated");
+          setOrder(next.order === "asc" ? "asc" : "desc");
+          setIncludeArchived(next.includeArchived === "true");
+          setPage(Math.max(1, Number(next.page) || 1));
+        }}
+      />
       <section className="surface deals-panel">
         <div className="filter-bar" aria-label="Deal filters">
           <label>
@@ -326,6 +391,31 @@ export function DealsPage({
               }}
             />
           </label>
+          <label>
+            Sort
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="updated">Updated</option>
+              <option value="name">Name</option>
+              <option value="amount">Amount</option>
+              <option value="close">Close date</option>
+              <option value="stage">Stage</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setOrder((value) => (value === "asc" ? "desc" : "asc"));
+              setPage(1);
+            }}
+          >
+            Direction: {order}
+          </button>
           <label>
             <span>Stage</span>
             <select
@@ -409,6 +499,22 @@ export function DealsPage({
               Pipeline
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setStageId("all");
+              setOwnerId("");
+              setCompanyId("");
+              setStatus("all");
+              setSort("updated");
+              setOrder("desc");
+              setIncludeArchived(false);
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </button>
         </div>
         {!loading && !error && list && (
           <div className="deal-totals" aria-label="Deal totals">
