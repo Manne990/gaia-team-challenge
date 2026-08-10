@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 afterEach(() => vi.unstubAllGlobals());
-describe("App", () => {
+describe.sequential("App", () => {
   it("shows loading then the ready workspace", async () => {
     vi.stubGlobal(
       "fetch",
@@ -20,10 +20,11 @@ describe("App", () => {
       }),
     );
     render(<App />);
-    expect(screen.getByText("Loading your workspace…")).toBeInTheDocument();
+    expect(screen.getByText("Loading your workspace")).toBeInTheDocument();
     expect(
-      await screen.findByText("Welcome, Northstar Owner."),
+      await screen.findByText("Good morning, Northstar"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("navigation")).toBeInTheDocument();
   });
   it("shows an expired-session sign-in state", async () => {
     vi.stubGlobal(

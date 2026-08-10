@@ -32,7 +32,7 @@ test("browser test exercises the product process and health boundary accessibly"
     page.getByRole("button", { name: "Signing in…" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("heading", { name: "Welcome, Northstar Owner." }),
+    page.getByRole("heading", { name: "Good morning, Northstar" }),
   ).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
