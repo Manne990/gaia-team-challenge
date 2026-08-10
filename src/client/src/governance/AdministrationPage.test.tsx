@@ -70,6 +70,9 @@ describe.sequential("AdministrationPage", () => {
         }),
       ),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add member" })).toBeEnabled(),
+    );
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "new@example.com" },
     });

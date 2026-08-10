@@ -164,10 +164,7 @@ export function AdministrationPage() {
                   required
                 />
               </label>
-              <button
-                type="submit"
-                disabled={busy === "organization" || !name.trim()}
-              >
+              <button type="submit" disabled={busy !== null || !name.trim()}>
                 {busy === "organization" ? "Saving…" : "Save name"}
               </button>
             </form>
@@ -228,7 +225,7 @@ export function AdministrationPage() {
                   <option value="owner">Owner</option>
                 </select>
               </label>
-              <button type="submit" disabled={busy === "create"}>
+              <button type="submit" disabled={busy !== null}>
                 {busy === "create" ? "Adding…" : "Add member"}
               </button>
             </form>
@@ -269,7 +266,7 @@ export function AdministrationPage() {
                                 event.target.value as Role,
                               )
                             }
-                            disabled={busy === `role:${person.userId}`}
+                            disabled={busy !== null}
                           >
                             <option value="owner">Owner</option>
                             <option value="member">Member</option>
@@ -281,7 +278,7 @@ export function AdministrationPage() {
                         <button
                           type="button"
                           onClick={() => revoke(person)}
-                          disabled={busy === `revoke:${person.userId}`}
+                          disabled={busy !== null}
                         >
                           {busy === `revoke:${person.userId}`
                             ? "Revoking…"
