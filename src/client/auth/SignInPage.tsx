@@ -22,11 +22,11 @@ export function SignInPage({ expired = false, onSignedIn }: SignInPageProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
       });
-      const result = await response.json() as { error?: string };
+      const result = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "Unable to sign in. Please try again.");
       onSignedIn?.();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to sign in. Please try again.");
+    } catch {
+      setError("Unable to sign in. Check your details and connection, then try again.");
     } finally {
       setBusy(false);
     }
@@ -52,13 +52,21 @@ export function SignInPage({ expired = false, onSignedIn }: SignInPageProps) {
 
 export function LogoutButton({ onLoggedOut }: { onLoggedOut?: () => void }) {
   const [busy, setBusy] = useState(false);
-  return <button type="button" disabled={busy} onClick={async () => {
-    setBusy(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      onLoggedOut?.();
-    } finally {
-      setBusy(false);
-    }
-  }}>{busy ? "Signing out…" : "Sign out"}</button>;
+  const [error, setError] = useState(false);
+  return <>
+    <button type="button" disabled={busy} onClick={async () => {
+      setBusy(true);
+      setError(false);
+      try {
+        const response = await fetch("/api/auth/logout", { method: "POST" });
+        if (!response.ok) throw new Error("logout failed");
+        onLoggedOut?.();
+      } catch {
+        setError(true);
+      } finally {
+        setBusy(false);
+      }
+    }}>{busy ? "Signing out…" : "Sign out"}</button>
+    {error && <span role="alert">Unable to sign out. Check your connection and try again.</span>}
+  </>;
 }
