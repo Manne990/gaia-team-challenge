@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 test("reviewer explicitly resolves and confirms an explainable company merge", async ({
   page,
 }) => {

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("activity composer is modal, keyboard-safe, and records shared history", async ({
   page,

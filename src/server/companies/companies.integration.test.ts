@@ -181,6 +181,19 @@ describe.sequential("company API", () => {
     });
     expect(stale.status).toBe(409);
     expect(await stale.json()).toMatchObject({ code: "VERSION_CONFLICT" });
+    expect(
+      database
+        .prepare("SELECT name, version FROM companies WHERE id = ?")
+        .get(created.company.id),
+    ).toEqual({ name: "Aperture Science", version: 2 });
+    const afterConflict = await companyRequest(
+      cookie,
+      `/${created.company.id}`,
+    );
+    expect(afterConflict.status).toBe(200);
+    expect(await afterConflict.json()).toMatchObject({
+      company: { name: "Aperture Science", version: 2 },
+    });
 
     expect(
       (
