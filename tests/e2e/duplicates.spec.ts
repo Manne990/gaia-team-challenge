@@ -19,6 +19,14 @@ test("reviewer explicitly resolves and confirms an explainable company merge", a
     name: "Choose survivor and field outcomes",
   });
   await expect(dialog.getByRole("radio").first()).toBeFocused();
+  await expect(
+    dialog.getByRole("button", { name: "Review consequences" }),
+  ).toBeDisabled();
+  await dialog.getByRole("radio").first().check();
+  for (const select of await dialog
+    .locator("tbody select:not(:disabled)")
+    .all())
+    await select.selectOption("left");
   await dialog.getByLabel("Resolve Industry").selectOption("right");
   await dialog.getByRole("button", { name: "Review consequences" }).click();
   await expect(dialog.getByText("Confirm irreversible merge")).toBeVisible();

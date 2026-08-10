@@ -261,15 +261,19 @@ describe.sequential("duplicate review and merge boundary", () => {
         "SELECT version,name,external_reference externalReference,website,phone,industry,size,address,lifecycle_status lifecycleStatus,owner_membership_id ownerMembershipId,tags_json tagsJson,description,archived_at archivedAt,id FROM companies WHERE id='company_northstar_03'",
       )
       .get() as Candidate & { tagsJson: string };
+    const thirdWithTags = {
+      ...third,
+      tags: JSON.parse(third.tagsJson) as string[],
+    };
     const chained = await request("/api/merges", member, {
       method: "POST",
       body: JSON.stringify({
         entityType: "company",
-        survivorId: "company_northstar_01",
-        retiredId: third.id,
-        survivorVersion: version,
-        retiredVersion: third.version,
-        fields: fields(pair.left),
+        survivorId: third.id,
+        retiredId: "company_northstar_01",
+        survivorVersion: third.version,
+        retiredVersion: version,
+        fields: fields(thirdWithTags),
       }),
     });
     expect(chained.status).toBe(200);
@@ -284,7 +288,7 @@ describe.sequential("duplicate review and merge boundary", () => {
       restarted,
     );
     expect(await redirect.json()).toMatchObject({
-      targetId: "company_northstar_01",
+      targetId: "company_northstar_03",
       redirected: true,
     });
   });

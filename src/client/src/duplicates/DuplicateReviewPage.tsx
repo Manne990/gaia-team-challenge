@@ -163,12 +163,19 @@ function MergeDialog({
 }) {
   const dialog = useRef<HTMLDialogElement>(null),
     firstRadio = useRef<HTMLInputElement>(null),
-    [survivor, setSurvivor] = useState<"left" | "right">("left"),
+    [survivor, setSurvivor] = useState<"left" | "right" | null>(null),
     [choices, setChoices] = useState<Record<string, "left" | "right">>({}),
     [confirming, setConfirming] = useState(false),
     [message, setMessage] = useState("");
   const keys =
     candidate.entityType === "company" ? companyFields : contactFields;
+  const conflictingKeys = keys.filter(
+    (key) =>
+      JSON.stringify(candidate.left[key] ?? null) !==
+      JSON.stringify(candidate.right[key] ?? null),
+  );
+  const complete =
+    survivor !== null && conflictingKeys.every((key) => choices[key]);
   useEffect(() => {
     dialog.current?.showModal();
     firstRadio.current?.focus();
@@ -178,6 +185,7 @@ function MergeDialog({
     onClose();
   };
   async function commit() {
+    if (!survivor || !complete) return;
     const retired = survivor === "left" ? candidate.right : candidate.left,
       chosen = candidate[survivor];
     const fields = Object.fromEntries(
@@ -259,7 +267,12 @@ function MergeDialog({
                 <td>
                   <select
                     aria-label={`Resolve ${humanize(key)}`}
-                    value={choices[key] ?? survivor}
+                    value={
+                      conflictingKeys.includes(key)
+                        ? (choices[key] ?? "")
+                        : "left"
+                    }
+                    disabled={!conflictingKeys.includes(key)}
                     onChange={(event) =>
                       setChoices((current) => ({
                         ...current,
@@ -267,6 +280,9 @@ function MergeDialog({
                       }))
                     }
                   >
+                    {conflictingKeys.includes(key) && (
+                      <option value="">Select an outcome</option>
+                    )}
                     <option value="left">{display(candidate.left[key])}</option>
                     <option value="right">
                       {display(candidate.right[key])}
@@ -278,7 +294,7 @@ function MergeDialog({
           </tbody>
         </table>
         {message && <p role="alert">{message}</p>}
-        {confirming && (
+        {confirming && survivor && (
           <div className="warning-panel" role="alert">
             <strong>Confirm irreversible merge</strong>
             <p>
@@ -297,7 +313,10 @@ function MergeDialog({
           <button className="button-secondary" onClick={close}>
             Cancel
           </button>
-          <button disabled={confirming} onClick={() => setConfirming(true)}>
+          <button
+            disabled={confirming || !complete}
+            onClick={() => setConfirming(true)}
+          >
             Review consequences
           </button>
         </div>
